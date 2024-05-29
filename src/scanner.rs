@@ -160,6 +160,15 @@ impl<'a> Scanner<'a> {
 					TokenType::Greater);
 			}
 
+			'/' => {
+				if self.match_char('/') {
+					while self.peek() != '\n' && !self.is_at_end() { self.advance(); }
+				}
+				else {
+					self.add_token(tokens, TokenType::Slash)
+				}
+			}
+
 			_ => {
 				self.lox.error(self.line, &format!("Unexpected character '{}'", c));
 			}
