@@ -169,6 +169,13 @@ impl<'a> Scanner<'a> {
 				}
 			}
 
+			'\t' | '\r' | ' ' => { /* Ignore whitespace */ }
+
+			'\n' => {
+				/* Ignore whitespace, but increment line number */
+				self.line += 1;
+			}
+
 			_ => {
 				self.lox.error(self.line, &format!("Unexpected character '{}'", c));
 			}
