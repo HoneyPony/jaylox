@@ -90,6 +90,29 @@ impl<'a> Scanner<'a> {
 		result
 	}
 
+	fn peek(&mut self) -> char {
+		if self.is_at_end() { return '\0'; }
+		return self.chars[self.current as usize];
+	}
+
+	fn match_char(&mut self, c: char) -> bool {
+		if self.peek() == c {
+			self.advance();
+			return true;
+		}
+
+		false
+	}
+
+	fn add_token_lookahead(&mut self, tokens: &mut Vec<Token>, next_char: char, type_both: TokenType, type_first: TokenType) {
+		if self.match_char(next_char) {
+			self.add_token(tokens, type_both);
+		}
+		else {
+			self.add_token(tokens, type_first);
+		}
+	}
+
 	fn add_token(&mut self, tokens: &mut Vec<Token>, typ: TokenType) {
 		self.add_token_lit(tokens, typ, TokenLiteral::None);
 	}
@@ -112,6 +135,30 @@ impl<'a> Scanner<'a> {
 			'+' => { self.add_token(tokens, TokenType::Plus); }
 			';' => { self.add_token(tokens, TokenType::Semicolon); }
 			'*' => { self.add_token(tokens, TokenType::Star); }
+
+			'!' => {
+				self.add_token_lookahead(tokens, '=', 
+					TokenType::BangEqual, 
+					TokenType::Bang);
+			}
+
+			'=' => {
+				self.add_token_lookahead(tokens, '=', 
+					TokenType::EqualEqual, 
+					TokenType::Equal);
+			}
+
+			'<' => {
+				self.add_token_lookahead(tokens, '=', 
+					TokenType::LessEqual, 
+					TokenType::Less);
+			}
+
+			'>' => {
+				self.add_token_lookahead(tokens, '=', 
+					TokenType::GreaterEqual, 
+					TokenType::Greater);
+			}
 
 			_ => {
 				self.lox.error(self.line, &format!("Unexpected character '{}'", c));
