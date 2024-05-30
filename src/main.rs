@@ -1,6 +1,7 @@
 mod scanner;
 mod expr;
 mod parser;
+mod interpreter;
 
 use std::env;
 use std::process::exit;
@@ -8,11 +9,13 @@ use std::io;
 use std::io::Write;
 
 use expr::ast_print;
+use interpreter::{interpret, InterpErr};
 use scanner::{Scanner, Token, TokenType};
 use parser::Parser;
 
 struct Lox {
-	had_error: bool
+	had_error: bool,
+	had_runtime_error: bool
 }
 
 impl Lox {
@@ -20,6 +23,7 @@ impl Lox {
 	fn new() -> Self {
 		Lox {
 			had_error: false,
+			had_runtime_error: false
 		}
 	}
 
@@ -41,6 +45,11 @@ impl Lox {
 		}
 	}
 
+	fn runtime_error(&mut self, err: &InterpErr) {
+		eprintln!("{0}\n[line {1}]", err.message, err.token.line);
+		self.had_runtime_error = true;
+	}
+
 	fn run(&mut self, code: String) {
 		let tokens = {
 			let mut scanner = Scanner::new(code, self);
@@ -53,8 +62,7 @@ impl Lox {
 		};
 
 		if let Some(tree) = tree {
-			ast_print(&tree);
-			println!("");
+			interpret(&tree, self);
 		}
 	}
 
@@ -70,7 +78,7 @@ impl Lox {
 			let _ = io::stdout().flush();
 
 			let mut line = String::new();
-			let Ok(_) =io::stdin().read_line(&mut line) else {
+			let Ok(_) = io::stdin().read_line(&mut line) else {
 				break;
 			};
 
@@ -91,8 +99,11 @@ fn main() -> io::Result<()> {
 	}
 	else if args.len() == 2 {
 		lox.run_file(args.remove(1))?;
-		if(lox.had_error) {
+		if lox.had_error {
 			exit(65);
+		}
+		if lox.had_runtime_error {
+			exit(70);
 		}
 	}
 	else {
