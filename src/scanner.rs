@@ -65,6 +65,20 @@ pub struct Scanner<'a> {
 	lox: &'a mut Lox
 }
 
+fn is_digit(c: char) -> bool {
+	return c >= '0' && c <= '9';
+}
+
+fn is_alpha(c: char) -> bool {
+	return (c >= 'a' && c <= 'z') ||
+		(c >= 'A' && c <= 'Z') ||
+		c == '_';
+}
+
+fn is_alnum(c: char) -> bool {
+	return is_digit(c) || is_alpha(c);
+}
+
 impl<'a> Scanner<'a> {
 	pub fn new(source: String, lox: &'a mut Lox) -> Scanner {
 		let chars = source.chars().collect();
@@ -93,6 +107,11 @@ impl<'a> Scanner<'a> {
 	fn peek(&mut self) -> char {
 		if self.is_at_end() { return '\0'; }
 		return self.chars[self.current as usize];
+	}
+
+	fn peek_next(&mut self) -> char {
+		if (self.current + 1) as usize > self.chars.len() { return '\0' }
+		return self.chars[(self.current + 1) as usize];
 	}
 
 	fn match_char(&mut self, c: char) -> bool {
@@ -141,6 +160,28 @@ impl<'a> Scanner<'a> {
 		let trimmed = String::from_iter(trimmed);
 
 		self.add_token_lit(tokens, TokenType::String, TokenLiteral::String(trimmed));
+	}
+
+	fn number(&mut self, tokens: &mut Vec<Token>) {
+		while is_digit(self.peek()) { self.advance(); }
+
+		if(self.peek() == '.' && is_digit(self.peek_next())) {
+			self.advance(); /* Consume decimal */
+
+			while is_digit(self.peek()) { self.advance(); }
+		}
+
+		let text = &self.chars[self.start as usize..self.current as usize];
+		let text = String::from_iter(text);
+
+		/* This should never fail because we're only lexing numbers. */
+		let value: f64 = text.parse().unwrap();
+
+		self.add_token_lit(tokens, TokenType::Number, TokenLiteral::Number(value));
+	}
+
+	fn identifier(&mut self, tokens: &mut Vec<Token>) {
+		
 	}
 
 	fn scan_token(&mut self, tokens: &mut Vec<Token>) {
@@ -200,7 +241,15 @@ impl<'a> Scanner<'a> {
 			'"' => { self.string(tokens); }
 
 			_ => {
-				self.lox.error(self.line, &format!("Unexpected character '{}'", c));
+				if is_digit(c) {
+					self.number(tokens);
+				}
+				else if is_alpha(c) {
+					self.identifier(tokens);
+				}
+				else {
+					self.lox.error(self.line, &format!("Unexpected character '{}'", c));
+				}
 			}
 		}
 	}
