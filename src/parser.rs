@@ -166,7 +166,44 @@ impl<'a> Parser<'a> {
 		return self.error_expr(self.peek().clone(), "Expect expression.");
 	}
 
-	pub fn parse(&mut self) -> Option<Expr> {
-		self.expression().ok()
+	fn statement(&mut self) -> StmtRes {
+		return Err(ExprErr)
+	}
+
+	fn declaration(&mut self) -> Option<Stmt> {
+		let result = {
+			self.statement()
+		};
+
+		if result.is_err() {
+			self.synchronize();
+		}
+
+		return result.ok()
+	}
+
+	fn synchronize(&mut self) {
+		self.advance();
+
+		while !self.is_at_end() {
+			if self.previous().typ == Semicolon { return; }
+
+			match self.peek().typ {
+				Class | Fun | Var | For | If | While | Print | Return => { return; }
+				_ => { }
+			}
+
+			self.advance();
+		}
+	}
+
+	pub fn parse(&mut self) -> Vec<Stmt> {
+		let mut result = vec![];
+
+		while !self.is_at_end() {
+			if let Some(next) = self.declaration() { result.push(next); }
+		}
+
+		result
 	}
 }
