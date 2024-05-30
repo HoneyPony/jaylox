@@ -2,17 +2,21 @@ use crate::expr::*;
 use crate::scanner::*;
 
 use crate::scanner::TokenType::*;
+use crate::Lox;
 
-pub struct Parser {
+pub struct Parser<'a> {
 	tokens: Vec<Token>,
-	current: usize
+	current: usize,
+
+	lox: &'a mut Lox
 }
 
-impl Parser {
-	pub fn new(tokens: Vec<Token>) -> Self {
+impl<'a> Parser<'a> {
+	pub fn new(tokens: Vec<Token>, lox: &'a mut Lox) -> Self {
 		Parser {
 			tokens,
-			current: 0
+			current: 0,
+			lox
 		}
 	}
 
@@ -28,14 +32,25 @@ impl Parser {
 		return &self.tokens[self.current];
 	}
 
-	fn advance(&mut self) {
+	fn advance(&mut self)  {
 		if !self.is_at_end() {
 			self.current += 1;
 		}
 	}
 
-	fn consume(typ: TokenType, message: &str) {
-		
+	fn error(&mut self, token: Token, message: &str) -> Result<Token, ExprErr> {
+		self.lox.error_token(&token, message);
+		return Err(ExprErr);
+	}
+
+	fn error_expr(&mut self, token: Token, message: &str) -> ExprRes {
+		self.lox.error_token(&token, message);
+		return Err(ExprErr);
+	}
+
+	fn consume(&mut self, typ: TokenType, message: &str) -> Result<Token, ExprErr> {
+		if self.check(typ) { self.advance(); return Ok(self.previous().clone()) }
+		return self.error(self.peek().clone(), message);
 	}
 
 	fn check(&self, typ: TokenType) -> bool {
@@ -70,81 +85,87 @@ impl Parser {
 		return false;
 	}
 
-	fn expression(&mut self) -> Expr {
+	fn expression(&mut self) -> ExprRes {
 		self.equality()
 	}
 
-	fn equality(&mut self) -> Expr {
-		let mut expr = self.comparison();
+	fn equality(&mut self) -> ExprRes {
+		let mut expr = self.comparison()?;
 
 		while self.match_either(BangEqual, EqualEqual) {
 			let operator = self.previous().clone();
-			let right = self.comparison();
+			let right = self.comparison()?;
 			expr = Expr::binary(expr, operator, right);
 		}
 
-		expr
+		Ok(expr)
 	}
 
-	fn comparison(&mut self) -> Expr {
-		let mut expr = self.term();
+	fn comparison(&mut self) -> ExprRes {
+		let mut expr = self.term()?;
 
 		while self.match_four(Greater, GreaterEqual, Less, LessEqual) {
 			let operator = self.previous().clone();
-			let right = self.term();
+			let right = self.term()?;
 			expr = Expr::binary(expr, operator, right);
 		}
 
-		expr
+		Ok(expr)
 	}
 
-	fn term(&mut self) -> Expr {
-		let mut expr = self.factor();
+	fn term(&mut self) -> ExprRes {
+		let mut expr = self.factor()?;
 
 		while self.match_either(Minus, Plus) {
 			let operator = self.previous().clone();
-			let right = self.factor();
+			let right = self.factor()?;
 			expr = Expr::binary(expr, operator, right);
 		}
 
-		expr
+		Ok(expr)
 	}
 
-	fn factor(&mut self) -> Expr {
-		let mut expr = self.unary();
+	fn factor(&mut self) -> ExprRes {
+		let mut expr = self.unary()?;
 
 		while self.match_either(Slash, Star) {
 			let operator = self.previous().clone();
-			let right = self.unary();
+			let right = self.unary()?;
 			expr = Expr::binary(expr, operator, right);
 		}
 
-		expr
+		Ok(expr)
 	}
 
-	fn unary(&mut self) -> Expr {
+	fn unary(&mut self) -> ExprRes {
 		if self.match_either(Bang, Minus) {
 			let operator = self.previous().clone();
-			let right = self.unary();
-			return Expr::unary(operator, right);
+			let right = self.unary()?;
+			return Ok(Expr::unary(operator, right));
 		}
 
-		primary();
+		self.primary()
 	}
 
-	fn primary(&mut self) -> Expr {
-		if self.match_one(False) { return TokenLiteral::Bool(false).into() }
-		if self.match_one(True) { return TokenLiteral::Bool(true).into() }
-		if self.match_one(Nil) { return TokenLiteral::None.into() }
+	fn primary(&mut self) -> ExprRes {
+		if self.match_one(False) { return Ok(TokenLiteral::Bool(false).into()) }
+		if self.match_one(True) { return Ok(TokenLiteral::Bool(true).into()) }
+		if self.match_one(Nil) { return Ok(TokenLiteral::None.into()) }
 
 		if self.match_either(Number, StringTok) {
-			return self.previous().literal.clone().into();
+			return Ok(self.previous().literal.clone().into());
 		}
 
-		if self.match(LeftParen) {
-			let expr = self.expression();
-			self.consume(RightParen, "Expect ')' after expression.");
-			return Expr::grouping(expr);
+		if self.match_one(LeftParen) {
+			let expr = self.expression()?;
+			self.consume(RightParen, "Expect ')' after expression.")?;
+			return Ok(Expr::grouping(expr));
 		}
+
+		return self.error_expr(self.peek().clone(), "Expect expression.");
+	}
+
+	pub fn parse(&mut self) -> Option<Expr> {
+		self.expression().ok()
 	}
 }

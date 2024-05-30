@@ -32,7 +32,7 @@ impl ToString for TokenLiteral {
 	fn to_string(&self) -> String {
 		match self {
 			TokenLiteral::None => "None".to_string(),
-			TokenLiteral::String(what) => what.clone(),
+			TokenLiteral::String(what) => format!("'{what}'"),
 			TokenLiteral::Number(num) => num.to_string(),
 			TokenLiteral::Bool(bool) => bool.to_string()
 		}

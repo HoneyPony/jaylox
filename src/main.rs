@@ -7,7 +7,9 @@ use std::process::exit;
 use std::io;
 use std::io::Write;
 
-use scanner::Scanner;
+use expr::ast_print;
+use scanner::{Scanner, Token, TokenType};
+use parser::Parser;
 
 struct Lox {
 	had_error: bool
@@ -30,14 +32,29 @@ impl Lox {
 		self.report(line, "", message);
 	}
 
+	fn error_token(&mut self, token: &Token, message: &str) {
+		if token.typ == TokenType::Eof {
+			self.report(token.line, " at end", message);
+		}
+		else {
+			self.report(token.line, &format!(" at '{0}'", token.lexeme), message);
+		}
+	}
+
 	fn run(&mut self, code: String) {
 		let tokens = {
 			let mut scanner = Scanner::new(code, self);
 			scanner.scan_tokens()
 		};
 
-		for token in tokens {
-			println!("{}", token.to_string());
+		let tree = {
+			let mut parser = Parser::new(tokens, self);
+			parser.parse()
+		};
+
+		if let Some(tree) = tree {
+			ast_print(&tree);
+			println!("");
 		}
 	}
 
