@@ -15,13 +15,17 @@ fn ty(tyname: &str, args: Vec<ExprArg>) -> ExprTy {
 	return ExprTy { tyname, args };
 }
 
-fn arg(name: &str, ty: &str) -> ExprArg {
+fn arg_stmt(name: &str, ty: &str) -> ExprArg {
 	let name = name.to_string();
-	let mut ty = ty.to_string();
-	if ty.eq("Expr") {
-		ty = "Box<Expr>".to_string();
-	}
+	let ty = ty.to_string();
 	return ExprArg { name, ty };
+}
+
+fn arg(name: &str, ty: &str) -> ExprArg {
+	if ty.eq("Expr") {
+		return arg_stmt(name, "Box<Expr>");
+	}
+	return arg_stmt(name, ty);
 }
 
 fn generate_ty_enum(file: &mut File, ty: &ExprTy) -> io::Result<()> {
@@ -87,30 +91,42 @@ fn generate_ty_impl(file: &mut File, ty: &ExprTy) -> io::Result<()> {
 	Ok(())
 }
 
-fn generate_expr_file(file: &mut File) -> io::Result<()> {
-	let tys: Vec<ExprTy> = vec![
-		ty("Binary", vec![arg("left", "Expr"), arg("operator", "Token"), arg("right", "Expr")]),
-		ty("Grouping", vec![arg("expression", "Expr")]),
-		ty("Literal", vec![arg("value", "TokenLiteral")]),
-		ty("Unary", vec![arg("operator", "Token"), arg("right", "Expr")])
-	];
-
+fn generate_ast_file(file: &mut File, tyname: &str, tys: &Vec<ExprTy>) -> io::Result<()> {
 	writeln!(file, "use crate::scanner::*;")?;
 	writeln!(file, "")?;
 
-	writeln!(file, "pub enum Expr {{")?;
-	for ty in &tys {
+	writeln!(file, "pub enum {} {{", tyname)?;
+	for ty in tys {
 		generate_ty_enum(file, ty)?;
 	}
 	writeln!(file, "}}")?;
 
 	writeln!(file, "")?;
 
-	writeln!(file, "impl Expr {{")?;
-	for ty in &tys {
+	writeln!(file, "impl {} {{", tyname)?;
+	for ty in tys {
 		generate_ty_impl(file, ty)?;
 	}
 	writeln!(file, "}}")?;
+
+	Ok(())
+}
+
+fn generate_ast_files(expr: &mut File, stmt: &mut File) -> io::Result<()> {
+	let tys_expr: Vec<ExprTy> = vec![
+		ty("Binary", vec![arg("left", "Expr"), arg("operator", "Token"), arg("right", "Expr")]),
+		ty("Grouping", vec![arg("expression", "Expr")]),
+		ty("Literal", vec![arg("value", "TokenLiteral")]),
+		ty("Unary", vec![arg("operator", "Token"), arg("right", "Expr")])
+	];
+
+	let tys_stmt: Vec<ExprTy> = vec![
+		ty("Expression", vec![arg_stmt("expression", "Expr")]),
+		ty("Print", vec![arg_stmt("expression", "Expr")])
+	];
+
+	generate_ast_file(expr, "Expr", &tys_expr)?;
+	generate_ast_file(stmt, "Stmt", &tys_stmt)?;
 
 	Ok(())
 }
@@ -120,10 +136,12 @@ fn main() {
 	println!("cargo::rerun-if-changed=build.rs");
 
 	let out_dir = env::var("OUT_DIR").unwrap();
-    let dest_path = Path::new(&out_dir).join("expr.gen.rs");
-    let mut output_file = File::create(dest_path).unwrap();
+    let expr_path = Path::new(&out_dir).join("expr.gen.rs");
+	let stmt_path = Path::new(&out_dir).join("stmt.gen.rs");
+    let mut expr_file = File::create(expr_path).unwrap();
+	let mut stmt_file = File::create(stmt_path).unwrap();
 
-	generate_expr_file(&mut output_file).unwrap();
+	generate_ast_files(&mut expr_file, &mut stmt_file).unwrap();
 
 	// Note: This setup is based in part off of
 	// https://github.com/condekind/tokers/blob/main/src/world.rs
