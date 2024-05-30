@@ -122,6 +122,27 @@ impl<'a> Scanner<'a> {
 		tokens.push(Token::new(typ, String::from_iter(text), lit, self.line));
 	}
 
+	fn string(&mut self, tokens: &mut Vec<Token>) {
+		while self.peek() != '"' && !self.is_at_end() {
+			if self.peek() == '\n' { self.line += 1; }
+			self.advance();
+		}
+
+		if self.is_at_end() {
+			self.lox.error(self.line, "Unterminated string.");
+			return;
+		}
+
+		// Consume closing '"'.
+		self.advance();
+
+		// Trim surrounding quotes.
+		let trimmed = &self.chars[(self.start + 1) as usize..(self.current - 1) as usize];
+		let trimmed = String::from_iter(trimmed);
+
+		self.add_token_lit(tokens, TokenType::String, TokenLiteral::String(trimmed));
+	}
+
 	fn scan_token(&mut self, tokens: &mut Vec<Token>) {
 		let c = self.advance();
 		match c {
@@ -175,6 +196,8 @@ impl<'a> Scanner<'a> {
 				/* Ignore whitespace, but increment line number */
 				self.line += 1;
 			}
+
+			'"' => { self.string(tokens); }
 
 			_ => {
 				self.lox.error(self.line, &format!("Unexpected character '{}'", c));
