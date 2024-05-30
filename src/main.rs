@@ -9,7 +9,7 @@ use std::io;
 use std::io::Write;
 
 use expr::ast_print;
-use interpreter::{interpret, InterpErr};
+use interpreter::{Interpreter, InterpErr};
 use scanner::{Scanner, Token, TokenType};
 use parser::Parser;
 
@@ -62,7 +62,8 @@ impl Lox {
 		};
 
 		if let Some(tree) = tree {
-			interpret(&tree, self);
+			let mut interpreter = Interpreter::new(self);
+			interpreter.interpret(&tree);
 		}
 	}
 
