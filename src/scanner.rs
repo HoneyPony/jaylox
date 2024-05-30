@@ -12,7 +12,7 @@ pub enum TokenType {
 	Greater, GreaterEqual,
 	Less, LessEqual,
 
-	Idenitifer, String, Number,
+	Identifier, StringTok, Number,
 
 	And, Class, Else, False, Fun, For, If, Nil, Or,
 	Print, Return, Super, This, True, Var, While,
@@ -20,6 +20,7 @@ pub enum TokenType {
 	Eof
 }
 
+#[derive(Clone)]
 pub enum TokenLiteral {
 	None,
 	String(String),
@@ -36,6 +37,7 @@ impl ToString for TokenLiteral {
 	}
 }
 
+#[derive(Clone)]
 pub struct Token {
 	pub typ: TokenType,
 	pub lexeme: String,
@@ -182,7 +184,7 @@ impl<'a> Scanner<'a> {
 		let trimmed = &self.chars[(self.start + 1) as usize..(self.current - 1) as usize];
 		let trimmed = String::from_iter(trimmed);
 
-		self.add_token_lit(tokens, TokenType::String, TokenLiteral::String(trimmed));
+		self.add_token_lit(tokens, TokenType::StringTok, TokenLiteral::String(trimmed));
 	}
 
 	fn number(&mut self, tokens: &mut Vec<Token>) {
@@ -214,7 +216,7 @@ impl<'a> Scanner<'a> {
 			return;
 		}
 
-		self.add_token(tokens, TokenType::Idenitifer);
+		self.add_token(tokens, TokenType::Identifier);
 	}
 
 	fn scan_token(&mut self, tokens: &mut Vec<Token>) {
