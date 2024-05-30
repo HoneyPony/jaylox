@@ -37,10 +37,10 @@ impl ToString for TokenLiteral {
 }
 
 pub struct Token {
-	typ: TokenType,
-	lexeme: String,
-	literal: TokenLiteral,
-	line: i32
+	pub typ: TokenType,
+	pub lexeme: String,
+	pub literal: TokenLiteral,
+	pub line: i32
 }
 
 impl Token {
