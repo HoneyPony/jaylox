@@ -1,4 +1,5 @@
 mod scanner;
+mod expr;
 
 use std::env;
 use std::process::exit;
