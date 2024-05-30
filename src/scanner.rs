@@ -1,6 +1,6 @@
 use std::{collections::HashMap, str::Chars};
 
-use crate::Lox;
+use crate::{expr::Expr, Lox};
 
 #[derive(PartialEq, Eq, Debug, Clone, Copy)]
 pub enum TokenType {
@@ -24,7 +24,8 @@ pub enum TokenType {
 pub enum TokenLiteral {
 	None,
 	String(String),
-	Number(f64)
+	Number(f64),
+	Bool(bool)
 }
 
 impl ToString for TokenLiteral {
@@ -33,7 +34,14 @@ impl ToString for TokenLiteral {
 			TokenLiteral::None => "None".to_string(),
 			TokenLiteral::String(what) => what.clone(),
 			TokenLiteral::Number(num) => num.to_string(),
+			TokenLiteral::Bool(bool) => bool.to_string()
 		}
+	}
+}
+
+impl Into<Expr> for TokenLiteral {
+	fn into(self) -> Expr {
+		return Expr::literal(self);
 	}
 }
 
