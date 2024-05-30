@@ -43,7 +43,7 @@ fn generate_ty_enum(file: &mut File, ty: &ExprTy) -> io::Result<()> {
 	Ok(())
 }
 
-fn generate_ty_impl(file: &mut File, ty: &ExprTy) -> io::Result<()> {
+fn generate_ty_impl(file: &mut File, ty: &ExprTy, roottyname: &str) -> io::Result<()> {
 	write!(file, "\tpub fn {0}(", ty.tyname.to_ascii_lowercase())?;
 
 	let mut comma = false;
@@ -58,7 +58,7 @@ fn generate_ty_impl(file: &mut File, ty: &ExprTy) -> io::Result<()> {
 		comma = true;
 	}
 
-	writeln!(file, ") -> Expr {{")?;
+	writeln!(file, ") -> {} {{", roottyname)?;
 
 	if ty.args.len() > 1 {
 		for arg in &ty.args {
@@ -73,7 +73,7 @@ fn generate_ty_impl(file: &mut File, ty: &ExprTy) -> io::Result<()> {
 		}
 	}
 
-	write!(file, "\t\tExpr::{0} ", ty.tyname)?;
+	write!(file, "\t\t{}::{} ", roottyname, ty.tyname)?;
 
 	if ty.args.len() > 1 {
 		write!(file, "{{ ")?;
@@ -105,7 +105,7 @@ fn generate_ast_file(file: &mut File, tyname: &str, tys: &Vec<ExprTy>) -> io::Re
 
 	writeln!(file, "impl {} {{", tyname)?;
 	for ty in tys {
-		generate_ty_impl(file, ty)?;
+		generate_ty_impl(file, ty, tyname)?;
 	}
 	writeln!(file, "}}")?;
 
@@ -126,6 +126,9 @@ fn generate_ast_files(expr: &mut File, stmt: &mut File) -> io::Result<()> {
 	];
 
 	generate_ast_file(expr, "Expr", &tys_expr)?;
+
+	// Use the expr module inside stmt.gen.rs
+	writeln!(stmt, "use crate::expr::*;")?;
 	generate_ast_file(stmt, "Stmt", &tys_stmt)?;
 
 	Ok(())
