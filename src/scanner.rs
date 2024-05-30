@@ -1,8 +1,8 @@
-use std::str::Chars;
+use std::{collections::HashMap, str::Chars};
 
 use crate::Lox;
 
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq, Debug, Clone, Copy)]
 pub enum TokenType {
 	LeftParen, RightParen, LeftBrace, RightBrace,
 	Comma, Dot, Minus, Plus, Semicolon, Slash, Star,
@@ -62,7 +62,9 @@ pub struct Scanner<'a> {
 	current: i32,
 	line: i32,
 
-	lox: &'a mut Lox
+	lox: &'a mut Lox,
+
+	keyword_hash: HashMap<&'static str, TokenType>
 }
 
 fn is_digit(c: char) -> bool {
@@ -83,6 +85,25 @@ impl<'a> Scanner<'a> {
 	pub fn new(source: String, lox: &'a mut Lox) -> Scanner {
 		let chars = source.chars().collect();
 
+		let keyword_hash: HashMap<&'static str, TokenType> = HashMap::from([
+			("and",    TokenType::And),
+			("class",  TokenType::Class),
+			("else",   TokenType::Else),
+			("false",  TokenType::False),
+			("for",    TokenType::For),
+			("fun",    TokenType::Fun),
+			("if",     TokenType::If),
+			("nil",    TokenType::Nil),
+			("or",     TokenType::Or),
+			("print",  TokenType::Print),
+			("return", TokenType::Return),
+			("super",  TokenType::Super),
+			("this",   TokenType::This),
+			("true",   TokenType::True),
+			("var",    TokenType::Var),
+			("while",  TokenType::While),
+		]);
+
 		Scanner {
 			source,
 			chars,
@@ -90,7 +111,9 @@ impl<'a> Scanner<'a> {
 			current: 0,
 			line: 1,
 
-			lox
+			lox,
+
+			keyword_hash
 		}
 	}
 
@@ -181,7 +204,17 @@ impl<'a> Scanner<'a> {
 	}
 
 	fn identifier(&mut self, tokens: &mut Vec<Token>) {
-		
+		while is_alnum(self.peek()) { self.advance(); }
+
+		let text = &self.chars[self.start as usize..self.current as usize];
+		let text = String::from_iter(text);
+
+		if let Some(typ) = self.keyword_hash.get(&text as &str) {
+			self.add_token(tokens, *typ);
+			return;
+		}
+
+		self.add_token(tokens, TokenType::Idenitifer);
 	}
 
 	fn scan_token(&mut self, tokens: &mut Vec<Token>) {
