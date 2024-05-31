@@ -3,13 +3,15 @@ use std::collections::HashMap;
 use crate::{interpreter::InterpErr, scanner::{Token, LoxValue}};
 
 pub struct Environment {
-	values: Vec<HashMap<String, LoxValue>>
+	values: Vec<HashMap<String, LoxValue>>,
 }
 
 impl Environment {
 	pub fn new() -> Self {
 		let root = HashMap::new();
-		Environment { values: vec![root] }
+		Environment {
+			values: vec![root],
+		}
 	}
 
 	pub fn define(&mut self, name: String, value: LoxValue) {

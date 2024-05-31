@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use crate::{environment::{Environment}, expr::Expr, scanner::{Token, LoxValue}, stmt::Stmt};
 
 use crate::scanner::TokenType::*;
@@ -54,7 +56,7 @@ fn is_truthy(value: LoxValue) -> bool {
 }
 
 fn string_to_res(value: String) -> InterpRes {
-	return Ok(LoxValue::String(value))
+	return Ok(LoxValue::String(Rc::from(value.into_boxed_str())))
 }
 
 impl<'a, 'b> Interpreter<'a, 'b> {
@@ -75,7 +77,7 @@ impl<'a, 'b> Interpreter<'a, 'b> {
 			Plus => {
 				if let LoxValue::String(lhs) = left {
 					if let LoxValue::String(rhs) = right {
-						return string_to_res(lhs + &rhs);
+						return string_to_res(lhs.to_string() + &rhs);
 					}
 				}
 				else if let LoxValue::Number(lhs) = left {

@@ -1,4 +1,4 @@
-use std::{collections::HashMap};
+use std::{collections::HashMap, rc::Rc};
 
 use crate::{expr::Expr, Lox};
 
@@ -23,7 +23,7 @@ pub enum TokenType {
 #[derive(Clone, PartialEq, Debug)]
 pub enum LoxValue {
 	Nil,
-	String(String),
+	String(Rc<str>),
 	Number(f64),
 	Bool(bool)
 }
@@ -87,7 +87,15 @@ pub struct Scanner<'a> {
 
 	lox: &'a mut Lox,
 
-	keyword_hash: HashMap<&'static str, TokenType>
+	keyword_hash: HashMap<&'static str, TokenType>,
+
+	/// When building the initial tokens, use a cache of Rc<String> so that we
+	/// can re-use the String values.
+	/// 
+	/// It would be nice to be able to re-use String values created by the application,
+	/// but that's not very easy as somehow the Rc in the HashMap needs to not be
+	/// counted.
+	string_rc_cache: HashMap<String, Rc<str>>,
 }
 
 fn is_digit(c: char) -> bool {
@@ -127,6 +135,8 @@ impl<'a> Scanner<'a> {
 			("while",  TokenType::While),
 		]);
 
+		let string_rc_cache = HashMap::new();
+
 		Scanner {
 			source,
 			chars,
@@ -136,7 +146,9 @@ impl<'a> Scanner<'a> {
 
 			lox,
 
-			keyword_hash
+			keyword_hash,
+
+			string_rc_cache,
 		}
 	}
 
@@ -187,6 +199,19 @@ impl<'a> Scanner<'a> {
 		tokens.push(Token::new(typ, String::from_iter(text), lit, self.line));
 	}
 
+	fn get_cached_string(&mut self, value: String) -> Rc<str> {
+		if let Some(ptr) = self.string_rc_cache.get(&value) {
+			return ptr.clone();
+		}
+
+		// Insert the value into the cache.
+		let key = value.clone();
+		let rc: Rc<str> = value.into_boxed_str().into();
+		self.string_rc_cache.insert(key, rc.clone());
+
+		rc
+	}
+
 	fn string(&mut self, tokens: &mut Vec<Token>) {
 		while self.peek() != '"' && !self.is_at_end() {
 			if self.peek() == '\n' { self.line += 1; }
@@ -205,7 +230,9 @@ impl<'a> Scanner<'a> {
 		let trimmed = &self.chars[(self.start + 1) as usize..(self.current - 1) as usize];
 		let trimmed = String::from_iter(trimmed);
 
-		self.add_token_lit(tokens, TokenType::StringTok, LoxValue::String(trimmed));
+		let string = self.get_cached_string(trimmed);
+
+		self.add_token_lit(tokens, TokenType::StringTok, LoxValue::String(string));
 	}
 
 	fn number(&mut self, tokens: &mut Vec<Token>) {
