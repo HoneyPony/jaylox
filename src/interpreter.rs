@@ -46,12 +46,12 @@ fn lox_equals(lhs: LoxValue, rhs: LoxValue, invert: bool) -> InterpRes {
 	return Ok(LoxValue::Bool(result));
 }
 
-fn is_truthy(value: LoxValue) -> bool {
+fn is_truthy(value: &LoxValue) -> bool {
 	match value {
 		LoxValue::Nil => false,
 		LoxValue::String(_) => true,
 		LoxValue::Number(_) => true,
-		LoxValue::Bool(v) => v,
+		LoxValue::Bool(v) => *v,
 	}
 }
 
@@ -131,7 +131,7 @@ impl<'a, 'b> Interpreter<'a, 'b> {
 
 		match operator.typ {
 			Bang => {
-				return bool_to_res(!is_truthy(right));
+				return bool_to_res(!is_truthy(&right));
 			},
 			Minus => {
 				let rhs = res_to_number(operator, right)?;
@@ -160,6 +160,21 @@ impl<'a, 'b> Interpreter<'a, 'b> {
 			Expr::Assign { name, value } => {
 				let value = self.evaluate(value)?;
 				return self.environment.assign(name, value);
+			},
+			Expr::Logical { left, operator, right } => {
+				let left = self.evaluate(left)?;
+				
+				match operator.typ {
+					Or => {
+						if is_truthy(&left) { return Ok(left); }
+					},
+					And => {
+						if !is_truthy(&left) { return Ok(left); }
+					},
+					_ => unreachable!()
+				}
+
+				return self.evaluate(right);
 			}
 		}
 	}
@@ -203,7 +218,7 @@ impl<'a, 'b> Interpreter<'a, 'b> {
 				self.execute_block(statements)?;
 			},
 			Stmt::If { condition, then_branch, else_branch } => {
-				let is_true = is_truthy(self.evaluate(condition)?);
+				let is_true = is_truthy(&self.evaluate(condition)?);
 				if is_true {
 					self.execute(then_branch)?;
 				}

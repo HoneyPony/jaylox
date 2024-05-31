@@ -91,7 +91,7 @@ impl<'a> Parser<'a> {
 	}
 
 	fn assignment(&mut self) -> ExprRes {
-		let expr = self.equality()?;
+		let expr = self.or()?;
 
 		if self.match_one(Equal) {
 			let equals = self.previous().clone();
@@ -103,6 +103,30 @@ impl<'a> Parser<'a> {
 
 			// Report but don't bubble.
 			let _ = self.error(equals, "Invalid assignment target.");
+		}
+
+		Ok(expr)
+	}
+
+	fn or(&mut self) -> ExprRes {
+		let mut expr = self.and()?;
+
+		while self.match_one(Or) {
+			let operator = self.previous().clone();
+			let right = self.and()?;
+			expr = Expr::logical(expr, operator, right);
+		}
+
+		Ok(expr)
+	}
+
+	fn and(&mut self) -> ExprRes {
+		let mut expr = self.equality()?;
+
+		while self.match_one(And) {
+			let operator = self.previous().clone();
+			let right = self.equality()?;
+			expr = Expr::logical(expr, operator, right);
 		}
 
 		Ok(expr)

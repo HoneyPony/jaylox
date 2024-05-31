@@ -137,6 +137,7 @@ fn generate_ast_files(expr: &mut File, stmt: &mut File) -> io::Result<()> {
 		ty("Binary", vec![arg("left", "Expr"), arg("operator", "Token"), arg("right", "Expr")]),
 		ty("Grouping", vec![arg("expression", "Expr")]),
 		ty("Literal", vec![arg("value", "LoxValue")]),
+		ty("Logical", vec![arg("left", "Expr"), arg("operator", "Token"), arg("right", "Expr")]),
 		ty("Unary", vec![arg("operator", "Token"), arg("right", "Expr")]),
 		ty("Variable", vec![arg("name", "Token")]),
 		ty("Assign", vec![arg("name", "Token"), arg("value", "Expr")]),

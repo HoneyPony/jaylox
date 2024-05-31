@@ -31,6 +31,11 @@ pub fn ast_print(expr: &Expr) {
 			paren_middle(left);
 			paren_end(right);
 		},
+		Expr::Logical { left, operator, right } => {
+			paren_begin(&operator.lexeme);
+			paren_middle(left);
+			paren_end(right);
+		}
 		Expr::Grouping(expr) => {
 			paren_begin("group");
 			paren_end(expr);
