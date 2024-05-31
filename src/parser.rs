@@ -211,7 +211,23 @@ impl<'a> Parser<'a> {
 		return Ok(statements);
 	}
 
+	fn if_statement(&mut self) -> StmtRes {
+		self.consume(LeftParen, "Expect '(' after 'if'.")?;
+		let condition = self.expression()?;
+		self.consume(RightParen, "Expect ')' after if condition.")?;
+
+		let then_branch = self.statement()?;
+		let mut else_branch = None;
+
+		if self.match_one(Else) {
+			else_branch = Some(self.statement()?);
+		}
+
+		return Ok(Stmt::if_(condition, then_branch, else_branch));
+	}
+
 	fn statement(&mut self) -> StmtRes {
+		if self.match_one(If) { return self.if_statement(); }
 		if self.match_one(Print) { return self.print_statement(); }
 		if self.match_one(LeftBrace) {
 			return Ok(Stmt::Block(self.block()?))

@@ -17,7 +17,13 @@ fn ty(tyname: &str, args: Vec<ExprArg>) -> ExprTy {
 
 fn arg_stmt(name: &str, ty: &str) -> ExprArg {
 	let name = name.to_string();
-	let ty = ty.to_string();
+	let mut ty = ty.to_string();
+	if ty == "Stmt" {
+		ty = "Box<Stmt>".into();
+	}
+	if ty == "Option<Stmt>" {
+		ty = "Option<Box<Stmt>>".into();
+	}
 	return ExprArg { name, ty };
 }
 
@@ -44,13 +50,21 @@ fn generate_ty_enum(file: &mut File, ty: &ExprTy) -> io::Result<()> {
 }
 
 fn generate_ty_impl(file: &mut File, ty: &ExprTy, roottyname: &str) -> io::Result<()> {
-	write!(file, "\tpub fn {0}(", ty.tyname.to_ascii_lowercase())?;
+	let mut fnname = ty.tyname.to_ascii_lowercase();
+	if fnname == "if" { fnname = "if_".into(); }
+	write!(file, "\tpub fn {0}(", fnname)?;
 
 	let mut comma = false;
 	for arg in &ty.args {
 		if comma { write!(file, ", ")?; }
 		if arg.ty == "Box<Expr>" {
 			write!(file, "{0}: {1}", arg.name, "Expr")?;
+		}
+		else if arg.ty == "Box<Stmt>" {
+			write!(file, "{0}: {1}", arg.name, "Stmt")?;
+		}
+		else if arg.ty == "Option<Box<Stmt>>" {
+			write!(file, "{0}: {1}", arg.name, "Option<Stmt>")?;
 		}
 		else {
 			write!(file, "{0}: {1}", arg.name, arg.ty)?;
@@ -62,14 +76,20 @@ fn generate_ty_impl(file: &mut File, ty: &ExprTy, roottyname: &str) -> io::Resul
 
 	if ty.args.len() > 1 {
 		for arg in &ty.args {
-			if arg.ty == "Box<Expr>" {
+			if arg.ty == "Box<Expr>" || arg.ty == "Box<Stmt>" {
 				writeln!(file, "\t\tlet {0} = Box::new({0});", arg.name)?;
+			}
+			if arg.ty == "Option<Box<Stmt>>" {
+				writeln!(file, "\t\tlet {0} = {0}.map(|s| Box::new(s));", arg.name)?;
 			}
 		}
 	}
 	else {
-		if ty.args[0].ty == "Box<Expr>" {
+		if ty.args[0].ty == "Box<Expr>" || ty.args[0].ty == "Box<Stmt>" {
 			writeln!(file, "\t\tlet {0} = Box::new({0});", ty.args[0].name)?;
+		}
+		if ty.args[0].ty == "Option<Box<Stmt>>" {
+			writeln!(file, "\t\tlet {0} = {0}.map(|s| Box::new(s));", ty.args[0].name)?;
 		}
 	}
 
@@ -116,7 +136,7 @@ fn generate_ast_files(expr: &mut File, stmt: &mut File) -> io::Result<()> {
 	let tys_expr: Vec<ExprTy> = vec![
 		ty("Binary", vec![arg("left", "Expr"), arg("operator", "Token"), arg("right", "Expr")]),
 		ty("Grouping", vec![arg("expression", "Expr")]),
-		ty("Literal", vec![arg("value", "TokenLiteral")]),
+		ty("Literal", vec![arg("value", "LoxValue")]),
 		ty("Unary", vec![arg("operator", "Token"), arg("right", "Expr")]),
 		ty("Variable", vec![arg("name", "Token")]),
 		ty("Assign", vec![arg("name", "Token"), arg("value", "Expr")]),
@@ -125,6 +145,7 @@ fn generate_ast_files(expr: &mut File, stmt: &mut File) -> io::Result<()> {
 	let tys_stmt: Vec<ExprTy> = vec![
 		ty("Block", vec![arg_stmt("statements", "Vec<Stmt>")]),
 		ty("Expression", vec![arg_stmt("expression", "Expr")]),
+		ty("If", vec![arg_stmt("condition", "Expr"), arg_stmt("then_branch", "Stmt"), arg_stmt("else_branch", "Option<Stmt>")]),
 		ty("Print", vec![arg_stmt("expression", "Expr")]),
 		ty("Var", vec![arg_stmt("name", "Token"), arg_stmt("initializer", "Option<Expr>")]),
 	];

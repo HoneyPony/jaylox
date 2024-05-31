@@ -201,6 +201,17 @@ impl<'a, 'b> Interpreter<'a, 'b> {
 			},
 			Stmt::Block(statements) => {
 				self.execute_block(statements)?;
+			},
+			Stmt::If { condition, then_branch, else_branch } => {
+				let is_true = is_truthy(self.evaluate(condition)?);
+				if is_true {
+					self.execute(then_branch)?;
+				}
+				else {
+					if let Some(else_branch) = else_branch {
+						self.execute(else_branch)?;
+					}
+				}
 			}
 		}
 
