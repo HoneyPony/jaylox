@@ -64,6 +64,9 @@ impl Lox {
 			parser.parse()
 		};
 
+		// Don't interpret if we had an error
+		if self.had_error { return; }
+
 		{
 			let mut interpreter = Interpreter::new(self, environment);
 			interpreter.interpret(&program);
@@ -73,6 +76,7 @@ impl Lox {
 	fn run_file(&mut self, path: String) -> std::io::Result<()> {
 		let contents = std::fs::read_to_string(path)?;
 		let mut environment = Environment::new();
+
 		self.run(contents, &mut environment);
 		Ok(())
 	}
