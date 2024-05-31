@@ -102,7 +102,7 @@ impl<'a> Parser<'a> {
 			}
 
 			// Report but don't bubble.
-			self.error(equals, "Invalid assignment target.");
+			let _ = self.error(equals, "Invalid assignment target.");
 		}
 
 		Ok(expr)
@@ -196,7 +196,7 @@ impl<'a> Parser<'a> {
 
 	fn expression_statement(&mut self) -> StmtRes {
 		let value = self.expression()?;
-		self.consume(Semicolon, "Expect ';' after expression.");
+		self.consume(Semicolon, "Expect ';' after expression.")?;
 		return Ok(Stmt::expression(value));
 	}
 
@@ -214,7 +214,7 @@ impl<'a> Parser<'a> {
 			initializer = Some(self.expression()?);
 		}
 
-		self.consume(Semicolon, "Expect ';' after variable declaration.");
+		self.consume(Semicolon, "Expect ';' after variable declaration.")?;
 		return Ok(Stmt::var(name, initializer));
 	}
 
