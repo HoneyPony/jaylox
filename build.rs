@@ -52,6 +52,7 @@ fn generate_ty_enum(file: &mut File, ty: &ExprTy) -> io::Result<()> {
 fn generate_ty_impl(file: &mut File, ty: &ExprTy, roottyname: &str) -> io::Result<()> {
 	let mut fnname = ty.tyname.to_ascii_lowercase();
 	if fnname == "if" { fnname = "if_".into(); }
+	if fnname == "while" { fnname = "while_".into(); }
 	write!(file, "\tpub fn {0}(", fnname)?;
 
 	let mut comma = false;
@@ -149,6 +150,7 @@ fn generate_ast_files(expr: &mut File, stmt: &mut File) -> io::Result<()> {
 		ty("If", vec![arg_stmt("condition", "Expr"), arg_stmt("then_branch", "Stmt"), arg_stmt("else_branch", "Option<Stmt>")]),
 		ty("Print", vec![arg_stmt("expression", "Expr")]),
 		ty("Var", vec![arg_stmt("name", "Token"), arg_stmt("initializer", "Option<Expr>")]),
+		ty("While", vec![arg_stmt("condition", "Expr"), arg_stmt("body", "Stmt")]),
 	];
 
 	generate_ast_file(expr, "Expr", &tys_expr)?;

@@ -250,8 +250,19 @@ impl<'a> Parser<'a> {
 		return Ok(Stmt::if_(condition, then_branch, else_branch));
 	}
 
+	fn while_statement(&mut self) -> StmtRes {
+		self.consume(LeftParen, "Expect '(' after 'while'.")?;
+		let condition = self.expression()?;
+		self.consume(RightParen, "Expect ')' after while condition.")?;
+
+		let body = self.statement()?;
+
+		return Ok(Stmt::while_(condition, body));
+	}
+
 	fn statement(&mut self) -> StmtRes {
 		if self.match_one(If) { return self.if_statement(); }
+		if self.match_one(While) { return self.while_statement(); }
 		if self.match_one(Print) { return self.print_statement(); }
 		if self.match_one(LeftBrace) {
 			return Ok(Stmt::Block(self.block()?))
