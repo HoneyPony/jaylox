@@ -3,6 +3,7 @@ mod expr;
 mod stmt;
 mod parser;
 mod interpreter;
+mod environment;
 
 use std::env;
 use std::process::exit;
@@ -13,10 +14,11 @@ use expr::ast_print;
 use interpreter::{Interpreter, InterpErr};
 use scanner::{Scanner, Token, TokenType};
 use parser::Parser;
+use environment::Environment;
 
 struct Lox {
 	had_error: bool,
-	had_runtime_error: bool
+	had_runtime_error: bool,
 }
 
 impl Lox {
@@ -51,7 +53,7 @@ impl Lox {
 		self.had_runtime_error = true;
 	}
 
-	fn run(&mut self, code: String) {
+	fn run(&mut self, code: String, environment: &mut Environment) {
 		let tokens = {
 			let mut scanner = Scanner::new(code, self);
 			scanner.scan_tokens()
@@ -63,18 +65,21 @@ impl Lox {
 		};
 
 		{
-			let mut interpreter = Interpreter::new(self);
+			let mut interpreter = Interpreter::new(self, environment);
 			interpreter.interpret(&program);
 		}
 	}
 
 	fn run_file(&mut self, path: String) -> std::io::Result<()> {
 		let contents = std::fs::read_to_string(path)?;
-		self.run(contents);
+		let mut environment = Environment::new();
+		self.run(contents, &mut environment);
 		Ok(())
 	}
 
 	fn run_prompt(&mut self) {
+		let mut environment = Environment::new();
+
 		loop {
 			print!("> ");
 			let _ = io::stdout().flush();
@@ -84,7 +89,7 @@ impl Lox {
 				break;
 			};
 
-			self.run(line);
+			self.run(line, &mut environment);
 			self.had_error = false;
 		}
 	}

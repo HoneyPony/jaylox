@@ -117,12 +117,15 @@ fn generate_ast_files(expr: &mut File, stmt: &mut File) -> io::Result<()> {
 		ty("Binary", vec![arg("left", "Expr"), arg("operator", "Token"), arg("right", "Expr")]),
 		ty("Grouping", vec![arg("expression", "Expr")]),
 		ty("Literal", vec![arg("value", "TokenLiteral")]),
-		ty("Unary", vec![arg("operator", "Token"), arg("right", "Expr")])
+		ty("Unary", vec![arg("operator", "Token"), arg("right", "Expr")]),
+		ty("Variable", vec![arg("name", "Token")]),
 	];
 
 	let tys_stmt: Vec<ExprTy> = vec![
 		ty("Expression", vec![arg_stmt("expression", "Expr")]),
-		ty("Print", vec![arg_stmt("expression", "Expr")])
+		ty("Print", vec![arg_stmt("expression", "Expr")]),
+		ty("Var", vec![arg_stmt("name", "Token"), arg_stmt("initializer", "Option<Expr>")]),
+
 	];
 
 	generate_ast_file(expr, "Expr", &tys_expr)?;

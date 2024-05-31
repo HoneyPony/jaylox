@@ -1,4 +1,4 @@
-use crate::{expr::Expr, scanner::{Token, TokenLiteral}, stmt::Stmt};
+use crate::{environment::{self, Environment}, expr::Expr, scanner::{Token, TokenLiteral}, stmt::Stmt};
 
 use crate::scanner::TokenType::*;
 use crate::Lox;
@@ -17,8 +17,9 @@ impl InterpErr {
 
 pub type InterpRes = Result<TokenLiteral, InterpErr>;
 
-pub struct Interpreter<'a> {
-	lox: &'a mut Lox
+pub struct Interpreter<'a, 'b> {
+	lox: &'a mut Lox,
+	environment: &'b mut Environment
 }
 
 fn res_to_number(op: &Token, value: TokenLiteral) -> Result<f64, InterpErr> {
@@ -63,9 +64,9 @@ fn string_to_res(value: String) -> InterpRes {
 	return Ok(TokenLiteral::String(value))
 }
 
-impl<'a> Interpreter<'a> {
-	pub fn new(lox: &'a mut Lox) -> Self {
-		Interpreter { lox }
+impl<'a, 'b> Interpreter<'a, 'b> {
+	pub fn new(lox: &'a mut Lox, environment: &'b mut Environment) -> Self {
+		Interpreter { lox, environment }
 	}
 
 	fn binary_op(&mut self, left: &Expr, op: &Token, right: &Expr) -> InterpRes {
@@ -155,6 +156,12 @@ impl<'a> Interpreter<'a> {
 			Expr::Unary { operator, right } => {
 				return self.unary_op(operator, right);
 			},
+			Expr::Variable(var) => {
+				// TODO: Consider how to speed this up in the case of strings.
+				// Maybe look into Cow?
+				// The other option is some kind of String arena
+				return self.environment.get(var).cloned();
+			}
 		}
 	}
 
@@ -165,6 +172,14 @@ impl<'a> Interpreter<'a> {
 				let value = self.evaluate(expr)?;
 				println!("{}", value.to_string());
 			},
+			Stmt::Var { name, initializer } => {
+				let mut value = TokenLiteral::None;
+				if let Some(expr) = initializer {
+					value = self.evaluate(expr)?;
+				}
+				self.environment.define(name.lexeme.clone(), value);
+				
+			}
 		}
 
 		Ok(())

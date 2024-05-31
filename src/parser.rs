@@ -157,6 +157,10 @@ impl<'a> Parser<'a> {
 			return Ok(self.previous().literal.clone().into());
 		}
 
+		if self.match_one(Identifier) {
+			return Ok(Expr::variable(self.previous().clone()));
+		}
+
 		if self.match_one(LeftParen) {
 			let expr = self.expression()?;
 			self.consume(RightParen, "Expect ')' after expression.")?;
@@ -184,8 +188,23 @@ impl<'a> Parser<'a> {
 		return self.expression_statement();
 	}
 
+	fn var_declaration(&mut self) -> StmtRes {
+		let name = self.consume(Identifier, "Expect variable name.")?;
+
+		let mut initializer = None;
+		if self.match_one(Equal) {
+			initializer = Some(self.expression()?);
+		}
+
+		self.consume(Semicolon, "Expect ';' after variable declaration.");
+		return Ok(Stmt::var(name, initializer));
+	}
+
 	fn declaration(&mut self) -> Option<Stmt> {
-		let result = {
+		let result = if self.match_one(Var) {
+			self.var_declaration()
+		}
+		else { 
 			self.statement()
 		};
 

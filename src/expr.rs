@@ -38,6 +38,9 @@ pub fn ast_print(expr: &Expr) {
 			paren_begin(&operator.lexeme);
 			paren_end(right);
 		},
+		Expr::Variable(var) => {
+			print!("{}", var.lexeme);
+		}
 	}
 }
 

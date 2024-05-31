@@ -20,7 +20,7 @@ pub enum TokenType {
 	Eof
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Debug)]
 pub enum TokenLiteral {
 	None,
 	String(String),
