@@ -57,14 +57,14 @@ impl Lox {
 			scanner.scan_tokens()
 		};
 
-		let tree = {
+		let program = {
 			let mut parser = Parser::new(tokens, self);
 			parser.parse()
 		};
 
-		if let Some(tree) = tree {
+		{
 			let mut interpreter = Interpreter::new(self);
-			interpreter.interpret(&tree);
+			interpreter.interpret(&program);
 		}
 	}
 

@@ -1,4 +1,4 @@
-use crate::{expr::Expr, scanner::{Token, TokenLiteral}};
+use crate::{expr::Expr, scanner::{Token, TokenLiteral}, stmt::Stmt};
 
 use crate::scanner::TokenType::*;
 use crate::Lox;
@@ -158,10 +158,30 @@ impl<'a> Interpreter<'a> {
 		}
 	}
 
-	pub fn interpret(&mut self, expr: &Expr) {
-		match self.evaluate(expr) {
-			Ok(result) => {
-				println!("=> {0}", result.to_string());
+	fn execute(&mut self, stmt: &Stmt) -> Result<(), InterpErr> {
+		match stmt {
+			Stmt::Expression(expr) => { self.evaluate(expr)?; },
+			Stmt::Print(expr) => {
+				let value = self.evaluate(expr)?;
+				println!("{}", value.to_string());
+			},
+		}
+
+		Ok(())
+	}
+
+	fn interpret_to_result(&mut self, stmts: &Vec<Stmt>) -> Result<(), InterpErr> {
+		for stmt in stmts {
+			self.execute(stmt)?;
+		}
+
+		Ok(())
+	}
+
+	pub fn interpret(&mut self, stmts: &Vec<Stmt>) {
+		match self.interpret_to_result(stmts) {
+			Ok(_) => {
+				// Do nothing
 			}
 			Err(err) => {
 				self.lox.runtime_error(&err)

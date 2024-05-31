@@ -166,8 +166,22 @@ impl<'a> Parser<'a> {
 		return self.error_expr(self.peek().clone(), "Expect expression.");
 	}
 
+	fn print_statement(&mut self) -> StmtRes {
+		let value = self.expression()?;
+		self.consume(Semicolon, "Expect ';' after value.")?;
+		return Ok(Stmt::print(value));
+	}
+
+	fn expression_statement(&mut self) -> StmtRes {
+		let value = self.expression()?;
+		self.consume(Semicolon, "Expect ';' after expression.");
+		return Ok(Stmt::expression(value));
+	}
+
 	fn statement(&mut self) -> StmtRes {
-		return Err(ExprErr)
+		if self.match_one(Print) { return self.print_statement(); }
+
+		return self.expression_statement();
 	}
 
 	fn declaration(&mut self) -> Option<Stmt> {
