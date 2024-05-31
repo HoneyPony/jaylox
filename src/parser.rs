@@ -200,8 +200,22 @@ impl<'a> Parser<'a> {
 		return Ok(Stmt::expression(value));
 	}
 
+	fn block(&mut self) -> Result<Vec<Stmt>, ExprErr> {
+		let mut statements = vec![];
+
+		while !self.check(RightBrace) && !self.is_at_end() {
+			statements.push(self.declaration().ok_or(ExprErr)?);
+		}
+
+		self.consume(RightBrace, "Expect '}' after block.")?;
+		return Ok(statements);
+	}
+
 	fn statement(&mut self) -> StmtRes {
 		if self.match_one(Print) { return self.print_statement(); }
+		if self.match_one(LeftBrace) {
+			return Ok(Stmt::Block(self.block()?))
+		}
 
 		return self.expression_statement();
 	}

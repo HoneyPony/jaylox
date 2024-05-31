@@ -162,6 +162,26 @@ impl<'a, 'b> Interpreter<'a, 'b> {
 		}
 	}
 
+	/// Does not handle making a new environment.
+	/// Helper function so that we can correctly pop_scope() after running into
+	/// an error.
+	fn execute_block_loop(&mut self, block: &Vec<Stmt>) -> Result<(), InterpErr> {
+		for stmt in block {
+			self.execute(stmt)?;
+		}
+
+		Ok(())
+	}
+
+	fn execute_block(&mut self, block: &Vec<Stmt>) -> Result<(), InterpErr> {
+		// TODO: Figure out if the environment scoping should be outside this function
+		self.environment.push_scope();
+		let result = self.execute_block_loop(block);
+		self.environment.pop_scope();
+
+		result
+	}
+
 	fn execute(&mut self, stmt: &Stmt) -> Result<(), InterpErr> {
 		match stmt {
 			Stmt::Expression(expr) => { self.evaluate(expr)?; },
@@ -176,6 +196,9 @@ impl<'a, 'b> Interpreter<'a, 'b> {
 				}
 				self.environment.define(name.lexeme.clone(), value);
 				
+			},
+			Stmt::Block(statements) => {
+				self.execute_block(statements)?;
 			}
 		}
 

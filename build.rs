@@ -123,10 +123,10 @@ fn generate_ast_files(expr: &mut File, stmt: &mut File) -> io::Result<()> {
 	];
 
 	let tys_stmt: Vec<ExprTy> = vec![
+		ty("Block", vec![arg_stmt("statements", "Vec<Stmt>")]),
 		ty("Expression", vec![arg_stmt("expression", "Expr")]),
 		ty("Print", vec![arg_stmt("expression", "Expr")]),
 		ty("Var", vec![arg_stmt("name", "Token"), arg_stmt("initializer", "Option<Expr>")]),
-
 	];
 
 	generate_ast_file(expr, "Expr", &tys_expr)?;
