@@ -10,7 +10,6 @@ use std::process::exit;
 use std::io;
 use std::io::Write;
 
-use expr::ast_print;
 use interpreter::{Interpreter, InterpErr};
 use scanner::{Scanner, Token, TokenType};
 use parser::Parser;

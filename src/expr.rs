@@ -5,21 +5,25 @@ pub struct ExprErr;
 
 pub type ExprRes = Result<Expr, ExprErr>;
 
+#[allow(unused)]
 fn paren_begin(marker: &str) {
 	print!("({}", marker);
 }
 
+#[allow(unused)]
 fn paren_middle(expr: &Expr) {
 	print!(" ");
 	ast_print(expr);
 }
 
+#[allow(unused)]
 fn paren_end(expr: &Expr) {
 	print!(" ");
 	ast_print(expr);
 	print!(")");
 }
 
+#[allow(unused)]
 pub fn ast_print(expr: &Expr) {
 	match expr {
 		Expr::Binary { left, operator, right } => {

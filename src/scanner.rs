@@ -1,4 +1,4 @@
-use std::{collections::HashMap, str::Chars};
+use std::{collections::HashMap};
 
 use crate::{expr::Expr, Lox};
 
@@ -198,7 +198,7 @@ impl<'a> Scanner<'a> {
 	fn number(&mut self, tokens: &mut Vec<Token>) {
 		while is_digit(self.peek()) { self.advance(); }
 
-		if(self.peek() == '.' && is_digit(self.peek_next())) {
+		if self.peek() == '.' && is_digit(self.peek_next()) {
 			self.advance(); /* Consume decimal */
 
 			while is_digit(self.peek()) { self.advance(); }
@@ -300,7 +300,7 @@ impl<'a> Scanner<'a> {
 	pub fn scan_tokens(&mut self) -> Vec<Token> {
 		let mut tokens = vec![];
 
-		while(!self.is_at_end()) {
+		while !self.is_at_end() {
 			self.start = self.current;
 			self.scan_token(&mut tokens);
 		}

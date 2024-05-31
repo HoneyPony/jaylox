@@ -1,4 +1,4 @@
-use crate::{environment::{self, Environment}, expr::Expr, scanner::{Token, TokenLiteral}, stmt::Stmt};
+use crate::{environment::{Environment}, expr::Expr, scanner::{Token, TokenLiteral}, stmt::Stmt};
 
 use crate::scanner::TokenType::*;
 use crate::Lox;
@@ -31,13 +31,6 @@ fn res_to_number(op: &Token, value: TokenLiteral) -> Result<f64, InterpErr> {
 
 fn number_to_res(value: f64) -> InterpRes {
 	return Ok(TokenLiteral::Number(value))
-}
-
-fn res_to_bool(op: &Token, value: TokenLiteral) -> Result<bool, InterpErr> {
-	if let TokenLiteral::Bool(x) = value {
-		return Ok(x)
-	}
-	return Err(InterpErr::new(op, format!("Operand should be bool")));
 }
 
 fn bool_to_res(value: bool) -> InterpRes {
