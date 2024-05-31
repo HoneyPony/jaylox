@@ -1,4 +1,4 @@
-use crate::{environment::{Environment}, expr::Expr, scanner::{Token, TokenLiteral}, stmt::Stmt};
+use crate::{environment::{Environment}, expr::Expr, scanner::{Token, LoxValue}, stmt::Stmt};
 
 use crate::scanner::TokenType::*;
 use crate::Lox;
@@ -15,46 +15,46 @@ impl InterpErr {
 	}
 }
 
-pub type InterpRes = Result<TokenLiteral, InterpErr>;
+pub type InterpRes = Result<LoxValue, InterpErr>;
 
 pub struct Interpreter<'a, 'b> {
 	lox: &'a mut Lox,
 	environment: &'b mut Environment
 }
 
-fn res_to_number(op: &Token, value: TokenLiteral) -> Result<f64, InterpErr> {
-	if let TokenLiteral::Number(x) = value {
+fn res_to_number(op: &Token, value: LoxValue) -> Result<f64, InterpErr> {
+	if let LoxValue::Number(x) = value {
 		return Ok(x)
 	}
 	return Err(InterpErr::new(op, format!("Operands should be numbers, when evaluating {0}", value.to_string())))
 }
 
 fn number_to_res(value: f64) -> InterpRes {
-	return Ok(TokenLiteral::Number(value))
+	return Ok(LoxValue::Number(value))
 }
 
 fn bool_to_res(value: bool) -> InterpRes {
-	return Ok(TokenLiteral::Bool(value))
+	return Ok(LoxValue::Bool(value))
 }
 
-fn lox_equals(lhs: TokenLiteral, rhs: TokenLiteral, invert: bool) -> InterpRes {
+fn lox_equals(lhs: LoxValue, rhs: LoxValue, invert: bool) -> InterpRes {
 	let result = lhs == rhs;
-	if invert { return Ok(TokenLiteral::Bool(!result)); }
+	if invert { return Ok(LoxValue::Bool(!result)); }
 
-	return Ok(TokenLiteral::Bool(result));
+	return Ok(LoxValue::Bool(result));
 }
 
-fn is_truthy(value: TokenLiteral) -> bool {
+fn is_truthy(value: LoxValue) -> bool {
 	match value {
-		TokenLiteral::None => false,
-		TokenLiteral::String(_) => true,
-		TokenLiteral::Number(_) => true,
-		TokenLiteral::Bool(v) => v,
+		LoxValue::Nil => false,
+		LoxValue::String(_) => true,
+		LoxValue::Number(_) => true,
+		LoxValue::Bool(v) => v,
 	}
 }
 
 fn string_to_res(value: String) -> InterpRes {
-	return Ok(TokenLiteral::String(value))
+	return Ok(LoxValue::String(value))
 }
 
 impl<'a, 'b> Interpreter<'a, 'b> {
@@ -73,13 +73,13 @@ impl<'a, 'b> Interpreter<'a, 'b> {
 				return number_to_res(lhs - rhs);
 			},
 			Plus => {
-				if let TokenLiteral::String(lhs) = left {
-					if let TokenLiteral::String(rhs) = right {
+				if let LoxValue::String(lhs) = left {
+					if let LoxValue::String(rhs) = right {
 						return string_to_res(lhs + &rhs);
 					}
 				}
-				else if let TokenLiteral::Number(lhs) = left {
-					if let TokenLiteral::Number(rhs) = right {
+				else if let LoxValue::Number(lhs) = left {
+					if let LoxValue::Number(rhs) = right {
 						return number_to_res(lhs + rhs);
 					}
 				}
@@ -187,10 +187,10 @@ impl<'a, 'b> Interpreter<'a, 'b> {
 			Stmt::Expression(expr) => { self.evaluate(expr)?; },
 			Stmt::Print(expr) => {
 				let value = self.evaluate(expr)?;
-				println!("{}", value.to_string());
+				println!("{}", value.to_printable_string());
 			},
 			Stmt::Var { name, initializer } => {
-				let mut value = TokenLiteral::None;
+				let mut value = LoxValue::Nil;
 				if let Some(expr) = initializer {
 					value = self.evaluate(expr)?;
 				}

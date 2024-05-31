@@ -59,13 +59,13 @@ mod tests {
 
     #[test]
     fn test_ast_print() {
-		let minus = Token::new(TokenType::Minus, "-".into(), TokenLiteral::None, 1);
-		let star = Token::new(TokenType::Star, "*".into(), TokenLiteral::None, 1);
+		let minus = Token::new(TokenType::Minus, "-".into(), LoxValue::Nil, 1);
+		let star = Token::new(TokenType::Star, "*".into(), LoxValue::Nil, 1);
 
         let expr = Expr::binary(
-			Expr::unary(minus, Expr::literal(TokenLiteral::Number(123.0))),
+			Expr::unary(minus, Expr::literal(LoxValue::Number(123.0))),
 			star,
-			Expr::grouping(Expr::literal(TokenLiteral::Number(45.67)))
+			Expr::grouping(Expr::literal(LoxValue::Number(45.67)))
 		);
 
 		ast_print(&expr);

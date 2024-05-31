@@ -21,25 +21,38 @@ pub enum TokenType {
 }
 
 #[derive(Clone, PartialEq, Debug)]
-pub enum TokenLiteral {
-	None,
+pub enum LoxValue {
+	Nil,
 	String(String),
 	Number(f64),
 	Bool(bool)
 }
 
-impl ToString for TokenLiteral {
+impl ToString for LoxValue {
 	fn to_string(&self) -> String {
 		match self {
-			TokenLiteral::None => "None".to_string(),
-			TokenLiteral::String(what) => format!("'{what}'"),
-			TokenLiteral::Number(num) => num.to_string(),
-			TokenLiteral::Bool(bool) => bool.to_string()
+			LoxValue::Nil => "nil".to_string(),
+			LoxValue::String(what) => format!("'{what}'"),
+			LoxValue::Number(num) => num.to_string(),
+			LoxValue::Bool(bool) => bool.to_string()
 		}
 	}
 }
 
-impl Into<Expr> for TokenLiteral {
+impl LoxValue {
+	/// Prints what the user would expect in the case of a string.
+	/// That is, instead of seeing 'blah', you just see blah.
+	pub fn to_printable_string(&self) -> String {
+		match self {
+			LoxValue::Nil => "nil".to_string(),
+			LoxValue::String(what) => format!("{what}"),
+			LoxValue::Number(num) => num.to_string(),
+			LoxValue::Bool(bool) => bool.to_string()
+		}
+	}
+}
+
+impl Into<Expr> for LoxValue {
 	fn into(self) -> Expr {
 		return Expr::literal(self);
 	}
@@ -49,12 +62,12 @@ impl Into<Expr> for TokenLiteral {
 pub struct Token {
 	pub typ: TokenType,
 	pub lexeme: String,
-	pub literal: TokenLiteral,
+	pub literal: LoxValue,
 	pub line: i32
 }
 
 impl Token {
-	pub fn new(typ: TokenType, lexeme: String, literal: TokenLiteral, line: i32) -> Self {
+	pub fn new(typ: TokenType, lexeme: String, literal: LoxValue, line: i32) -> Self {
 		Token { typ, lexeme, literal, line }
 	}
 }
@@ -166,10 +179,10 @@ impl<'a> Scanner<'a> {
 	}
 
 	fn add_token(&mut self, tokens: &mut Vec<Token>, typ: TokenType) {
-		self.add_token_lit(tokens, typ, TokenLiteral::None);
+		self.add_token_lit(tokens, typ, LoxValue::Nil);
 	}
 
-	fn add_token_lit(&mut self, tokens: &mut Vec<Token>, typ: TokenType, lit: TokenLiteral) {
+	fn add_token_lit(&mut self, tokens: &mut Vec<Token>, typ: TokenType, lit: LoxValue) {
 		let text = &self.chars[self.start as usize..self.current as usize];
 		tokens.push(Token::new(typ, String::from_iter(text), lit, self.line));
 	}
@@ -192,7 +205,7 @@ impl<'a> Scanner<'a> {
 		let trimmed = &self.chars[(self.start + 1) as usize..(self.current - 1) as usize];
 		let trimmed = String::from_iter(trimmed);
 
-		self.add_token_lit(tokens, TokenType::StringTok, TokenLiteral::String(trimmed));
+		self.add_token_lit(tokens, TokenType::StringTok, LoxValue::String(trimmed));
 	}
 
 	fn number(&mut self, tokens: &mut Vec<Token>) {
@@ -210,7 +223,7 @@ impl<'a> Scanner<'a> {
 		/* This should never fail because we're only lexing numbers. */
 		let value: f64 = text.parse().unwrap();
 
-		self.add_token_lit(tokens, TokenType::Number, TokenLiteral::Number(value));
+		self.add_token_lit(tokens, TokenType::Number, LoxValue::Number(value));
 	}
 
 	fn identifier(&mut self, tokens: &mut Vec<Token>) {
@@ -305,7 +318,7 @@ impl<'a> Scanner<'a> {
 			self.scan_token(&mut tokens);
 		}
 
-		tokens.push(Token::new(TokenType::Eof, "".to_string(), TokenLiteral::None, self.line));
+		tokens.push(Token::new(TokenType::Eof, "".to_string(), LoxValue::Nil, self.line));
 
 		return tokens;
 	}

@@ -167,9 +167,9 @@ impl<'a> Parser<'a> {
 	}
 
 	fn primary(&mut self) -> ExprRes {
-		if self.match_one(False) { return Ok(TokenLiteral::Bool(false).into()) }
-		if self.match_one(True) { return Ok(TokenLiteral::Bool(true).into()) }
-		if self.match_one(Nil) { return Ok(TokenLiteral::None.into()) }
+		if self.match_one(False) { return Ok(LoxValue::Bool(false).into()) }
+		if self.match_one(True) { return Ok(LoxValue::Bool(true).into()) }
+		if self.match_one(Nil) { return Ok(LoxValue::Nil.into()) }
 
 		if self.match_either(Number, StringTok) {
 			return Ok(self.previous().literal.clone().into());
