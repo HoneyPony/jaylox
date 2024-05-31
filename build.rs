@@ -119,6 +119,7 @@ fn generate_ast_files(expr: &mut File, stmt: &mut File) -> io::Result<()> {
 		ty("Literal", vec![arg("value", "TokenLiteral")]),
 		ty("Unary", vec![arg("operator", "Token"), arg("right", "Expr")]),
 		ty("Variable", vec![arg("name", "Token")]),
+		ty("Assign", vec![arg("name", "Token"), arg("value", "Expr")]),
 	];
 
 	let tys_stmt: Vec<ExprTy> = vec![

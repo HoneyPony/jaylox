@@ -26,5 +26,14 @@ impl Environment {
 
 		Err(InterpErr::new(name, format!("Undefined variable '{}'", name.lexeme)))
 	}
+
+	pub fn assign(&mut self, name: &Token, value: TokenLiteral) -> Result<TokenLiteral, InterpErr> {
+		if let Some(ptr) = self.values.get_mut(&name.lexeme) {
+			*ptr = value.clone();
+			return Ok(value);
+		}
+		
+		Err(InterpErr::new(name, format!("Undefined variable '{}'", name.lexeme)))
+	}
 }
 

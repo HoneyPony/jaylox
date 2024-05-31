@@ -87,7 +87,25 @@ impl<'a> Parser<'a> {
 	}
 
 	fn expression(&mut self) -> ExprRes {
-		self.equality()
+		self.assignment()
+	}
+
+	fn assignment(&mut self) -> ExprRes {
+		let expr = self.equality()?;
+
+		if self.match_one(Equal) {
+			let equals = self.previous().clone();
+			let value = self.assignment()?;
+
+			if let Expr::Variable(name) = expr {
+				return Ok(Expr::assign(name, value));
+			}
+
+			// Report but don't bubble.
+			self.error(equals, "Invalid assignment target.");
+		}
+
+		Ok(expr)
 	}
 
 	fn equality(&mut self) -> ExprRes {

@@ -40,6 +40,11 @@ pub fn ast_print(expr: &Expr) {
 		},
 		Expr::Variable(var) => {
 			print!("{}", var.lexeme);
+		},
+		Expr::Assign { name, value } => {
+			paren_begin("assign");
+			print!(" {}", name.lexeme);
+			paren_end(value);
 		}
 	}
 }

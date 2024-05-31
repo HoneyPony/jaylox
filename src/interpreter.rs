@@ -161,6 +161,10 @@ impl<'a, 'b> Interpreter<'a, 'b> {
 				// Maybe look into Cow?
 				// The other option is some kind of String arena
 				return self.environment.get(var).cloned();
+			},
+			Expr::Assign { name, value } => {
+				let value = self.evaluate(value)?;
+				return self.environment.assign(name, value);
 			}
 		}
 	}
