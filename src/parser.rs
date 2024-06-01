@@ -260,7 +260,55 @@ impl<'a> Parser<'a> {
 		return Ok(Stmt::while_(condition, body));
 	}
 
+	fn for_statement(&mut self) -> StmtRes {
+		self.consume(LeftParen, "Expect '(' after 'for'.")?;
+
+		let mut initializer = None;
+		if self.match_one(Semicolon) {
+
+		}
+		else if self.match_one(Var) {
+			initializer = Some(self.var_declaration()?);
+		}
+		else {
+			initializer = Some(self.expression_statement()?);
+		}
+
+		let mut condition = None;
+		if !self.check(Semicolon) {
+			condition = Some(self.expression()?);
+		}
+
+		self.consume(Semicolon, "Expect ';' after loop condition.")?;
+
+		let mut increment = None;
+		if !self.check(RightParen) {
+			increment = Some(self.expression()?);
+		}
+
+		self.consume(RightParen, "Expect ')' after for clauses.")?;
+
+		let mut body = self.statement()?;
+
+		// Desugar: add increment to end of loop body.
+		if let Some(increment) = increment {
+			body = Stmt::block(vec![body, Stmt::expression(increment)]);
+		}
+
+		// Desugar: add condition to loop.
+		let condition = condition.unwrap_or(Expr::literal(LoxValue::Bool(true)));
+		body = Stmt::while_(condition, body);
+
+		// Desugar: add initializer.
+		if let Some(initializer) = initializer {
+			body = Stmt::Block(vec![initializer, body]);
+		}
+
+		return Ok(body);
+	}
+
 	fn statement(&mut self) -> StmtRes {
+		if self.match_one(For) { return self.for_statement(); }
 		if self.match_one(If) { return self.if_statement(); }
 		if self.match_one(While) { return self.while_statement(); }
 		if self.match_one(Print) { return self.print_statement(); }
