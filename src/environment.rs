@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::{interpreter::InterpErr, scanner::{Token, LoxValue}};
+use crate::{callable::LoxCallable, interpreter::InterpErr, scanner::{LoxValue, Token}};
 
 pub struct Environment {
 	values: Vec<HashMap<String, LoxValue>>,
@@ -12,6 +12,13 @@ impl Environment {
 		Environment {
 			values: vec![root],
 		}
+	}
+
+	pub fn new_with_globals() -> Self {
+		let mut env = Self::new();
+		env.define("clock".into(), LoxValue::Callable(LoxCallable::FnClock));
+
+		env
 	}
 
 	pub fn define(&mut self, name: String, value: LoxValue) {

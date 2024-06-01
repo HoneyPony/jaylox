@@ -180,14 +180,18 @@ impl<'a, 'b> Interpreter<'a, 'b> {
 			Expr::Call { callee, paren, arguments } => {
 				let callee = self.evaluate(callee)?;
 
+				let LoxValue::Callable(mut function) = callee else {
+					return Err(InterpErr::new(paren, "Can only call functions and classes.".into()));
+				};
+
+				if function.arity() != arguments.len() {
+					return Err(InterpErr::new(paren, format!("Expected {} arguments but got {}.", function.arity(), arguments.len())));
+				}
+
 				let mut argument_values = vec![];
 				for argument in arguments {
 					argument_values.push(self.evaluate(argument)?);
 				}
-
-				let LoxValue::Callable(mut function) = callee else {
-					return Err(InterpErr::new(paren, "Can only call functions and classes.".into()));
-				};
 
 				return Ok(function.call(self, argument_values))
 			}

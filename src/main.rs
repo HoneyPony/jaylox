@@ -75,14 +75,14 @@ impl Lox {
 
 	fn run_file(&mut self, path: String) -> std::io::Result<()> {
 		let contents = std::fs::read_to_string(path)?;
-		let mut environment = Environment::new();
+		let mut environment = Environment::new_with_globals();
 
 		self.run(contents, &mut environment);
 		Ok(())
 	}
 
 	fn run_prompt(&mut self) {
-		let mut environment = Environment::new();
+		let mut environment = Environment::new_with_globals();
 
 		loop {
 			print!("> ");
