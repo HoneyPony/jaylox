@@ -52,6 +52,7 @@ fn is_truthy(value: &LoxValue) -> bool {
 		LoxValue::String(_) => true,
 		LoxValue::Number(_) => true,
 		LoxValue::Bool(v) => *v,
+		LoxValue::Callable(_) => true,
 	}
 }
 
@@ -175,6 +176,20 @@ impl<'a, 'b> Interpreter<'a, 'b> {
 				}
 
 				return self.evaluate(right);
+			},
+			Expr::Call { callee, paren, arguments } => {
+				let callee = self.evaluate(callee)?;
+
+				let mut argument_values = vec![];
+				for argument in arguments {
+					argument_values.push(self.evaluate(argument)?);
+				}
+
+				let LoxValue::Callable(mut function) = callee else {
+					return Err(InterpErr::new(paren, "Can only call functions and classes.".into()));
+				};
+
+				return Ok(function.call(self, argument_values))
 			}
 		}
 	}

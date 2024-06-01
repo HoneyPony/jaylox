@@ -1,6 +1,6 @@
 use std::{collections::HashMap, rc::Rc};
 
-use crate::{expr::Expr, Lox};
+use crate::{callable::LoxCallable, expr::Expr, Lox};
 
 #[derive(PartialEq, Eq, Debug, Clone, Copy)]
 pub enum TokenType {
@@ -25,7 +25,8 @@ pub enum LoxValue {
 	Nil,
 	String(Rc<str>),
 	Number(f64),
-	Bool(bool)
+	Bool(bool),
+	Callable(LoxCallable)
 }
 
 impl ToString for LoxValue {
@@ -34,7 +35,8 @@ impl ToString for LoxValue {
 			LoxValue::Nil => "nil".to_string(),
 			LoxValue::String(what) => format!("'{what}'"),
 			LoxValue::Number(num) => num.to_string(),
-			LoxValue::Bool(bool) => bool.to_string()
+			LoxValue::Bool(bool) => bool.to_string(),
+			LoxValue::Callable(_) => "callable".to_string(),
 		}
 	}
 }
@@ -47,7 +49,9 @@ impl LoxValue {
 			LoxValue::Nil => "nil".to_string(),
 			LoxValue::String(what) => format!("{what}"),
 			LoxValue::Number(num) => num.to_string(),
-			LoxValue::Bool(bool) => bool.to_string()
+			LoxValue::Bool(bool) => bool.to_string(),
+			// TODO: Consider giving LoxCallable a "repr()" function or something
+			LoxValue::Callable(_) => "callable".to_string(),
 		}
 	}
 }

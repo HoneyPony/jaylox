@@ -136,6 +136,7 @@ fn generate_ast_file(file: &mut File, tyname: &str, tys: &Vec<ExprTy>) -> io::Re
 fn generate_ast_files(expr: &mut File, stmt: &mut File) -> io::Result<()> {
 	let tys_expr: Vec<ExprTy> = vec![
 		ty("Binary", vec![arg("left", "Expr"), arg("operator", "Token"), arg("right", "Expr")]),
+		ty("Call", vec![arg("callee", "Expr"), arg("paren", "Token"), arg("arguments", "Vec<Expr>")]),
 		ty("Grouping", vec![arg("expression", "Expr")]),
 		ty("Literal", vec![arg("value", "LoxValue")]),
 		ty("Logical", vec![arg("left", "Expr"), arg("operator", "Token"), arg("right", "Expr")]),

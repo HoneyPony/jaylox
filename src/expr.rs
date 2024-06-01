@@ -54,6 +54,14 @@ pub fn ast_print(expr: &Expr) {
 			paren_begin("assign");
 			print!(" {}", name.lexeme);
 			paren_end(value);
+		},
+		Expr::Call { callee, paren, arguments } => {
+			print!("(");
+			ast_print(callee);
+			for arg in arguments {
+				paren_middle(arg);
+			}
+			print!(")");
 		}
 	}
 }

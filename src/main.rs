@@ -4,6 +4,7 @@ mod stmt;
 mod parser;
 mod interpreter;
 mod environment;
+mod callable;
 
 use std::env;
 use std::process::exit;
