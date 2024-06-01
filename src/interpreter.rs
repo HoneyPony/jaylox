@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use crate::{environment::{Environment}, expr::Expr, scanner::{Token, LoxValue}, stmt::Stmt};
+use crate::{environment::Environment, expr::Expr, scanner::{LoxValue, Token}, stmt::{Function, Stmt}};
 
 use crate::scanner::TokenType::*;
 use crate::Lox;
@@ -20,8 +20,8 @@ impl InterpErr {
 pub type InterpRes = Result<LoxValue, InterpErr>;
 
 pub struct Interpreter<'a, 'b> {
-	lox: &'a mut Lox,
-	environment: &'b mut Environment
+	pub lox: &'a mut Lox,
+	pub environment: &'b mut Environment
 }
 
 fn res_to_number(op: &Token, value: LoxValue) -> Result<f64, InterpErr> {
@@ -193,7 +193,7 @@ impl<'a, 'b> Interpreter<'a, 'b> {
 					argument_values.push(self.evaluate(argument)?);
 				}
 
-				return Ok(function.call(self, argument_values))
+				return function.call(self, argument_values)
 			}
 		}
 	}
@@ -209,13 +209,17 @@ impl<'a, 'b> Interpreter<'a, 'b> {
 		Ok(())
 	}
 
-	fn execute_block(&mut self, block: &Vec<Stmt>) -> Result<(), InterpErr> {
-		// TODO: Figure out if the environment scoping should be outside this function
-		self.environment.push_scope();
+	pub fn execute_block_then_pop(&mut self, block: &Vec<Stmt>) -> Result<(), InterpErr> {
 		let result = self.execute_block_loop(block);
 		self.environment.pop_scope();
 
 		result
+	}
+
+	fn execute_block(&mut self, block: &Vec<Stmt>) -> Result<(), InterpErr> {
+		// TODO: Figure out if the environment scoping should be outside this function
+		self.environment.push_scope();
+		self.execute_block_then_pop(block)
 	}
 
 	fn execute(&mut self, stmt: &Stmt) -> Result<(), InterpErr> {
@@ -251,6 +255,9 @@ impl<'a, 'b> Interpreter<'a, 'b> {
 				while is_truthy(&self.evaluate(condition)?) {
 					self.execute(body)?;
 				}
+			},
+			Stmt::Function(func) => {
+				self.environment.define(func.name.lexeme.clone(), Function::to_lox_value(func))
 			}
 		}
 

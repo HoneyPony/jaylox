@@ -20,7 +20,7 @@ pub enum TokenType {
 	Eof
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, PartialEq)]
 pub enum LoxValue {
 	Nil,
 	String(Rc<str>),

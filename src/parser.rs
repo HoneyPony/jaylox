@@ -359,9 +359,32 @@ impl<'a> Parser<'a> {
 		return Ok(Stmt::var(name, initializer));
 	}
 
+	fn function(&mut self, kind: &str) -> StmtRes {
+		let name = self.consume(Identifier, &format!("Expect {kind} name."))?;
+
+		self.consume(LeftParen, &format!("Expect '(' after {kind} name."))?;
+		let mut parameters = vec![];
+		
+		if !self.check(RightParen) {
+			parameters.push(self.consume(Identifier, "Expect parameter name.")?);
+			while self.match_one(Comma) {
+				parameters.push(self.consume(Identifier, "Expect parameter name.")?);
+			}
+		}
+
+		self.consume(RightParen, "Expect ')' after parameters.")?;
+
+		self.consume(LeftBrace, &format!("Expect '{{' before {kind} body."))?;
+		let body = self.block()?;
+		return Function::new_as_stmt_res(name, parameters, body);
+	}
+
 	fn declaration(&mut self) -> Option<Stmt> {
 		let result = if self.match_one(Var) {
 			self.var_declaration()
+		}
+		else if self.match_one(Fun) {
+			self.function("function")
 		}
 		else { 
 			self.statement()
