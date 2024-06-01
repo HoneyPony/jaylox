@@ -11,20 +11,27 @@ pub struct InterpErr {
 }
 
 impl InterpErr {
-	pub fn new(token: &Token, message: String) -> InterpErr {
+	pub fn new(token: &Token, message: String) -> InterpUnwind {
 		let token = token.clone();
-		InterpErr { token, message }
+		InterpUnwind::Error(InterpErr { token, message })
 	}
 }
 
-pub type InterpRes = Result<LoxValue, InterpErr>;
+// Use the Result system to implement stack unwinding. This is needed for
+// return statements and could also be used for break, etc.
+pub enum InterpUnwind {
+	Error(InterpErr),
+	ReturnValue(LoxValue)
+}
+
+pub type InterpRes = Result<LoxValue, InterpUnwind>;
 
 pub struct Interpreter<'a, 'b> {
 	pub lox: &'a mut Lox,
 	pub environment: &'b mut Environment
 }
 
-fn res_to_number(op: &Token, value: LoxValue) -> Result<f64, InterpErr> {
+fn res_to_number(op: &Token, value: LoxValue) -> Result<f64, InterpUnwind> {
 	if let LoxValue::Number(x) = value {
 		return Ok(x)
 	}
@@ -156,7 +163,7 @@ impl<'a, 'b> Interpreter<'a, 'b> {
 				// TODO: Consider how to speed this up in the case of strings.
 				// Maybe look into Cow?
 				// The other option is some kind of String arena
-				return self.environment.get(var).cloned();
+				return Ok(self.environment.get(var)?.clone());
 			},
 			Expr::Assign { name, value } => {
 				let value = self.evaluate(value)?;
@@ -201,7 +208,7 @@ impl<'a, 'b> Interpreter<'a, 'b> {
 	/// Does not handle making a new environment.
 	/// Helper function so that we can correctly pop_scope() after running into
 	/// an error.
-	fn execute_block_loop(&mut self, block: &Vec<Stmt>) -> Result<(), InterpErr> {
+	fn execute_block_loop(&mut self, block: &Vec<Stmt>) -> Result<(), InterpUnwind> {
 		for stmt in block {
 			self.execute(stmt)?;
 		}
@@ -209,20 +216,20 @@ impl<'a, 'b> Interpreter<'a, 'b> {
 		Ok(())
 	}
 
-	pub fn execute_block_then_pop(&mut self, block: &Vec<Stmt>) -> Result<(), InterpErr> {
+	pub fn execute_block_then_pop(&mut self, block: &Vec<Stmt>) -> Result<(), InterpUnwind> {
 		let result = self.execute_block_loop(block);
 		self.environment.pop_scope();
 
 		result
 	}
 
-	fn execute_block(&mut self, block: &Vec<Stmt>) -> Result<(), InterpErr> {
+	fn execute_block(&mut self, block: &Vec<Stmt>) -> Result<(), InterpUnwind> {
 		// TODO: Figure out if the environment scoping should be outside this function
 		self.environment.push_scope();
 		self.execute_block_then_pop(block)
 	}
 
-	fn execute(&mut self, stmt: &Stmt) -> Result<(), InterpErr> {
+	fn execute(&mut self, stmt: &Stmt) -> Result<(), InterpUnwind> {
 		match stmt {
 			Stmt::Expression(expr) => { self.evaluate(expr)?; },
 			Stmt::Print(expr) => {
@@ -258,13 +265,22 @@ impl<'a, 'b> Interpreter<'a, 'b> {
 			},
 			Stmt::Function(func) => {
 				self.environment.define(func.name.lexeme.clone(), Function::to_lox_value(func))
+			},
+			Stmt::Return { keyword, value } => {
+				let mut return_value = LoxValue::Nil;
+				if let Some(value) = value {
+					return_value = self.evaluate(value)?;
+				}
+				// Note: In jlox, the semantic is that a return value with no
+				// expression still results in a nil value. This is the same here.
+				return Err(InterpUnwind::ReturnValue(return_value));
 			}
 		}
 
 		Ok(())
 	}
 
-	fn interpret_to_result(&mut self, stmts: &Vec<Stmt>) -> Result<(), InterpErr> {
+	fn interpret_to_result(&mut self, stmts: &Vec<Stmt>) -> Result<(), InterpUnwind> {
 		for stmt in stmts {
 			self.execute(stmt)?;
 		}

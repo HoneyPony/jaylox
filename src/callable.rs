@@ -1,4 +1,5 @@
 use crate::interpreter::InterpRes;
+use crate::interpreter::InterpUnwind;
 use crate::{interpreter::Interpreter, scanner::LoxValue};
 use crate::stmt::Function;
 
@@ -43,9 +44,16 @@ impl LoxCallable {
 					)
 				}
 
-				interpreter.execute_block_then_pop(&func.body)?;
-				// TODO: Return value
-				return Ok(LoxValue::Nil);
+				let result = interpreter.execute_block_then_pop(&func.body);
+
+				// Turn return value unwinds into regular return values here.
+				if let Err(InterpUnwind::ReturnValue(return_value)) = result {
+					return Ok(return_value);
+				}
+
+				// Map any other value to a return value of nil. Or, propogate
+				// any error / unwind value that isn't a return.
+				return result.map(|_| LoxValue::Nil);
 			}
 		}
 	}

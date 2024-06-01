@@ -11,7 +11,7 @@ use std::process::exit;
 use std::io;
 use std::io::Write;
 
-use interpreter::{Interpreter, InterpErr};
+use interpreter::{InterpErr, InterpUnwind, Interpreter};
 use scanner::{Scanner, Token, TokenType};
 use parser::Parser;
 use environment::Environment;
@@ -48,9 +48,11 @@ impl Lox {
 		}
 	}
 
-	fn runtime_error(&mut self, err: &InterpErr) {
-		eprintln!("{0}\n[line {1}]", err.message, err.token.line);
-		self.had_runtime_error = true;
+	fn runtime_error(&mut self, err: &InterpUnwind) {
+		if let InterpUnwind::Error(err) = err {
+			eprintln!("{0}\n[line {1}]", err.message, err.token.line);
+			self.had_runtime_error = true;
+		}
 	}
 
 	fn run(&mut self, code: String, environment: &mut Environment) {

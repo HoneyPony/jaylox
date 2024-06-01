@@ -335,11 +335,24 @@ impl<'a> Parser<'a> {
 		return Ok(body);
 	}
 
+	fn return_statement(&mut self) -> StmtRes {
+		let keyword = self.previous().clone();
+		let mut value = None;
+
+		if !self.check(Semicolon) {
+			value = Some(self.expression()?);
+		}
+
+		self.consume(Semicolon, "Expect ';' after return value.")?;
+		return Ok(Stmt::return_(keyword, value));
+	}
+
 	fn statement(&mut self) -> StmtRes {
 		if self.match_one(For) { return self.for_statement(); }
 		if self.match_one(If) { return self.if_statement(); }
 		if self.match_one(While) { return self.while_statement(); }
 		if self.match_one(Print) { return self.print_statement(); }
+		if self.match_one(Return) { return self.return_statement(); }
 		if self.match_one(LeftBrace) {
 			return Ok(Stmt::Block(self.block()?))
 		}

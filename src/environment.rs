@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use crate::{callable::LoxCallable, interpreter::InterpErr, scanner::{LoxValue, Token}};
+use crate::interpreter::InterpUnwind;
 
 pub struct Environment {
 	values: Vec<HashMap<String, LoxValue>>,
@@ -26,7 +27,7 @@ impl Environment {
 		self.values.last_mut().unwrap().insert(name, value);
 	}
 
-	pub fn get(&self, name: &Token) -> Result<&LoxValue, InterpErr> {
+	pub fn get(&self, name: &Token) -> Result<&LoxValue, InterpUnwind> {
 		for map in self.values.iter().rev() {
 			if let Some(value) = map.get(&name.lexeme) {
 				return Ok(value)
@@ -36,7 +37,7 @@ impl Environment {
 		Err(InterpErr::new(name, format!("Undefined variable '{}'", name.lexeme)))
 	}
 
-	pub fn assign(&mut self, name: &Token, value: LoxValue) -> Result<LoxValue, InterpErr> {
+	pub fn assign(&mut self, name: &Token, value: LoxValue) -> Result<LoxValue, InterpUnwind> {
 		for map in self.values.iter_mut().rev() {
 			if let Some(ptr) = map.get_mut(&name.lexeme) {
 				*ptr = value.clone();
