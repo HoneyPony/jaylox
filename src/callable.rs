@@ -1,4 +1,4 @@
-use crate::{interpreter::Interpreter, scanner::LoxValue};
+use crate::{interpreter::Interpreter, scanner::LoxValue, Lox};
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -26,6 +26,14 @@ impl LoxCallable {
 	pub fn arity(&self) -> usize {
 		match self {
 			LoxCallable::FnClock => 0,
+		}
+	}
+}
+
+impl ToString for LoxCallable {
+	fn to_string(&self) -> String {
+		match self {
+			LoxCallable::FnClock => "<native fn>".into(),
 		}
 	}
 }

@@ -36,7 +36,7 @@ impl ToString for LoxValue {
 			LoxValue::String(what) => format!("'{what}'"),
 			LoxValue::Number(num) => num.to_string(),
 			LoxValue::Bool(bool) => bool.to_string(),
-			LoxValue::Callable(_) => "callable".to_string(),
+			LoxValue::Callable(callable) => callable.to_string(),
 		}
 	}
 }
@@ -51,7 +51,7 @@ impl LoxValue {
 			LoxValue::Number(num) => num.to_string(),
 			LoxValue::Bool(bool) => bool.to_string(),
 			// TODO: Consider giving LoxCallable a "repr()" function or something
-			LoxValue::Callable(_) => "callable".to_string(),
+			LoxValue::Callable(callable) => callable.to_string(),
 		}
 	}
 }
