@@ -6,7 +6,8 @@ mod interpreter;
 mod environment;
 mod callable;
 
-use std::env;
+use std::cell::RefCell;
+use std::{env, rc::Rc};
 use std::process::exit;
 use std::io;
 use std::io::Write;
@@ -55,7 +56,7 @@ impl Lox {
 		}
 	}
 
-	fn run(&mut self, code: String, environment: &mut Environment) {
+	fn run(&mut self, code: String, environment: Rc<RefCell<Environment>>) {
 		let tokens = {
 			let mut scanner = Scanner::new(code, self);
 			scanner.scan_tokens()
@@ -77,14 +78,14 @@ impl Lox {
 
 	fn run_file(&mut self, path: String) -> std::io::Result<()> {
 		let contents = std::fs::read_to_string(path)?;
-		let mut environment = Environment::new_with_globals();
+		let environment = Environment::new_with_globals();
 
-		self.run(contents, &mut environment);
+		self.run(contents, Rc::clone(&environment));
 		Ok(())
 	}
 
 	fn run_prompt(&mut self) {
-		let mut environment = Environment::new_with_globals();
+		let environment = Environment::new_with_globals();
 
 		loop {
 			print!("> ");
@@ -95,7 +96,7 @@ impl Lox {
 				break;
 			};
 
-			self.run(line, &mut environment);
+			self.run(line, Rc::clone(&environment));
 			self.had_error = false;
 		}
 	}

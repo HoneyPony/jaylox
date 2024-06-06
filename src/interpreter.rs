@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::{cell::RefCell, rc::Rc};
 
 use crate::{environment::Environment, expr::Expr, scanner::{LoxValue, Token}, stmt::{Function, Stmt}};
 
@@ -26,9 +26,9 @@ pub enum InterpUnwind {
 
 pub type InterpRes = Result<LoxValue, InterpUnwind>;
 
-pub struct Interpreter<'a, 'b> {
+pub struct Interpreter<'a> {
 	pub lox: &'a mut Lox,
-	pub environment: &'b mut Environment
+	pub environment: Rc<RefCell<Environment>>,
 }
 
 fn res_to_number(op: &Token, value: LoxValue) -> Result<f64, InterpUnwind> {
@@ -67,8 +67,8 @@ fn string_to_res(value: String) -> InterpRes {
 	return Ok(LoxValue::String(Rc::from(value.into_boxed_str())))
 }
 
-impl<'a, 'b> Interpreter<'a, 'b> {
-	pub fn new(lox: &'a mut Lox, environment: &'b mut Environment) -> Self {
+impl<'a> Interpreter<'a> {
+	pub fn new(lox: &'a mut Lox, environment: Rc<RefCell<Environment>>) -> Self {
 		Interpreter { lox, environment }
 	}
 
@@ -163,11 +163,11 @@ impl<'a, 'b> Interpreter<'a, 'b> {
 				// TODO: Consider how to speed this up in the case of strings.
 				// Maybe look into Cow?
 				// The other option is some kind of String arena
-				return Ok(self.environment.get(var)?.clone());
+				return Ok(self.environment.borrow().get(var)?.clone());
 			},
 			Expr::Assign { name, value } => {
 				let value = self.evaluate(value)?;
-				return self.environment.assign(name, value);
+				return self.environment.borrow_mut().assign(name, value);
 			},
 			Expr::Logical { left, operator, right } => {
 				let left = self.evaluate(left)?;
@@ -216,17 +216,12 @@ impl<'a, 'b> Interpreter<'a, 'b> {
 		Ok(())
 	}
 
-	pub fn execute_block_then_pop(&mut self, block: &Vec<Stmt>) -> Result<(), InterpUnwind> {
+	pub fn execute_block(&mut self, block: &Vec<Stmt>, enviroment: Rc<RefCell<Environment>>) -> Result<(), InterpUnwind> {
+		let previous = std::mem::replace(&mut self.environment, enviroment);
 		let result = self.execute_block_loop(block);
-		self.environment.pop_scope();
 
+		self.environment = previous;
 		result
-	}
-
-	fn execute_block(&mut self, block: &Vec<Stmt>) -> Result<(), InterpUnwind> {
-		// TODO: Figure out if the environment scoping should be outside this function
-		self.environment.push_scope();
-		self.execute_block_then_pop(block)
 	}
 
 	fn execute(&mut self, stmt: &Stmt) -> Result<(), InterpUnwind> {
@@ -241,11 +236,12 @@ impl<'a, 'b> Interpreter<'a, 'b> {
 				if let Some(expr) = initializer {
 					value = self.evaluate(expr)?;
 				}
-				self.environment.define(name.lexeme.clone(), value);
+				self.environment.borrow_mut().define(name.lexeme.clone(), value);
 				
 			},
 			Stmt::Block(statements) => {
-				self.execute_block(statements)?;
+				let new_scope = Environment::new_with_enclosing(Rc::clone(&self.environment));
+				self.execute_block(statements, new_scope)?;
 			},
 			Stmt::If { condition, then_branch, else_branch } => {
 				let is_true = is_truthy(&self.evaluate(condition)?);
@@ -264,7 +260,10 @@ impl<'a, 'b> Interpreter<'a, 'b> {
 				}
 			},
 			Stmt::Function(func) => {
-				self.environment.define(func.name.lexeme.clone(), Function::to_lox_value(func))
+				// The closure is captured when the function is seen (at least for now)
+				self.environment.borrow_mut().define(
+					func.name.lexeme.clone(),
+					 Function::to_lox_value(func, &self.environment))
 			},
 			Stmt::Return { keyword, value } => {
 				let mut return_value = LoxValue::Nil;

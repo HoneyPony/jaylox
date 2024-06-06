@@ -1,8 +1,10 @@
+use crate::environment::Environment;
 use crate::interpreter::InterpRes;
 use crate::interpreter::InterpUnwind;
 use crate::{interpreter::Interpreter, scanner::LoxValue};
 use crate::stmt::Function;
 
+use std::cell::RefCell;
 use std::{rc::Rc, time::{SystemTime, UNIX_EPOCH}};
 
 fn get_epoch_ms() -> f64 {
@@ -16,13 +18,16 @@ fn get_epoch_ms() -> f64 {
 pub enum LoxCallable {
 	FnClock,
 
-	FnLox(Rc<Function>)
+	/// Store the closure inside the LoxCallable object, rather than inside the
+	/// Function (as the Function basically lives inside the parser).
+	FnLox(Rc<Function>, Rc<RefCell<Environment>>)
 }
 
 impl PartialEq for LoxCallable {
 	fn eq(&self, other: &Self) -> bool {
 		match (self, other) {
-			(Self::FnLox(l0), Self::FnLox(r0)) => Rc::ptr_eq(l0, r0),
+			(Self::FnLox(fun_l, env_l), Self::FnLox(fun_r, env_r)) => 
+				Rc::ptr_eq(fun_l, fun_r) && Rc::ptr_eq(env_l, env_r),
 			_ => core::mem::discriminant(self) == core::mem::discriminant(other),
 		}
 	}
@@ -35,16 +40,16 @@ impl LoxCallable {
 				return Ok(LoxValue::Number(get_epoch_ms()))
 			},
 
-			LoxCallable::FnLox(func) => {
-				interpreter.environment.push_scope();
+			LoxCallable::FnLox(func, closure) => {
+				let fn_scope = Environment::new_with_enclosing(Rc::clone(closure));
 				for i in 0..func.parameters.len() {
-					interpreter.environment.define(
+					fn_scope.borrow_mut().define(
 						func.parameters.get(i).unwrap().lexeme.clone(),
 						arguments.get(i).unwrap().clone()
 					)
 				}
 
-				let result = interpreter.execute_block_then_pop(&func.body);
+				let result = interpreter.execute_block(&func.body, fn_scope);
 
 				// Turn return value unwinds into regular return values here.
 				if let Err(InterpUnwind::ReturnValue(return_value)) = result {
@@ -61,7 +66,7 @@ impl LoxCallable {
 	pub fn arity(&self) -> usize {
 		match self {
 			LoxCallable::FnClock => 0,
-			LoxCallable::FnLox(rc) => rc.parameters.len(),
+			LoxCallable::FnLox(rc, _) => rc.parameters.len(),
 		}
 	}
 }
@@ -70,7 +75,7 @@ impl ToString for LoxCallable {
 	fn to_string(&self) -> String {
 		match self {
 			LoxCallable::FnClock => "<native fn>".into(),
-			LoxCallable::FnLox(func) => func.name.lexeme.clone()
+			LoxCallable::FnLox(func, _) => func.name.lexeme.clone()
 		}
 	}
 }

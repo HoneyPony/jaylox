@@ -2,8 +2,9 @@
 include!(concat!(env!("OUT_DIR"), "/stmt.gen.rs"));
 
 use std::rc::Rc;
+use std::cell::RefCell;
 
-use crate::{callable::LoxCallable, expr::ExprErr};
+use crate::{callable::LoxCallable, environment::Environment, expr::ExprErr};
 
 pub type StmtRes = Result<Stmt, ExprErr>;
 
@@ -11,7 +12,7 @@ pub type StmtRes = Result<Stmt, ExprErr>;
 pub struct Function {
 	pub name: Token,
 	pub parameters: Vec<Token>,
-	pub body: Vec<Stmt>
+	pub body: Vec<Stmt>,
 }
 
 impl Function {
@@ -27,7 +28,10 @@ impl Function {
 		Ok(Self::new_as_stmt(name, parameters, body))
 	}
 
-	pub fn to_lox_value(rc: &Rc<Function>) -> LoxValue {
-		return LoxValue::Callable(LoxCallable::FnLox(rc.clone()))
+	pub fn to_lox_value(fun: &Rc<Function>, closure: &Rc<RefCell<Environment>>) -> LoxValue {
+		return LoxValue::Callable(LoxCallable::FnLox(
+			Rc::clone(fun),
+			Rc::clone(closure)
+		))
 	}
 }
