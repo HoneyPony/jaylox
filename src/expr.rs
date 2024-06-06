@@ -47,10 +47,10 @@ pub fn ast_print(expr: &Expr) {
 			paren_begin(&operator.lexeme);
 			paren_end(right);
 		},
-		Expr::Variable(var) => {
-			print!("{}", var.lexeme);
+		Expr::Variable { name, resolved }=> {
+			print!("{}", name.lexeme);
 		},
-		Expr::Assign { name, value } => {
+		Expr::Assign { name, value, resolved } => {
 			paren_begin("assign");
 			print!(" {}", name.lexeme);
 			paren_end(value);

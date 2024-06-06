@@ -97,8 +97,8 @@ impl<'a> Parser<'a> {
 			let equals = self.previous().clone();
 			let value = self.assignment()?;
 
-			if let Expr::Variable(name) = expr {
-				return Ok(Expr::assign(name, value));
+			if let Expr::Variable { name, resolved } = expr {
+				return Ok(Expr::assign(name, value, None));
 			}
 
 			// Report but don't bubble.
@@ -228,7 +228,7 @@ impl<'a> Parser<'a> {
 		}
 
 		if self.match_one(Identifier) {
-			return Ok(Expr::variable(self.previous().clone()));
+			return Ok(Expr::variable(self.previous().clone(), None));
 		}
 
 		if self.match_one(LeftParen) {

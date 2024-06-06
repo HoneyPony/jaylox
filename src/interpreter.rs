@@ -159,13 +159,13 @@ impl<'a> Interpreter<'a> {
 			Expr::Unary { operator, right } => {
 				return self.unary_op(operator, right);
 			},
-			Expr::Variable(var) => {
+			Expr::Variable{ name, resolved } => {
 				// TODO: Consider how to speed this up in the case of strings.
 				// Maybe look into Cow?
 				// The other option is some kind of String arena
-				return Ok(self.environment.borrow().get(var)?.clone());
+				return Ok(self.environment.borrow().get(name)?.clone());
 			},
-			Expr::Assign { name, value } => {
+			Expr::Assign { name, value , resolved } => {
 				let value = self.evaluate(value)?;
 				return self.environment.borrow_mut().assign(name, value);
 			},

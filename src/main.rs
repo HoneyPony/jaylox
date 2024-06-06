@@ -5,6 +5,7 @@ mod parser;
 mod interpreter;
 mod environment;
 mod callable;
+mod resolver;
 
 use std::cell::RefCell;
 use std::{env, rc::Rc};
