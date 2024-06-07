@@ -147,8 +147,11 @@ impl<'a> Resolver<'a> {
 				self.resolve_expr(left);
 				self.resolve_expr(right);
 			},
-			Expr::Call { callee, paren: _, arguments: _ } => {
+			Expr::Call { callee, paren: _, arguments } => {
 				self.resolve_expr(callee);
+				for arg in arguments {
+					self.resolve_expr(arg);
+				}
 			},
 			Expr::Grouping(inner) => self.resolve_expr(inner),
 			Expr::Literal(_literal) => {},
