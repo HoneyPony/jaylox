@@ -33,6 +33,9 @@ impl<'a> Resolver<'a> {
 	}
 
 	fn declare(&mut self, name: &Token) {
+		// Note: It is important that we don't assume that scopes has any items,
+		// as the variables in the global scope will NOT be in the scopes array
+		// (this is why they result in None).
 		if let Some(scope) = self.scopes.last_mut() {
 			if scope.contains_key(&name.lexeme) {
 				self.lox.error_token(name, &format!("Scope already has a variable named '{}'", name.lexeme));
@@ -187,6 +190,7 @@ impl<'a> Resolver<'a> {
 			hops += 1;
 		}
 
+		// Global variables get None.
 		None
 	}
 }
