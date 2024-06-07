@@ -7,15 +7,27 @@ use crate::Lox;
 use crate::stmt::*;
 use crate::expr::*;
 
+#[derive(Clone, Copy, PartialEq)]
+enum FunctionType {
+	None,
+	Function
+}
+
 pub struct Resolver<'a> {
 	lox: &'a mut Lox,
 
-	scopes: Vec<HashMap<String, bool>>
+	scopes: Vec<HashMap<String, bool>>,
+
+	current_function: FunctionType,
 }
 
 impl<'a> Resolver<'a> {
 	pub fn new(lox: &'a mut Lox) -> Self {
-		Resolver { lox, scopes: Default::default() }
+		Resolver {
+			lox,
+			scopes: Default::default(),
+			current_function: FunctionType::None,
+		}
 	}
 
 	pub fn resolve_stmts(&mut self, stmts: &mut Vec<Stmt>) {
@@ -53,7 +65,9 @@ impl<'a> Resolver<'a> {
 		}
 	}
 
-	fn resolve_function(&mut self, fun: &mut Rc<Function>) {
+	fn resolve_function(&mut self, fun: &mut Rc<Function>, kind: FunctionType) {
+		let enclosing_function = self.current_function;
+		self.current_function = kind;
 		self.begin_scope();
 
 		// Declare/define all parameters
@@ -102,6 +116,7 @@ impl<'a> Resolver<'a> {
 		}
 
 		self.end_scope();
+		self.current_function = enclosing_function;
 	}
 
 	pub fn resolve_stmt(&mut self, stmt: &mut Stmt) {
@@ -116,7 +131,7 @@ impl<'a> Resolver<'a> {
 				self.declare(&fun.name);
 				self.define(&fun.name);
 
-				self.resolve_function(fun);
+				self.resolve_function(fun, FunctionType::Function);
 			},
 			Stmt::If { condition, then_branch, else_branch } => {
 				self.resolve_expr(condition);
@@ -124,7 +139,11 @@ impl<'a> Resolver<'a> {
 				else_branch.as_mut().map(|branch| self.resolve_stmt(branch));
 			},
 			Stmt::Print(expr) => self.resolve_expr(expr),
-			Stmt::Return { keyword: _, value } => {
+			Stmt::Return { keyword, value } => {
+				if self.current_function == FunctionType::None {
+					self.lox.error_token(keyword, "Can't return from top-level code.");
+				}
+
 				value.as_mut().map(|value| self.resolve_expr(value));
 			}
 			Stmt::Var { name, initializer } => {
