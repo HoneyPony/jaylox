@@ -163,11 +163,11 @@ impl<'a> Interpreter<'a> {
 				// TODO: Consider how to speed this up in the case of strings.
 				// Maybe look into Cow?
 				// The other option is some kind of String arena
-				return Ok(self.environment.borrow().get(name)?.clone());
+				return Ok(self.environment.borrow().get_at(name, *resolved)?.clone());
 			},
 			Expr::Assign { name, value , resolved } => {
 				let value = self.evaluate(value)?;
-				return self.environment.borrow_mut().assign(name, value);
+				return self.environment.borrow_mut().assign_at(name, value, *resolved);
 			},
 			Expr::Logical { left, operator, right } => {
 				let left = self.evaluate(left)?;

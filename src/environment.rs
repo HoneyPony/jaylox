@@ -49,6 +49,30 @@ impl Environment {
 		Err(InterpErr::new(name, format!("Undefined variable '{}'", name.lexeme)))
 	}
 
+	pub fn get_at(&self, name: &Token, depth: Option<u32>) -> Result<LoxValue, InterpUnwind> {
+		match depth {
+			Some(0) => {
+				if let Some(value) = self.values.get(&name.lexeme) {
+					return Ok(value.clone())
+				}
+
+				return Err(InterpErr::new(name, format!("Undefined variable '{}'", name.lexeme)));
+			},
+			Some(x) => {
+				// The parent must exist, otherwise the Resolver made a mistake.
+				return self.parent.as_ref().unwrap().borrow_mut().get_at(name, Some(x - 1));
+			},
+
+			// TODO: If we store an explicit reference to the globals, we can skip directly there...
+			None => {
+				if let Some(parent) = self.parent.as_ref() {
+					return parent.borrow_mut().get_at(name, None);
+				}
+				return self.get_at(name, Some(0));
+			}
+		}
+	}
+
 	pub fn assign(&mut self, name: &Token, value: LoxValue) -> Result<LoxValue, InterpUnwind> {
 		if let Some(ptr) = self.values.get_mut(&name.lexeme) {
 			*ptr = value.clone();
@@ -60,6 +84,29 @@ impl Environment {
 		}
 
 		Err(InterpErr::new(name, format!("Undefined variable '{}'", name.lexeme)))
+	}
+
+	pub fn assign_at(&mut self, name: &Token, value: LoxValue, depth: Option<u32>) -> Result<LoxValue, InterpUnwind> {
+		match depth {
+			Some(0) => {
+				if let Some(ptr) = self.values.get_mut(&name.lexeme) {
+					*ptr = value.clone();
+					return Ok(value);
+				}
+
+				return Err(InterpErr::new(name, format!("Undefined variable '{}'", name.lexeme)));
+			},
+			Some(x) => {
+				// The parent must exist, otherwise the Resolver made a mistake.
+				return self.parent.as_mut().unwrap().borrow_mut().assign_at(name, value, Some(x - 1));
+			},
+			None => {
+				if let Some(parent) = self.parent.as_mut() {
+					return parent.borrow_mut().assign_at(name, value, None);
+				}
+				return self.assign_at(name, value, Some(0));
+			}
+		}
 	}
 
 	//pub fn push_scope(&mut self) {
