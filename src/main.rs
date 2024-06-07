@@ -14,6 +14,7 @@ use std::io;
 use std::io::Write;
 
 use interpreter::{InterpErr, InterpUnwind, Interpreter};
+use resolver::Resolver;
 use scanner::{Scanner, Token, TokenType};
 use parser::Parser;
 use environment::Environment;
@@ -63,10 +64,18 @@ impl Lox {
 			scanner.scan_tokens()
 		};
 
-		let program = {
+		let mut program = {
 			let mut parser = Parser::new(tokens, self);
 			parser.parse()
 		};
+
+		// Don't resolve if we had an error
+		if self.had_error { return; }
+
+		{
+			let mut resolver = Resolver::new(self);
+			resolver.resolve_stmts(&mut program);
+		}
 
 		// Don't interpret if we had an error
 		if self.had_error { return; }
