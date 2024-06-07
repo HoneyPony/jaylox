@@ -54,6 +54,7 @@ fn generate_ty_impl(file: &mut File, ty: &ExprTy, roottyname: &str) -> io::Resul
 	if fnname == "if" { fnname = "if_".into(); }
 	if fnname == "while" { fnname = "while_".into(); }
 	if fnname == "return" { fnname = "return_".into(); }
+	writeln!(file, "\t#[allow(unused)]")?;
 	write!(file, "\tpub fn {0}(", fnname)?;
 
 	let mut comma = false;
