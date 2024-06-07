@@ -37,18 +37,6 @@ impl Environment {
 		self.values.insert(name, value);
 	}
 
-	pub fn get(&self, name: &Token) -> Result<LoxValue, InterpUnwind> {
-		if let Some(value) = self.values.get(&name.lexeme) {
-			return Ok(value.clone())
-		}
-
-		if let Some(parent) = &self.parent {
-			return parent.borrow().get(name);
-		}
-
-		Err(InterpErr::new(name, format!("Undefined variable '{}'", name.lexeme)))
-	}
-
 	pub fn get_at(&self, name: &Token, depth: Option<u32>) -> Result<LoxValue, InterpUnwind> {
 		match depth {
 			Some(0) => {
@@ -71,19 +59,6 @@ impl Environment {
 				return self.get_at(name, Some(0));
 			}
 		}
-	}
-
-	pub fn assign(&mut self, name: &Token, value: LoxValue) -> Result<LoxValue, InterpUnwind> {
-		if let Some(ptr) = self.values.get_mut(&name.lexeme) {
-			*ptr = value.clone();
-			return Ok(value);
-		}
-
-		if let Some(parent) = &mut self.parent {
-			return parent.borrow_mut().assign(name, value);
-		}
-
-		Err(InterpErr::new(name, format!("Undefined variable '{}'", name.lexeme)))
 	}
 
 	pub fn assign_at(&mut self, name: &Token, value: LoxValue, depth: Option<u32>) -> Result<LoxValue, InterpUnwind> {
