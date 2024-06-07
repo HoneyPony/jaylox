@@ -34,6 +34,9 @@ impl<'a> Resolver<'a> {
 
 	fn declare(&mut self, name: &Token) {
 		if let Some(scope) = self.scopes.last_mut() {
+			if scope.contains_key(&name.lexeme) {
+				self.lox.error_token(name, &format!("Scope already has a variable named '{}'", name.lexeme));
+			}
 			scope.insert(name.lexeme.clone(), false);
 		}
 	}
