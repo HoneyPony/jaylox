@@ -56,6 +56,15 @@ impl Lox {
 			eprintln!("{0}\n[line {1}]", err.message, err.token.line);
 			self.had_runtime_error = true;
 		}
+
+		// In the case that an InterpUnwind::ReturnValue makes it back to the top
+		// of the interpreter, we could consider that a fine thing...
+		//
+		// We could even use this as a way to implement the "exprs implicitly return
+		// in REPL" thing
+		if let InterpUnwind::ReturnValue(value) = err {
+			println!("=> {}", value.to_string());
+		}
 	}
 
 	fn run(&mut self, code: String, environment: Rc<RefCell<Environment>>) {
