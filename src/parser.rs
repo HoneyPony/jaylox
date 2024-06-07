@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use crate::expr::*;
 use crate::stmt::*;
 use crate::scanner::*;
@@ -372,7 +374,7 @@ impl<'a> Parser<'a> {
 		return Ok(Stmt::var(name, initializer));
 	}
 
-	fn function(&mut self, kind: &str) -> StmtRes {
+	fn function(&mut self, kind: &str) -> Result<Rc<Function>, ExprErr> {
 		let name = self.consume(Identifier, &format!("Expect {kind} name."))?;
 
 		self.consume(LeftParen, &format!("Expect '(' after {kind} name."))?;
@@ -389,7 +391,21 @@ impl<'a> Parser<'a> {
 
 		self.consume(LeftBrace, &format!("Expect '{{' before {kind} body."))?;
 		let body = self.block()?;
-		return Function::new_as_stmt_res(name, parameters, body);
+		return Ok(Function::new_as_rc(name, parameters, body));
+	}
+
+	fn class_declaration(&mut self) -> StmtRes {
+		let name = self.consume(Identifier, "Expect class name.")?;
+		self.consume(LeftBrace, "Expect '{' before class body.")?;
+
+		let mut methods = vec![];
+		while !self.check(RightBrace) && !self.is_at_end() {
+			methods.push(self.function("method")?);
+		}
+
+		self.consume(RightBrace, "Expect '}' after class body.")?;
+
+		Ok(Stmt::class(LoxClass::new_as_rc(name, methods)))
 	}
 
 	fn declaration(&mut self) -> Option<Stmt> {
@@ -397,7 +413,10 @@ impl<'a> Parser<'a> {
 			self.var_declaration()
 		}
 		else if self.match_one(Fun) {
-			self.function("function")
+			self.function("function").map(|fun| Stmt::Function(fun))
+		}
+		else if self.match_one(Class) {
+			self.class_declaration()
 		}
 		else { 
 			self.statement()

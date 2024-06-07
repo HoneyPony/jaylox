@@ -1,6 +1,6 @@
 use std::{cell::RefCell, rc::Rc};
 
-use crate::{environment::Environment, expr::Expr, scanner::{LoxValue, Token}, stmt::{Function, Stmt}};
+use crate::{environment::Environment, expr::Expr, scanner::{LoxValue, Token}, stmt::{Function, LoxClass, Stmt}};
 
 use crate::scanner::TokenType::*;
 use crate::Lox;
@@ -273,6 +273,13 @@ impl<'a> Interpreter<'a> {
 				// Note: In jlox, the semantic is that a return value with no
 				// expression still results in a nil value. This is the same here.
 				return Err(InterpUnwind::ReturnValue(return_value));
+			},
+			Stmt::Class(class) => {
+				// Wrap the class value into a Callable
+				self.environment.borrow_mut().define(
+					class.name.lexeme.clone(),
+					LoxClass::to_lox_value(class)
+				);
 			}
 		}
 

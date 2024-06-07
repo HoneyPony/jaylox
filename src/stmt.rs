@@ -15,9 +15,20 @@ pub struct Function {
 	pub body: Vec<Stmt>,
 }
 
+// Similar to functions, we put the class info in a struct that is Rc'd.
+
+pub struct LoxClass {
+	pub name: Token,
+	pub methods: Vec<Rc<Function>>,
+}
+
 impl Function {
 	pub fn new(name: Token, parameters: Vec<Token>, body: Vec<Stmt>) -> Self {
 		Function { name, parameters, body }
+	}
+
+	pub fn new_as_rc(name: Token, parameters: Vec<Token>, body: Vec<Stmt>) -> Rc<Self> {
+		Rc::new(Self::new(name, parameters, body))
 	}
 
 	pub fn new_as_stmt(name: Token, parameters: Vec<Token>, body: Vec<Stmt>) -> Stmt {
@@ -32,6 +43,22 @@ impl Function {
 		return LoxValue::Callable(LoxCallable::FnLox(
 			Rc::clone(fun),
 			Rc::clone(closure)
+		))
+	}
+}
+
+impl LoxClass {
+	pub fn new(name: Token, methods: Vec<Rc<Function>>) -> Self {
+		LoxClass { name, methods }
+	}
+
+	pub fn new_as_rc(name: Token, methods: Vec<Rc<Function>>) -> Rc<Self> {
+		Rc::new(Self::new(name, methods))
+	}
+
+	pub fn to_lox_value(class: &Rc<LoxClass>) -> LoxValue {
+		return LoxValue::Callable(LoxCallable::FnClass(
+			Rc::clone(class)
 		))
 	}
 }

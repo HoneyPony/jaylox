@@ -156,6 +156,13 @@ impl<'a> Resolver<'a> {
 			Stmt::While { condition, body } => {
 				self.resolve_expr(condition);
 				self.resolve_stmt(body);
+			},
+			Stmt::Class(class) => {
+				self.declare(&class.name);
+				self.define(&class.name);
+
+				// Note to self: Will probably need to do the whole get_mut thing
+				// later
 			}
 		}
 	}

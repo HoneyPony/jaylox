@@ -1,6 +1,7 @@
 use crate::environment::Environment;
 use crate::interpreter::InterpRes;
 use crate::interpreter::InterpUnwind;
+use crate::stmt::LoxClass;
 use crate::{interpreter::Interpreter, scanner::LoxValue};
 use crate::stmt::Function;
 
@@ -20,7 +21,9 @@ pub enum LoxCallable {
 
 	/// Store the closure inside the LoxCallable object, rather than inside the
 	/// Function (as the Function basically lives inside the parser).
-	FnLox(Rc<Function>, Rc<RefCell<Environment>>)
+	FnLox(Rc<Function>, Rc<RefCell<Environment>>),
+
+	FnClass(Rc<LoxClass>)
 }
 
 impl PartialEq for LoxCallable {
@@ -60,6 +63,7 @@ impl LoxCallable {
 				// any error / unwind value that isn't a return.
 				return result.map(|_| LoxValue::Nil);
 			}
+			LoxCallable::FnClass(_) => todo!(),
 		}
 	}
 
@@ -67,6 +71,7 @@ impl LoxCallable {
 		match self {
 			LoxCallable::FnClock => 0,
 			LoxCallable::FnLox(rc, _) => rc.parameters.len(),
+			LoxCallable::FnClass(_) => todo!(),
 		}
 	}
 }
@@ -75,7 +80,8 @@ impl ToString for LoxCallable {
 	fn to_string(&self) -> String {
 		match self {
 			LoxCallable::FnClock => "<native fn>".into(),
-			LoxCallable::FnLox(func, _) => func.name.lexeme.clone()
+			LoxCallable::FnLox(func, _) => func.name.lexeme.clone(),
+			LoxCallable::FnClass(class) => format!("<class {}>", class.name.lexeme),
 		}
 	}
 }
