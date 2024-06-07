@@ -97,7 +97,7 @@ impl<'a> Parser<'a> {
 			let equals = self.previous().clone();
 			let value = self.assignment()?;
 
-			if let Expr::Variable { name, resolved } = expr {
+			if let Expr::Variable { name, resolved: _ } = expr {
 				return Ok(Expr::assign(name, value, None));
 			}
 

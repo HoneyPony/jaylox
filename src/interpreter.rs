@@ -265,7 +265,7 @@ impl<'a> Interpreter<'a> {
 					func.name.lexeme.clone(),
 					 Function::to_lox_value(func, &self.environment))
 			},
-			Stmt::Return { keyword, value } => {
+			Stmt::Return { keyword: _, value } => {
 				let mut return_value = LoxValue::Nil;
 				if let Some(value) = value {
 					return_value = self.evaluate(value)?;

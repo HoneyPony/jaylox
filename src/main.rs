@@ -13,7 +13,7 @@ use std::process::exit;
 use std::io;
 use std::io::Write;
 
-use interpreter::{InterpErr, InterpUnwind, Interpreter};
+use interpreter::{InterpUnwind, Interpreter};
 use resolver::Resolver;
 use scanner::{Scanner, Token, TokenType};
 use parser::Parser;

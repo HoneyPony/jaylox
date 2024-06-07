@@ -118,7 +118,7 @@ impl<'a> Resolver<'a> {
 				else_branch.as_mut().map(|branch| self.resolve_stmt(branch));
 			},
 			Stmt::Print(expr) => self.resolve_expr(expr),
-			Stmt::Return { keyword, value } => {
+			Stmt::Return { keyword: _, value } => {
 				value.as_mut().map(|value| self.resolve_expr(value));
 			}
 			Stmt::Var { name, initializer } => {
@@ -137,20 +137,20 @@ impl<'a> Resolver<'a> {
 
 	pub fn resolve_expr(&mut self, expr: &mut Expr) {
 		match expr {
-			Expr::Binary { left, operator, right } => {
+			Expr::Binary { left, operator: _, right } => {
 				self.resolve_expr(left);
 				self.resolve_expr(right);
 			},
-			Expr::Call { callee, paren, arguments } => {
+			Expr::Call { callee, paren: _, arguments: _ } => {
 				self.resolve_expr(callee);
 			},
 			Expr::Grouping(inner) => self.resolve_expr(inner),
-			Expr::Literal(literal) => {},
-			Expr::Logical { left, operator, right } => {
+			Expr::Literal(_literal) => {},
+			Expr::Logical { left, operator: _, right } => {
 				self.resolve_expr(left);
 				self.resolve_expr(right);
 			},
-			Expr::Unary { operator, right } => {
+			Expr::Unary { operator: _, right } => {
 				self.resolve_expr(right);	
 			},
 			Expr::Variable { name, resolved } => {
