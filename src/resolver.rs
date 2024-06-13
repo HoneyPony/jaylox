@@ -204,6 +204,10 @@ impl<'a> Resolver<'a> {
 			Expr::Get { object, name } => {
 				self.resolve_expr(object);
 			},
+			Expr::Set { object, name, value } => {
+				self.resolve_expr(object);
+				self.resolve_expr(value);
+			}
 		}
 	}
 

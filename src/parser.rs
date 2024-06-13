@@ -102,6 +102,10 @@ impl<'a> Parser<'a> {
 			if let Expr::Variable { name, resolved: _ } = expr {
 				return Ok(Expr::assign(name, value, None));
 			}
+			else if let Expr::Get { object, name } = expr {
+				// Transform end-of-chain getter into setter. (Others remain as getters)
+				return Ok(Expr::set(*object, name, value));
+			}
 
 			// Report but don't bubble.
 			let _ = self.error(equals, "Invalid assignment target.");

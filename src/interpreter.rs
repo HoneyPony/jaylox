@@ -211,6 +211,18 @@ impl<'a> Interpreter<'a> {
 
 				return Err(InterpErr::new(name, "Only instances have properties.".into()));
 			},
+			Expr::Set { object, name, value } => {
+				let object = self.evaluate(object)?;
+
+				let LoxValue::Instance(ptr) = object else {
+					return Err(InterpErr::new(name, "Only instances have fields.".into()));
+				};
+
+				let value = self.evaluate(value)?;
+
+				self.lox.get_mut(ptr).set(name, value.clone());
+				return Ok(value);
+			},
 		}
 	}
 

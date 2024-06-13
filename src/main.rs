@@ -32,8 +32,14 @@ impl LoxInstance {
 		LoxInstance { class, fields: HashMap::new() }
 	}
 
-	pub fn get(self: &LoxInstance, name: &Token) -> Result<LoxValue, InterpUnwind> {
+	pub fn get(&self, name: &Token) -> Result<LoxValue, InterpUnwind> {
 		self.fields.get(&name.lexeme).ok_or_else(|| InterpErr::new(name, format!("Undefined property {}.", name.lexeme))).cloned()
+	}
+
+	pub fn set(&mut self, name: &Token, value: LoxValue) {
+		// TODO: Can we avoid this clone in the case that the
+		// item already exists..?
+		self.fields.insert(name.lexeme.clone(), value);
 	}
 }
 
