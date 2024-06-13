@@ -18,19 +18,60 @@ use resolver::Resolver;
 use scanner::{Scanner, Token, TokenType};
 use parser::Parser;
 use environment::Environment;
+use stmt::LoxClass;
+
+pub struct LoxInstance {
+	class: Rc<LoxClass>,
+}
+
+impl LoxInstance {
+	pub fn new(class: Rc<LoxClass>) -> Self {
+		LoxInstance { class }
+	}
+}
 
 struct Lox {
 	had_error: bool,
 	had_runtime_error: bool,
+
+	instances: Vec<LoxInstance>
 }
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct LoxRef(usize);
 
 impl Lox {
 
 	fn new() -> Self {
 		Lox {
 			had_error: false,
-			had_runtime_error: false
+			had_runtime_error: false,
+
+			instances: vec![]
 		}
+	}
+
+	pub fn new_instance(&mut self, class: Rc<LoxClass>) -> LoxRef {
+		let idx = self.instances.len();
+		self.instances.push(LoxInstance::new(class));
+
+		LoxRef(idx)
+	}
+
+	pub fn get(&self, ptr: LoxRef) -> &LoxInstance {
+		let idx = ptr.0;
+
+		// Safety: We only hand out LoxRef's to valid items in the array. And,
+		// at least for now... There's no garbage collection... :(
+		unsafe { self.instances.get_unchecked(idx) }
+	}
+
+	pub fn get_mut(&mut self, ptr: LoxRef) -> &mut LoxInstance {
+		let idx = ptr.0;
+
+		// Safety: We only hand out LoxRef's to valid items in the array. And,
+		// at least for now... There's no garbage collection... :(
+		unsafe { self.instances.get_unchecked_mut(idx) }
 	}
 
 	fn report(&mut self, line: i32, where_: &str, message: &str) {

@@ -63,7 +63,12 @@ impl LoxCallable {
 				// any error / unwind value that isn't a return.
 				return result.map(|_| LoxValue::Nil);
 			}
-			LoxCallable::FnClass(_) => todo!(),
+			LoxCallable::FnClass(class) => {
+				// TODO: It is possible that we will need to move new_instance to the interpreter when we
+				// add constructors. Somehow, then, the entire instance array will have to live in the interpreter..
+				// or maybe we can just invoke the constructor right here.
+				return Ok(LoxValue::Instance(interpreter.lox.new_instance(Rc::clone(class))));
+			},
 		}
 	}
 
@@ -71,7 +76,8 @@ impl LoxCallable {
 		match self {
 			LoxCallable::FnClock => 0,
 			LoxCallable::FnLox(rc, _) => rc.parameters.len(),
-			LoxCallable::FnClass(_) => todo!(),
+			// TODO: Real arity implementation.
+			LoxCallable::FnClass(_) => 0,
 		}
 	}
 }

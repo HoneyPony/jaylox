@@ -60,6 +60,7 @@ fn is_truthy(value: &LoxValue) -> bool {
 		LoxValue::Number(_) => true,
 		LoxValue::Bool(v) => *v,
 		LoxValue::Callable(_) => true,
+		LoxValue::Instance(_) => true,
 	}
 }
 
@@ -229,7 +230,7 @@ impl<'a> Interpreter<'a> {
 			Stmt::Expression(expr) => { self.evaluate(expr)?; },
 			Stmt::Print(expr) => {
 				let value = self.evaluate(expr)?;
-				println!("{}", value.to_printable_string());
+				println!("{}", value.to_printable_string(self.lox));
 			},
 			Stmt::Var { name, initializer } => {
 				let mut value = LoxValue::Nil;

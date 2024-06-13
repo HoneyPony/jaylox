@@ -1,6 +1,6 @@
 use std::{collections::HashMap, rc::Rc};
 
-use crate::{callable::LoxCallable, expr::Expr, Lox};
+use crate::{callable::LoxCallable, expr::Expr, Lox, LoxRef};
 
 #[derive(PartialEq, Eq, Debug, Clone, Copy)]
 pub enum TokenType {
@@ -26,7 +26,8 @@ pub enum LoxValue {
 	String(Rc<str>),
 	Number(f64),
 	Bool(bool),
-	Callable(LoxCallable)
+	Callable(LoxCallable),
+	Instance(LoxRef),
 }
 
 impl ToString for LoxValue {
@@ -37,6 +38,7 @@ impl ToString for LoxValue {
 			LoxValue::Number(num) => num.to_string(),
 			LoxValue::Bool(bool) => bool.to_string(),
 			LoxValue::Callable(callable) => callable.to_string(),
+			LoxValue::Instance(_) => "instance".to_string(),
 		}
 	}
 }
@@ -44,7 +46,7 @@ impl ToString for LoxValue {
 impl LoxValue {
 	/// Prints what the user would expect in the case of a string.
 	/// That is, instead of seeing 'blah', you just see blah.
-	pub fn to_printable_string(&self) -> String {
+	pub fn to_printable_string(&self, lox: &Lox) -> String {
 		match self {
 			LoxValue::Nil => "nil".to_string(),
 			LoxValue::String(what) => format!("{what}"),
@@ -52,6 +54,8 @@ impl LoxValue {
 			LoxValue::Bool(bool) => bool.to_string(),
 			// TODO: Consider giving LoxCallable a "repr()" function or something
 			LoxValue::Callable(callable) => callable.to_string(),
+			// TODO: Consider passing the interpreter or the lox so we can look up the reference..?
+			LoxValue::Instance(ptr) => format!("<instance of {}>", lox.get(*ptr).class.name.lexeme),
 		}
 	}
 }
