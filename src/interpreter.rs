@@ -202,7 +202,15 @@ impl<'a> Interpreter<'a> {
 				}
 
 				return function.call(self, argument_values)
-			}
+			},
+			Expr::Get { object, name } => {
+				let object = self.evaluate(object)?;
+				if let LoxValue::Instance(ptr) = object {
+					return self.lox.get(ptr).get(name);
+				}
+
+				return Err(InterpErr::new(name, "Only instances have properties.".into()));
+			},
 		}
 	}
 

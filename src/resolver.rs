@@ -201,6 +201,9 @@ impl<'a> Resolver<'a> {
 				self.resolve_expr(value);
 				*resolved = self.resolve_name_now(name);
 			},
+			Expr::Get { object, name } => {
+				self.resolve_expr(object);
+			},
 		}
 	}
 

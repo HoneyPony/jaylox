@@ -62,6 +62,11 @@ pub fn ast_print(expr: &Expr) {
 				paren_middle(arg);
 			}
 			print!(")");
+		},
+		Expr::Get { object, name } => {
+			paren_begin("get");
+			ast_print(object);
+			print!(" {})", name.lexeme);
 		}
 	}
 }

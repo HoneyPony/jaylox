@@ -8,25 +8,32 @@ mod callable;
 mod resolver;
 
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::{env, rc::Rc};
 use std::process::exit;
 use std::io;
 use std::io::Write;
 
-use interpreter::{InterpUnwind, Interpreter};
+use interpreter::{InterpErr, InterpUnwind, Interpreter};
 use resolver::Resolver;
-use scanner::{Scanner, Token, TokenType};
+use scanner::{LoxValue, Scanner, Token, TokenType};
 use parser::Parser;
 use environment::Environment;
 use stmt::LoxClass;
 
 pub struct LoxInstance {
 	class: Rc<LoxClass>,
+
+	fields: HashMap<String, LoxValue>,
 }
 
 impl LoxInstance {
 	pub fn new(class: Rc<LoxClass>) -> Self {
-		LoxInstance { class }
+		LoxInstance { class, fields: HashMap::new() }
+	}
+
+	pub fn get(self: &LoxInstance, name: &Token) -> Result<LoxValue, InterpUnwind> {
+		self.fields.get(&name.lexeme).ok_or_else(|| InterpErr::new(name, format!("Undefined property {}.", name.lexeme))).cloned()
 	}
 }
 

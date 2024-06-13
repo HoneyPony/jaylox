@@ -213,8 +213,18 @@ impl<'a> Parser<'a> {
 	fn call(&mut self) -> ExprRes {
 		let mut expr = self.primary()?;
 		
-		while self.match_one(LeftParen) {
-			expr = self.finish_call(expr)?;
+		loop {
+			if self.match_one(LeftParen) {
+				expr = self.finish_call(expr)?;
+			}
+			else if self.match_one(Dot) {
+				let name = self.consume(Identifier,
+					"Expect property name after '.'.")?;
+				expr = Expr::get(expr, name);
+			}
+			else {
+				break;
+			}
 		}
 
 		Ok(expr)
