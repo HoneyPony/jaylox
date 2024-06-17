@@ -33,6 +33,10 @@ impl LoxInstance {
 	}
 
 	pub fn get(&self, name: &Token) -> Result<LoxValue, InterpUnwind> {
+		if let Some(value) = self.class.find_method(&name.lexeme) {
+			return Ok(value);
+		}
+
 		self.fields.get(&name.lexeme).ok_or_else(|| InterpErr::new(name, format!("Undefined property {}.", name.lexeme))).cloned()
 	}
 

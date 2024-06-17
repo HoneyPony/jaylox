@@ -67,4 +67,10 @@ impl LoxClass {
 			Self::new_as_rc(name, methods)
 		))
 	}
+
+	pub fn find_method(&self, name: &str) -> Option<LoxValue> {
+		self.methods.get(name).map(|(fun, env)| LoxValue::Callable(LoxCallable::FnLox(
+			Rc::clone(fun), Rc::clone(env)
+		)))
+	}
 }
