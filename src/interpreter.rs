@@ -1,4 +1,4 @@
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use crate::{environment::Environment, expr::Expr, scanner::{LoxValue, Token}, stmt::{Function, LoxClass, Stmt}};
 
@@ -295,11 +295,27 @@ impl<'a> Interpreter<'a> {
 				// expression still results in a nil value. This is the same here.
 				return Err(InterpUnwind::ReturnValue(return_value));
 			},
-			Stmt::Class(class) => {
+			Stmt::Class { name, methods } => {
+				let mut method_map = HashMap::new();
+
+				// NOTE: This means that a class local to a function, etc,
+				// will be very slow -- because every time that function is run, this
+				// hash map is created from scratch.
+				//
+				// It is "fine" for top-level clases as it will only need to be run
+				// once, but it is definitely sub-optimal.
+				for method in methods {
+					// Note: Original Crafting Interpreters stores the Environment
+					// inside the Function. Here we store them as tuples... it's a
+					// little ugly, but works OK for non-class Functions.
+					method_map.insert(method.name.lexeme.clone(),
+					 (Rc::clone(method), Rc::clone(&self.environment)));
+				}
+				
 				// Wrap the class value into a Callable
 				self.environment.borrow_mut().define(
-					class.name.lexeme.clone(),
-					LoxClass::to_lox_value(class)
+					name.lexeme.clone(),
+					LoxClass::new_as_lox_value(name.lexeme.clone(), method_map)
 				);
 			}
 		}

@@ -419,7 +419,7 @@ impl<'a> Parser<'a> {
 
 		self.consume(RightBrace, "Expect '}' after class body.")?;
 
-		Ok(Stmt::class(LoxClass::new_as_rc(name, methods)))
+		Ok(Stmt::class(name, methods))
 	}
 
 	fn declaration(&mut self) -> Option<Stmt> {

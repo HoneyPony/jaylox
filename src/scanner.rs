@@ -55,7 +55,7 @@ impl LoxValue {
 			// TODO: Consider giving LoxCallable a "repr()" function or something
 			LoxValue::Callable(callable) => callable.to_string(),
 			// TODO: Consider passing the interpreter or the lox so we can look up the reference..?
-			LoxValue::Instance(ptr) => format!("<instance of {}>", lox.get(*ptr).class.name.lexeme),
+			LoxValue::Instance(ptr) => format!("<instance of {}>", lox.get(*ptr).class.name),
 		}
 	}
 }

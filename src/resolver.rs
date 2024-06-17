@@ -10,7 +10,8 @@ use crate::expr::*;
 #[derive(Clone, Copy, PartialEq)]
 enum FunctionType {
 	None,
-	Function
+	Function,
+	Method
 }
 
 pub struct Resolver<'a> {
@@ -157,12 +158,14 @@ impl<'a> Resolver<'a> {
 				self.resolve_expr(condition);
 				self.resolve_stmt(body);
 			},
-			Stmt::Class(class) => {
-				self.declare(&class.name);
-				self.define(&class.name);
+			Stmt::Class { name, methods } => {
+				self.declare(&name);
+				self.define(&name);
 
-				// Note to self: Will probably need to do the whole get_mut thing
-				// later
+				for method in methods {
+					let declaration = FunctionType::Method;
+					self.resolve_function(method, declaration);
+				}
 			}
 		}
 	}

@@ -151,7 +151,7 @@ fn generate_ast_files(expr: &mut File, stmt: &mut File) -> io::Result<()> {
 
 	let tys_stmt: Vec<ExprTy> = vec![
 		ty("Block", vec![arg_stmt("statements", "Vec<Stmt>")]),
-		ty("Class", vec![arg_stmt("class", "Rc<LoxClass>")]),
+		ty("Class", vec![arg_stmt("name", "Token"), arg_stmt("methods", "Vec<Rc<Function>>")]),
 		ty("Expression", vec![arg_stmt("expression", "Expr")]),
 		ty("Function", vec![arg_stmt("function", "Rc<Function>")]),
 		ty("If", vec![arg_stmt("condition", "Expr"), arg_stmt("then_branch", "Stmt"), arg_stmt("else_branch", "Option<Stmt>")]),

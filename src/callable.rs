@@ -87,7 +87,7 @@ impl ToString for LoxCallable {
 		match self {
 			LoxCallable::FnClock => "<native fn>".into(),
 			LoxCallable::FnLox(func, _) => func.name.lexeme.clone(),
-			LoxCallable::FnClass(class) => format!("<class {}>", class.name.lexeme),
+			LoxCallable::FnClass(class) => format!("<class {}>", class.name),
 		}
 	}
 }
