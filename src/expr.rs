@@ -74,6 +74,9 @@ pub fn ast_print(expr: &Expr) {
 			print!(" {}", name.lexeme);
 			paren_end(value);
 		},
+		Expr::This { keyword, resolved } => {
+			print!("(this)");
+		}
 	}
 }
 

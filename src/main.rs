@@ -25,15 +25,17 @@ pub struct LoxInstance {
 	class: Rc<LoxClass>,
 
 	fields: HashMap<String, LoxValue>,
+
+	this_ptr: LoxRef,
 }
 
 impl LoxInstance {
-	pub fn new(class: Rc<LoxClass>) -> Self {
-		LoxInstance { class, fields: HashMap::new() }
+	pub fn new(class: Rc<LoxClass>, this_ptr: LoxRef) -> Self {
+		LoxInstance { class, fields: HashMap::new(), this_ptr }
 	}
 
 	pub fn get(&self, name: &Token) -> Result<LoxValue, InterpUnwind> {
-		if let Some(value) = self.class.find_method(&name.lexeme) {
+		if let Some(value) = self.class.find_method_bound_to(&name.lexeme, LoxValue::Instance(self.this_ptr)) {
 			return Ok(value);
 		}
 
@@ -70,7 +72,7 @@ impl Lox {
 
 	pub fn new_instance(&mut self, class: Rc<LoxClass>) -> LoxRef {
 		let idx = self.instances.len();
-		self.instances.push(LoxInstance::new(class));
+		self.instances.push(LoxInstance::new(class, LoxRef(idx)));
 
 		LoxRef(idx)
 	}

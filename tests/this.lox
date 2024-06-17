@@ -1,0 +1,21 @@
+class Thing {
+  getCallback() {
+	this.value = 30;
+	var local = 0;
+    fun localFunction() {
+      print this;
+	  print local;
+	  print this.value;
+	  local = local + 1;
+	  this.value = this.value + 2;
+    }
+
+    return localFunction;
+  }
+}
+
+var callback = Thing().getCallback();
+callback();
+callback();
+callback();
+callback();

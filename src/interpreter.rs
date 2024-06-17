@@ -166,6 +166,9 @@ impl<'a> Interpreter<'a> {
 				// The other option is some kind of String arena
 				return Ok(self.environment.borrow().get_at(name, *resolved)?.clone());
 			},
+			Expr::This { keyword, resolved } => {
+				return Ok(self.environment.borrow().get_at(keyword, *resolved)?.clone());
+			}
 			Expr::Assign { name, value , resolved } => {
 				let value = self.evaluate(value)?;
 				return self.environment.borrow_mut().assign_at(name, value, *resolved);

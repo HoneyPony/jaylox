@@ -243,6 +243,10 @@ impl<'a> Parser<'a> {
 			return Ok(self.previous().literal.clone().into());
 		}
 
+		if self.match_one(This) {
+			return Ok(Expr::this(self.previous().clone(), None));
+		}
+
 		if self.match_one(Identifier) {
 			return Ok(Expr::variable(self.previous().clone(), None));
 		}

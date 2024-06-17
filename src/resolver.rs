@@ -162,11 +162,26 @@ impl<'a> Resolver<'a> {
 				self.declare(&name);
 				self.define(&name);
 
+				self.begin_scope(); // New scope for "this"
+				self.scopes.last_mut().unwrap().insert("this".into(), true);
+
 				for method in methods {
 					let declaration = FunctionType::Method;
 					self.resolve_function(method, declaration);
 				}
+
+				self.end_scope();
 			}
+		}
+	}
+
+	fn resolve_local(&mut self, name: &Token, resolved: &mut Option<u32>) {
+		if let Some(scope) = self.scopes.last() {
+			if *scope.get(&name.lexeme).unwrap_or(&true) == false {
+				self.lox.error_token(name, "Can't read local variable in its own initializer.");
+			}
+
+			*resolved = self.resolve_name_now(name);
 		}
 	}
 
@@ -192,13 +207,7 @@ impl<'a> Resolver<'a> {
 				self.resolve_expr(right);	
 			},
 			Expr::Variable { name, resolved } => {
-				if let Some(scope) = self.scopes.last() {
-					if *scope.get(&name.lexeme).unwrap_or(&true) == false {
-						self.lox.error_token(name, "Can't read local variable in its own initializer.");
-					}
-
-					*resolved = self.resolve_name_now(name);
-				}
+				self.resolve_local(name, resolved)
 			},
 			Expr::Assign { name, value, resolved } => {
 				self.resolve_expr(value);
@@ -210,7 +219,10 @@ impl<'a> Resolver<'a> {
 			Expr::Set { object, name, value } => {
 				self.resolve_expr(object);
 				self.resolve_expr(value);
-			}
+			},
+			Expr::This { keyword, resolved } => {
+				self.resolve_local(keyword, resolved);
+			},
 		}
 	}
 
