@@ -13,6 +13,7 @@ pub struct Function {
 	pub name: Token,
 	pub parameters: Vec<Token>,
 	pub body: Vec<Stmt>,
+	pub is_initializer: bool,
 }
 
 // Similar to functions, we put the class info in a struct that is Rc'd.
@@ -23,20 +24,20 @@ pub struct LoxClass {
 }
 
 impl Function {
-	pub fn new(name: Token, parameters: Vec<Token>, body: Vec<Stmt>) -> Self {
-		Function { name, parameters, body }
+	pub fn new(name: Token, parameters: Vec<Token>, body: Vec<Stmt>, is_initializer: bool) -> Self {
+		Function { name, parameters, body, is_initializer }
 	}
 
-	pub fn new_as_rc(name: Token, parameters: Vec<Token>, body: Vec<Stmt>) -> Rc<Self> {
-		Rc::new(Self::new(name, parameters, body))
+	pub fn new_as_rc(name: Token, parameters: Vec<Token>, body: Vec<Stmt>, is_initializer: bool) -> Rc<Self> {
+		Rc::new(Self::new(name, parameters, body, is_initializer))
 	}
 
-	pub fn new_as_stmt(name: Token, parameters: Vec<Token>, body: Vec<Stmt>) -> Stmt {
-		Stmt::Function(Rc::new(Self::new(name, parameters, body)))
+	pub fn new_as_stmt(name: Token, parameters: Vec<Token>, body: Vec<Stmt>, is_initializer: bool) -> Stmt {
+		Stmt::Function(Rc::new(Self::new(name, parameters, body, is_initializer)))
 	}
 
-	pub fn new_as_stmt_res(name: Token, parameters: Vec<Token>, body: Vec<Stmt>) -> StmtRes {
-		Ok(Self::new_as_stmt(name, parameters, body))
+	pub fn new_as_stmt_res(name: Token, parameters: Vec<Token>, body: Vec<Stmt>, is_initializer: bool) -> StmtRes {
+		Ok(Self::new_as_stmt(name, parameters, body, is_initializer))
 	}
 
 	pub fn to_lox_value(fun: &Rc<Function>, closure: &Rc<RefCell<Environment>>) -> LoxValue {

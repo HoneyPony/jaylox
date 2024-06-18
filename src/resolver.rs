@@ -11,6 +11,7 @@ use crate::expr::*;
 enum FunctionType {
 	None,
 	Function,
+	Initializer,
 	Method
 }
 
@@ -119,6 +120,10 @@ impl<'a> Resolver<'a> {
 
 		if let Some(fun) = Rc::get_mut(fun) {
 			self.resolve_stmts(&mut fun.body);
+
+			if kind == FunctionType::Initializer {
+				fun.is_initializer = true;
+			}
 		}
 		else {
 			panic!("Resolver could not get_mut() when resolving function");
@@ -153,6 +158,10 @@ impl<'a> Resolver<'a> {
 					self.lox.error_token(keyword, "Can't return from top-level code.");
 				}
 
+				if self.current_function == FunctionType::Initializer && value.is_some() {
+					self.lox.error_token(keyword, "Can't return a value from an initializer.");
+				}
+
 				value.as_mut().map(|value| self.resolve_expr(value));
 			}
 			Stmt::Var { name, initializer } => {
@@ -177,7 +186,10 @@ impl<'a> Resolver<'a> {
 				self.scopes.last_mut().unwrap().insert("this".into(), true);
 
 				for method in methods {
-					let declaration = FunctionType::Method;
+					let mut declaration = FunctionType::Method;
+					if method.name.lexeme == "init" {
+						declaration = FunctionType::Initializer;
+					}
 					self.resolve_function(method, declaration);
 				}
 

@@ -409,7 +409,7 @@ impl<'a> Parser<'a> {
 
 		self.consume(LeftBrace, &format!("Expect '{{' before {kind} body."))?;
 		let body = self.block()?;
-		return Ok(Function::new_as_rc(name, parameters, body));
+		return Ok(Function::new_as_rc(name, parameters, body, false));
 	}
 
 	fn class_declaration(&mut self) -> StmtRes {

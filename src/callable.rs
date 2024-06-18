@@ -1,6 +1,8 @@
 use crate::environment::Environment;
 use crate::interpreter::InterpRes;
 use crate::interpreter::InterpUnwind;
+use crate::scanner::Token;
+use crate::scanner::TokenType;
 use crate::stmt::LoxClass;
 use crate::{interpreter::Interpreter, scanner::LoxValue};
 use crate::stmt::Function;
@@ -53,6 +55,19 @@ impl LoxCallable {
 				}
 
 				let result = interpreter.execute_block(&func.body, fn_scope);
+
+				if func.is_initializer {
+					// If we're propogating up an error, do that. Otherwise, we return "this" from the initializer.
+					if let Err(InterpUnwind::Error(err)) = result {
+						return InterpRes::Err(InterpUnwind::Error(err));
+					}
+
+					let dummy_this = Token::new(TokenType::This, "this".into(), LoxValue::Nil, 0);
+					return Ok(closure
+						.borrow()
+						.get_at(&dummy_this, Some(0))
+						.unwrap_or_else(|_| panic!("Getting 'this' should never fail inside initializer")));
+				}
 
 				// Turn return value unwinds into regular return values here.
 				if let Err(InterpUnwind::ReturnValue(return_value)) = result {

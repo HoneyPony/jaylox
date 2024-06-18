@@ -1,0 +1,21 @@
+class Test {
+	init(arg) {
+		this.value = arg * 40;
+
+		print "A";
+		if(arg == 1) { return; }
+		print "B";
+		if(arg == 2) { return; }
+		print "C";
+		if(arg == 3) { return; }
+		print "D";
+		if(arg == 4) { return; }
+		print "E";
+	}
+}
+
+print Test(1).value;
+print Test(2).value;
+print Test(3).value;
+print Test(4).value;
+print Test(5).value;
