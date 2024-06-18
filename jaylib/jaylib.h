@@ -6,6 +6,7 @@
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <time.h>
 
 struct jay_value;
 struct jay_instance;
@@ -304,9 +305,10 @@ jay_new_scope(jay_instance *closure) {
 
 // Creates a new function object from a closure and a function pointer.
 jay_value
-jay_fun_from(jay_fn fn, jay_instance *closure) {
+jay_fun_from(jay_fn fn, size_t arity, jay_instance *closure) {
 	jay_instance *instance = jay_new_instance();
 	instance->callable = fn;
+	instance->arity = arity;
 	instance->closure = closure;
 
 	jay_value result;
@@ -427,6 +429,15 @@ jay_lookup(jay_instance *instance, size_t name) {
 jay_instance*
 jay_find_method(jay_instance *class, size_t name) {
 
+}
+
+/* --- Builtin Functions (e.g. clock) --- */
+
+jay_value
+jay_std_clock(jay_value *args, jay_instance *closure) {
+	clock_t time = clock();
+	double ms = (time * 1000.0 / CLOCKS_PER_SEC);
+	return jay_number(ms);
 }
 
 /*jay_value

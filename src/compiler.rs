@@ -53,6 +53,11 @@ impl<'a> Compiler<'a> {
 		self.name_set.insert(name.lexeme.clone());
 	}
 
+	fn add_name_str(&mut self, name: &str) {
+		if self.name_set.contains(name) { return; }
+		self.name_set.insert(name.to_string());
+	}
+
 	fn binary_op(&mut self, into: &mut String, left: &Expr, op: &Token, right: &Expr) -> fmt::Result {
 		let fun = match op.typ {
 			Minus => "jay_sub",
@@ -256,7 +261,7 @@ impl<'a> Compiler<'a> {
 				// ordering properties (e.g. not being visible beforehand).
 				self.indent(into);
 				self.add_name(&fun.name);
-				writeln!(into, "jay_put_new(scope, NAME_{}, jay_fun_from({mangled_name}, scope));", fun.name.lexeme)?;
+				writeln!(into, "jay_put_new(scope, NAME_{}, jay_fun_from({}, {}, scope));", fun.name.lexeme, mangled_name, fun.parameters.len())?;
 			},
 			Stmt::If { condition, then_branch, else_branch } => {
 				self.indent(into);
@@ -332,6 +337,14 @@ impl<'a> Compiler<'a> {
 		self.indent(&mut main_fn);
 		// Create the scope for the main fn
 		writeln!(main_fn, "jay_instance *scope = jay_new_scope(NULL);")?;
+		// Place global variables into the top-level scope (might change if
+		// we ever implement optimizations)
+		self.add_name_str("clock");
+		self.indent(&mut main_fn);
+		writeln!(main_fn, "jay_put_new(scope, NAME_clock, jay_fun_from(jay_std_clock, 0, scope));")?;
+
+		// Compile the actual top-level code (any normal statements will go
+		// into main; other things will go into their own functions)
 		self.compile_stmts(stmts, &mut main_fn)?;
 		self.pop_indent();
 
