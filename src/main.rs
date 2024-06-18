@@ -201,12 +201,12 @@ fn main() -> io::Result<()> {
 	let mut lox = Lox::new();
 
 	if args.len() > 3 {
-		println!("Usage: jlox [-c] [script]");
+		println!("Usage: jlox [c] [script]");
 		exit(64);
 	}
 	else if args.len() == 3{
-		if args[1] != "-c" {
-			println!("Usage: jlox [-c] [script]");
+		if args[1] != "c" {
+			println!("Usage: jlox [c] [script]");
 			println!("Unknown argument {}", args[1]);
 			exit(64);
 		}
