@@ -22,7 +22,7 @@ typedef struct jay_instance {
 	jay_instance *closure;
 
 	// The class of this instance, or the superclass if we're a class.
-	jay_instance *class;
+	jay_instance *klass;
 
 	// For efficiency:
 	// Callables are just instances. The closure is the jay_instance object,
@@ -73,13 +73,37 @@ jay_as_instance(jay_value value, const char *message) {
 	return value.as_instance;
 }
 
+double
+jay_as_number(jay_value value, const char *message) {
+	if(value.tag != JAY_NUMBER) {
+		oops(message);
+	}
+
+	return value.as_double;
+}
+
+jay_value
+jay_number(double input) {
+	jay_value res;
+	res.tag = JAY_NUMBER;
+	res.as_double = input;
+	return res;
+}
+
+jay_value
+jay_boolean(bool input) {
+	jay_value res;
+	res.tag = input ? JAY_TRUE : JAY_FALSE;
+	return res;
+}
+
 jay_value
 jay_lookup(jay_instance *instance, size_t name) {
 
 }
 
 jay_instance*
-jay_find_method(jay_instance *class, size_t name) {
+jay_find_method(jay_instance *klass, size_t name) {
 
 }
 
@@ -97,6 +121,110 @@ jay_get(jay_value object, size_t name) {
 	}
 
 	return instance->members[name].value;
+}
+
+jay_value
+jay_add(jay_value a, jay_value b) {
+
+}
+
+jay_value
+jay_sub(jay_value a, jay_value b) {
+	const char *message = "subtraction expects two numbers";
+	double an = jay_as_number(a, message);
+	double bn = jay_as_number(b, message);
+	return jay_number(an - bn);
+}
+
+jay_value
+jay_mul(jay_value a, jay_value b) {
+	const char *message = "multiplication expects two numbers";
+	double an = jay_as_number(a, message);
+	double bn = jay_as_number(b, message);
+	return jay_number(an * bn);
+}
+
+jay_value
+jay_div(jay_value a, jay_value b) {
+	const char *message = "division expects two numbers";
+	double an = jay_as_number(a, message);
+	double bn = jay_as_number(b, message);
+	return jay_number(an / bn);
+}
+
+jay_value
+jay_gt(jay_value a, jay_value b) {
+	const char *message = "comparison (>) expects two numbers";
+	double an = jay_as_number(a, message);
+	double bn = jay_as_number(b, message);
+	return jay_boolean(an > bn);
+}
+
+jay_value
+jay_ge(jay_value a, jay_value b) {
+	const char *message = "comparison (>=) expects two numbers";
+	double an = jay_as_number(a, message);
+	double bn = jay_as_number(b, message);
+	return jay_boolean(an >= bn);
+}
+
+jay_value
+jay_lt(jay_value a, jay_value b) {
+	const char *message = "comparison (<) expects two numbers";
+	double an = jay_as_number(a, message);
+	double bn = jay_as_number(b, message);
+	return jay_boolean(an < bn);
+}
+
+jay_value
+jay_le(jay_value a, jay_value b) {
+	const char *message = "comparison (<=) expects two numbers";
+	double an = jay_as_number(a, message);
+	double bn = jay_as_number(b, message);
+	return jay_boolean(an <= bn);
+}
+
+bool
+jay_truthy(jay_value value) {
+	if(value.tag == JAY_FALSE || value.tag == JAY_NIL) return false;
+	return true;
+}
+
+bool
+jay_eq_impl(jay_value a, jay_value b) {
+	if(a.tag != b.tag) {
+		return false;
+	}
+	if(a.tag == JAY_NUMBER) {
+		return a.as_double == b.as_double;
+	}
+	if(a.tag == JAY_STRING) {
+		// TODO: Decide if we want string interning, etc
+		return false;
+	}
+	// All other types can be compared by identity... I think
+	return a.as_instance == b.as_instance;
+}
+
+jay_value
+jay_neq(jay_value a, jay_value b) {
+	return jay_boolean(!jay_eq_impl(a, b));
+}
+
+jay_value
+jay_eq(jay_value a, jay_value b) {
+	return jay_boolean(jay_eq_impl(a, b));
+}
+
+jay_value
+jay_not(jay_value v) {
+	return jay_boolean(!jay_truthy(v));
+}
+
+jay_value
+jay_negate(jay_value v) {
+	double vd = jay_as_number(v, "negation expects a number");
+	return jay_number(-vd);
 }
 
 /*
@@ -178,7 +306,7 @@ init_blahblah(jay_value *args, jay_instance *closure) {
 // Each class is similarly turned into a top-level C function, one that calls
 // the init method
 //
-// 
+// The code inside a function is 
 */
 
 #endif
