@@ -235,6 +235,9 @@ impl<'a> Compiler<'a> {
 					writeln!(def, "jay_put(NAME_{}, arguments[{idx}]);", arg.lexeme)?;
 				}
 
+				// Generate the code inside the function.
+				self.compile_stmts(&fun.body, &mut def)?;
+
 				// Finally, put a default return value.
 				self.indent(&mut def);
 				writeln!(def, "return jay_null();")?;
