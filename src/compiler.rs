@@ -2,7 +2,8 @@ use core::fmt;
 use std::{cell::RefCell, collections::HashSet, fmt::Write, rc::Rc};
 
 use crate::{environment::Environment, expr::Expr, scanner::Token, stmt::Stmt, Lox};
-
+use crate::scanner::LoxValue;
+use crate::scanner::TokenType::*;
 
 
 pub struct Compiler<'a> {
@@ -52,20 +53,125 @@ impl<'a> Compiler<'a> {
 		self.name_set.insert(name.lexeme.clone());
 	}
 
+	fn binary_op(&mut self, into: &mut String, left: &Expr, op: &Token, right: &Expr) -> fmt::Result {
+		let fun = match op.typ {
+			Minus => "jay_sub",
+			Plus => "jay_add",
+			Slash => "jay_div",
+			Star => "jay_mul",
+			BangEqual => "jay_neq",
+			EqualEqual => "jay_eq",
+			Greater => "jay_gt",
+			GreaterEqual => "jay_ge",
+			Less => "jay_lt",
+			LessEqual => "jay_le",
+			_ => unreachable!()
+		};
+
+		write!(into, "{fun}(")?;
+		self.compile_expr(left, into)?;
+		into.write_str(", ")?;
+		self.compile_expr(right, into)?;
+		into.write_str(")")?;
+
+		Ok(())
+	}
+
 	fn compile_expr(&mut self, expr: &Expr, into: &mut String) -> fmt::Result {
 		match expr {
-			Expr::Binary { left, operator, right } => todo!(),
-			Expr::Call { callee, paren, arguments } => todo!(),
-			Expr::Get { object, name } => todo!(),
-			Expr::Grouping(_) => todo!(),
-			Expr::Literal(_) => todo!(),
-			Expr::Logical { left, operator, right } => todo!(),
+			Expr::Binary { left, operator, right } => {
+				self.binary_op(into, left, operator, right)?;
+			},
+			Expr::Call { callee, paren, arguments } => {
+				write!(into, "(jay_as_callable(")?;
+				self.compile_expr(callee, into)?;
+				// Look up the callable directly inside the returned struct. This should
+				// be somewhat inline-able..?
+				//
+				// Well, anyway, jay_as_callable() can look up the argument count. We
+				// could also just use a function that acted as a way to call functions.
+				// It might be interesting to look into places where this could be turned
+				// into a much simpler call expression.
+				write!(into, ", {})->callable)(", arguments.len())?;
+				if arguments.is_empty() {
+					// If we have no arguments, just pass a NULL.
+					write!(into, "NULL, ")?;
+				}
+				else {
+					write!(into, " (jay_value[]){{")?;
+					let mut comma = false;
+					for arg in arguments {
+						if comma {
+							into.push_str(", ");
+						}
+						self.compile_expr(arg, into)?;
+						comma = true;
+					}
+					write!(into, "}}, ")?;
+				}
+
+				// Finally, write the closure and end the expression. The closure
+				// is always the scope of the current function.
+				write!(into, "scope)")?;
+			},
+			Expr::Get { object, name } => {
+				into.push_str("jay_get(");
+				self.compile_expr(object, into)?;
+				self.add_name(name);
+				write!(into, ", NAME_{})", name.lexeme)?;
+			},
+			Expr::Grouping(inner) => {
+				// Note: I don't know if it's really necessary to do parens here, but whatever..
+				into.push('(');
+				self.compile_expr(inner, into)?;
+				into.push(')');
+			},
+			Expr::Literal(value) => {
+				match value {
+					LoxValue::Nil => into.push_str("jay_null()"),
+					LoxValue::String(chars) => write!(into, "jay_string(\"{}\")", chars)?,
+					LoxValue::Number(value) => write!(into, "jay_number(value)")?,
+					LoxValue::Bool(value) => write!(into, "jay_boolean(value)")?,
+					_ => panic!("Don't know how to compile a literal of this kind.")
+				}
+			},
+			Expr::Logical { left, operator, right } => {
+				self.binary_op(into, left, operator, right)?;
+			}
 			Expr::Set { object, name, value } => todo!(),
 			Expr::Super { keyword, method, resolved } => todo!(),
-			Expr::This { keyword, resolved } => todo!(),
-			Expr::Unary { operator, right } => todo!(),
-			Expr::Variable { name, resolved } => todo!(),
-			Expr::Assign { name, value, resolved } => todo!(),
+			Expr::This { keyword, resolved } => {
+				// Note: We could do this add_name just once in compile() for speed,
+				// but it is a little annoying to set up the token... for now, just do
+				// it like this
+				self.add_name(keyword);
+				write!(into, "jay_lookup(scope, NAME_{})", keyword.lexeme)?;
+			}
+			Expr::Unary { operator, right } => {
+				let op = match operator.typ {
+					Bang => "jay_not",
+					Minus => "jay_negate",
+					_ => unreachable!()
+				};
+
+				write!(into, "{op}(")?;
+				self.compile_expr(right, into)?;
+			},
+			Expr::Variable { name, resolved } => {
+				self.add_name(name);
+				// TODO: For variables and this and etc, also used the "resolved"
+				// information to speed up lookups
+				//
+				// Of course, we could also add another compiler pass to move variables
+				// out of the closures entirely for more speed...
+				write!(into, "jay_lookup(scope, NAME_{})", name.lexeme)?;
+			},
+			Expr::Assign { name, value, resolved } => {
+				self.add_name(name);
+				write!(into, "jay_put(scope, NAME_{}, ", name.lexeme)?;
+				self.compile_expr(value, into)?;
+				into.push(')');
+			},
 		}
 
 		Ok(())
