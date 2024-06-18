@@ -136,7 +136,19 @@ impl<'a> Compiler<'a> {
 				}
 			},
 			Expr::Logical { left, operator, right } => {
-				self.binary_op(into, left, operator, right)?;
+				// Note: C logical operators are short-circuiting. So, if we use them,
+				// we can implement Lox's short-circuiting operations without too much hassle.
+				let op = match operator.typ {
+					Or => "||",
+					And => "&&",
+					_ => unreachable!()
+				};
+
+				write!(into, "(jay_truthy(")?;
+				self.compile_expr(left, into)?;
+				write!(into, ") {op} (jay_truthy(")?;
+				self.compile_expr(right, into)?;
+				write!(into, "))")?;
 			}
 			Expr::Set { object, name, value } => todo!(),
 			Expr::Super { keyword, method, resolved } => todo!(),
