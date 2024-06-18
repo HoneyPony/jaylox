@@ -1,6 +1,6 @@
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
-use crate::{environment::Environment, expr::Expr, scanner::{LoxValue, Token}, stmt::{Function, LoxClass, Stmt}};
+use crate::{callable::LoxCallable, environment::Environment, expr::Expr, scanner::{LoxValue, Token, TokenType}, stmt::{Function, LoxClass, Stmt}};
 
 use crate::scanner::TokenType::*;
 use crate::Lox;
@@ -226,6 +226,24 @@ impl<'a> Interpreter<'a> {
 				self.lox.get_mut(ptr).set(name, value.clone());
 				return Ok(value);
 			},
+			Expr::Super { keyword, method, resolved } => {
+				let Some(distance) = *resolved else {
+					panic!("Super keyword should be resolved with at least depth 1");
+				};
+
+				let superclass = self.environment.borrow().get_at(keyword, *resolved)?;
+				let superclass = match superclass {
+					LoxValue::Callable(LoxCallable::FnClass(class)) => class,
+					_ => panic!("Could not find value of superclass when evaluating 'super' expression")
+				};
+
+				let dummy_this = Token::new(TokenType::This, "this".into(), LoxValue::Nil, 0);
+				// Hack to look up 'this' in the surrounding environment
+				let object = self.environment.borrow().get_at(&dummy_this, Some(distance - 1))?;
+
+				let bound = superclass.find_method_bound_to(&method.lexeme, object);
+				return bound.ok_or_else(|| InterpErr::new(method, format!("Undefined property {}.", method.lexeme)));
+			},
 		}
 	}
 
@@ -298,8 +316,29 @@ impl<'a> Interpreter<'a> {
 				// expression still results in a nil value. This is the same here.
 				return Err(InterpUnwind::ReturnValue(return_value));
 			},
-			Stmt::Class { name, methods } => {
+			Stmt::Class { name, methods, superclass } => {
 				let mut method_map = HashMap::new();
+
+				let mut superclass_resolved = None;
+
+				if let Some(superclass_name) = &superclass.0 {
+					let value = self.environment.borrow().get_at(superclass_name, superclass.1)?;
+					let LoxValue::Callable(LoxCallable::FnClass(class)) = value else {
+						return Err(InterpErr::new(superclass_name, "Superclass must be a class.".into()));
+					};
+
+					// Store the resolved class for later.
+					superclass_resolved = Some(class);
+				}
+
+				// TODO: In the book, the class name lexeme is define()'d in the enviroment
+				// here. Should we do that?
+
+				// Create environment for superclass resolution (mirrors resolver)
+				if let Some(class) = &superclass_resolved {
+					self.environment = Environment::new_with_enclosing(Rc::clone(&self.environment));
+					self.environment.borrow_mut().define("super".into(), LoxClass::to_lox_value(class));
+				}
 
 				// NOTE: This means that a class local to a function, etc,
 				// will be very slow -- because every time that function is run, this
@@ -314,11 +353,17 @@ impl<'a> Interpreter<'a> {
 					method_map.insert(method.name.lexeme.clone(),
 					 (Rc::clone(method), Rc::clone(&self.environment)));
 				}
+
+				// Pop the superclass environment if needed
+				if superclass_resolved.is_some() {
+					let enclosing =  Rc::clone(self.environment.borrow().parent.as_ref().unwrap());
+					self.environment = enclosing;
+				}
 				
 				// Wrap the class value into a Callable
 				self.environment.borrow_mut().define(
 					name.lexeme.clone(),
-					LoxClass::new_as_lox_value(name.lexeme.clone(), method_map)
+					LoxClass::new_as_lox_value(name.lexeme.clone(), method_map, superclass_resolved)
 				);
 			}
 		}

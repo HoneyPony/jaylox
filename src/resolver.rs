@@ -19,6 +19,7 @@ enum FunctionType {
 enum ClassType {
 	None,
 	Class,
+	Subclass,
 }
 
 pub struct Resolver<'a> {
@@ -175,12 +176,27 @@ impl<'a> Resolver<'a> {
 				self.resolve_expr(condition);
 				self.resolve_stmt(body);
 			},
-			Stmt::Class { name, methods } => {
+			Stmt::Class { name, methods, superclass } => {
 				let enclosing = self.current_class;
 				self.current_class = ClassType::Class;
 				
 				self.declare(&name);
 				self.define(&name);
+
+				if let Some(superclass_name) = &superclass.0 {
+					if name.lexeme == superclass_name.lexeme {
+						self.lox.error_token(superclass_name, "A class can't inherit from itself.");
+					}
+					self.resolve_local(superclass_name, &mut superclass.1);
+
+					self.current_class = ClassType::Subclass;
+				}
+
+				if superclass.0.is_some() {
+					self.begin_scope();
+					// Safety: We just began the scope, so last must exist.
+					self.scopes.last_mut().unwrap().insert("super".into(), true);
+				}
 
 				self.begin_scope(); // New scope for "this"
 				self.scopes.last_mut().unwrap().insert("this".into(), true);
@@ -194,6 +210,11 @@ impl<'a> Resolver<'a> {
 				}
 
 				self.end_scope();
+
+				// Must close the superclass scope if it existed
+				if superclass.0.is_some() {
+					self.end_scope();
+				}
 
 				self.current_class = enclosing;
 			}
@@ -252,6 +273,16 @@ impl<'a> Resolver<'a> {
 				}
 				self.resolve_local(keyword, resolved);
 			},
+			Expr::Super { keyword, method, resolved } => {
+				if self.current_class == ClassType::None {
+					self.lox.error_token(keyword, "Can't user 'super' outside of a class.");
+				}
+				if self.current_class != ClassType::Subclass {
+					self.lox.error_token(keyword, "Can't use 'super' in a class with no superclass.");
+				}
+
+				self.resolve_local(keyword, resolved);
+			}
 		}
 	}
 

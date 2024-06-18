@@ -76,7 +76,10 @@ pub fn ast_print(expr: &Expr) {
 		},
 		Expr::This { keyword, resolved } => {
 			print!("(this)");
-		}
+		},
+		Expr::Super { keyword, method, .. } => {
+			print!("({} {})", keyword.lexeme, method.lexeme);
+		},
 	}
 }
 

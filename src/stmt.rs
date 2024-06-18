@@ -21,6 +21,7 @@ pub struct Function {
 pub struct LoxClass {
 	pub name: String,
 	pub methods: HashMap<String, (Rc<Function>, Rc<RefCell<Environment>>)>,
+	pub superclass: Option<Rc<LoxClass>>,
 }
 
 impl Function {
@@ -49,12 +50,12 @@ impl Function {
 }
 
 impl LoxClass {
-	pub fn new(name: String, methods: HashMap<String, (Rc<Function>, Rc<RefCell<Environment>>)>) -> Self {
-		LoxClass { name, methods }
+	pub fn new(name: String, methods: HashMap<String, (Rc<Function>, Rc<RefCell<Environment>>)>, superclass: Option<Rc<LoxClass>>) -> Self {
+		LoxClass { name, methods, superclass }
 	}
 
-	pub fn new_as_rc(name: String, methods: HashMap<String, (Rc<Function>, Rc<RefCell<Environment>>)>) -> Rc<Self> {
-		Rc::new(Self::new(name, methods))
+	pub fn new_as_rc(name: String, methods: HashMap<String, (Rc<Function>, Rc<RefCell<Environment>>)>, superclass: Option<Rc<LoxClass>>) -> Rc<Self> {
+		Rc::new(Self::new(name, methods, superclass))
 	}
 
 	pub fn to_lox_value(class: &Rc<LoxClass>) -> LoxValue {
@@ -63,14 +64,21 @@ impl LoxClass {
 		))
 	}
 
-	pub fn new_as_lox_value(name: String, methods: HashMap<String, (Rc<Function>, Rc<RefCell<Environment>>)>) -> LoxValue {
+	pub fn new_as_lox_value(name: String, methods: HashMap<String, (Rc<Function>, Rc<RefCell<Environment>>)>, superclass: Option<Rc<LoxClass>>) -> LoxValue {
 		return LoxValue::Callable(LoxCallable::FnClass(
-			Self::new_as_rc(name, methods)
+			Self::new_as_rc(name, methods, superclass)
 		))
 	}
 
+	fn find_method_rc(&self, name: &str) -> Option<& (Rc<Function>, Rc<RefCell<Environment>>)> {
+		self.methods.get(name).or_else(|| match &self.superclass {
+			Some(superclass) => superclass.find_method_rc(name),
+			None => None,
+		})
+	}
+
 	pub fn find_raw_method_bound_to(&self, name: &str, this_binding: LoxValue) -> Option<LoxCallable> {
-		self.methods.get(name).map(|(fun, env)| {
+		self.find_method_rc(name).map(|(fun, env)| {
 			let bound_env = Environment::new_with_enclosing(Rc::clone(env));
 			bound_env.borrow_mut().define("this".into(), this_binding);
 				
@@ -85,6 +93,6 @@ impl LoxClass {
 	}
 
 	pub fn find_method_arity(&self, name: &str) -> Option<usize> {
-		self.methods.get(name).map(|(fun, _)| fun.parameters.len())
+		self.find_method_rc(name).map(|(fun, _)| fun.parameters.len())
 	}
 }

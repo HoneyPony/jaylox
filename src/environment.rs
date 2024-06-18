@@ -5,7 +5,7 @@ use crate::interpreter::InterpUnwind;
 
 pub struct Environment {
 	values: HashMap<String, LoxValue>,
-	parent: Option<Rc<RefCell<Environment>>>,
+	pub parent: Option<Rc<RefCell<Environment>>>,
 }
 
 impl Environment {

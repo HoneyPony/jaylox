@@ -247,6 +247,20 @@ impl<'a> Parser<'a> {
 			return Ok(Expr::this(self.previous().clone(), None));
 		}
 
+		if self.match_one(Super) {
+			let keyword = self.previous().clone();
+			self.consume(Dot, "Expect '.' after 'super'.")?;
+			let method = self.consume(Identifier,
+				"Expect superclass method name.")?;
+
+			// Note to self while writing this:
+			// It seems quite possible that, instead of cloning Token's willy-nilly,
+			// we could have simply returned either a reference to the token, or
+			// perhaps an index into the Token Vec...
+
+			return Ok(Expr::super_(keyword, method, None));
+		}
+
 		if self.match_one(Identifier) {
 			return Ok(Expr::variable(self.previous().clone(), None));
 		}
@@ -414,6 +428,12 @@ impl<'a> Parser<'a> {
 
 	fn class_declaration(&mut self) -> StmtRes {
 		let name = self.consume(Identifier, "Expect class name.")?;
+		
+		let superclass = if self.match_one(Less) {
+			let identifier = self.consume(Identifier, "Expect superclass name.")?;
+			Some(identifier)
+		} else { None };
+
 		self.consume(LeftBrace, "Expect '{' before class body.")?;
 
 		let mut methods = vec![];
@@ -423,7 +443,7 @@ impl<'a> Parser<'a> {
 
 		self.consume(RightBrace, "Expect '}' after class body.")?;
 
-		Ok(Stmt::class(name, methods))
+		Ok(Stmt::class(name, methods, (superclass, None)))
 	}
 
 	fn declaration(&mut self) -> Option<Stmt> {

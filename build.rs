@@ -54,6 +54,7 @@ fn generate_ty_impl(file: &mut File, ty: &ExprTy, roottyname: &str) -> io::Resul
 	if fnname == "if" { fnname = "if_".into(); }
 	if fnname == "while" { fnname = "while_".into(); }
 	if fnname == "return" { fnname = "return_".into(); }
+	if fnname == "super" { fnname = "super_".into(); }
 	writeln!(file, "\t#[allow(unused)]")?;
 	write!(file, "\tpub fn {0}(", fnname)?;
 
@@ -144,6 +145,7 @@ fn generate_ast_files(expr: &mut File, stmt: &mut File) -> io::Result<()> {
 		ty("Literal", vec![arg("value", "LoxValue")]),
 		ty("Logical", vec![arg("left", "Expr"), arg("operator", "Token"), arg("right", "Expr")]),
 		ty("Set", vec![arg("object", "Expr"), arg("name", "Token"), arg("value", "Expr")]),
+		ty("Super", vec![arg("keyword", "Token"), arg("method", "Token"), arg("resolved", "Option<u32>")]),
 		ty("This", vec![arg("keyword", "Token"), arg("resolved", "Option<u32>")]),
 		ty("Unary", vec![arg("operator", "Token"), arg("right", "Expr")]),
 		ty("Variable", vec![arg("name", "Token"), arg("resolved", "Option<u32>")]),
@@ -152,7 +154,7 @@ fn generate_ast_files(expr: &mut File, stmt: &mut File) -> io::Result<()> {
 
 	let tys_stmt: Vec<ExprTy> = vec![
 		ty("Block", vec![arg_stmt("statements", "Vec<Stmt>")]),
-		ty("Class", vec![arg_stmt("name", "Token"), arg_stmt("methods", "Vec<Rc<Function>>")]),
+		ty("Class", vec![arg_stmt("name", "Token"), arg_stmt("methods", "Vec<Rc<Function>>"), arg_stmt("superclass", "(Option<Token>, Option<u32>)")]),
 		ty("Expression", vec![arg_stmt("expression", "Expr")]),
 		ty("Function", vec![arg_stmt("function", "Rc<Function>")]),
 		ty("If", vec![arg_stmt("condition", "Expr"), arg_stmt("then_branch", "Stmt"), arg_stmt("else_branch", "Option<Stmt>")]),
