@@ -14,12 +14,19 @@ enum FunctionType {
 	Method
 }
 
+#[derive(Clone, Copy, PartialEq)]
+enum ClassType {
+	None,
+	Class,
+}
+
 pub struct Resolver<'a> {
 	lox: &'a mut Lox,
 
 	scopes: Vec<HashMap<String, bool>>,
 
 	current_function: FunctionType,
+	current_class: ClassType,
 }
 
 impl<'a> Resolver<'a> {
@@ -28,6 +35,7 @@ impl<'a> Resolver<'a> {
 			lox,
 			scopes: Default::default(),
 			current_function: FunctionType::None,
+			current_class: ClassType::None,
 		}
 	}
 
@@ -159,6 +167,9 @@ impl<'a> Resolver<'a> {
 				self.resolve_stmt(body);
 			},
 			Stmt::Class { name, methods } => {
+				let enclosing = self.current_class;
+				self.current_class = ClassType::Class;
+				
 				self.declare(&name);
 				self.define(&name);
 
@@ -171,6 +182,8 @@ impl<'a> Resolver<'a> {
 				}
 
 				self.end_scope();
+
+				self.current_class = enclosing;
 			}
 		}
 	}
@@ -221,6 +234,10 @@ impl<'a> Resolver<'a> {
 				self.resolve_expr(value);
 			},
 			Expr::This { keyword, resolved } => {
+				if self.current_class == ClassType::None {
+					self.lox.error_token(keyword, "Can't use 'this' keyword outside of a class.");
+					return;
+				}
 				self.resolve_local(keyword, resolved);
 			},
 		}
