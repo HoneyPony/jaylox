@@ -14,9 +14,15 @@ typedef struct {
 	struct jay_value value;
 } jay_hash_entry;
 
-typedef struct {
+typedef struct jay_instance {
 	jay_hash_entry *members;
 	size_t array_size;
+
+	// The parent closure of this instance, if we're a callable.
+	jay_instance *closure;
+
+	// The class of this instance, or the superclass if we're a class.
+	jay_instance *class;
 
 	// For efficiency:
 	// Callables are just instances. The closure is the jay_instance object,
@@ -65,6 +71,16 @@ jay_as_instance(jay_value value, const char *message) {
 	}
 
 	return value.as_instance;
+}
+
+jay_value
+jay_lookup(jay_instance *instance, size_t name) {
+
+}
+
+jay_instance*
+jay_find_method(jay_instance *class, size_t name) {
+
 }
 
 jay_value
@@ -128,6 +144,41 @@ jay_instance make_cool_fn = {
 	.arity = 1,
 	.callable = make_cool
 };
+
+So each instance might need both a class and a closure. In particular, consider:
+
+fun example(param) {
+	class Inner {
+		fun init(x) {
+			this.value = param + x;
+		}
+	}
+
+	return Inner;
+}
+
+// The 'closure' passed here is the closure created by the class to bind the 'this'
+// and 'super' properties. The closure will always contain a variable 'this', which
+// points to the actual instance of the class. 
+jay_value
+init_blahblah(jay_value *args, jay_instance *closure) {
+	jay_instance *scope = make_closure(closure);
+
+	jay_set(
+		jay_get(scope, NAME_this),
+		NAME_value,
+		jay_add(args[0], jay_get(scope, NAME_param))
+	)
+}
+
+// So essentially:
+// Each function is turned into a top-level C function that calls jay_new_scope()
+// or something
+//
+// Each class is similarly turned into a top-level C function, one that calls
+// the init method
+//
+// 
 */
 
 #endif

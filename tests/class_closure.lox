@@ -1,0 +1,14 @@
+fun example(param) {
+	class Inner {
+		init(x) {
+			this.value = param + x;
+		}
+	}
+
+	return Inner;
+}
+
+var a = example(3);
+var b = a(5);
+print b;
+print b.value;

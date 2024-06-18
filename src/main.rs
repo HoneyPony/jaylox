@@ -6,6 +6,7 @@ mod interpreter;
 mod environment;
 mod callable;
 mod resolver;
+mod compiler;
 
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -14,6 +15,7 @@ use std::process::exit;
 use std::io;
 use std::io::Write;
 
+use compiler::Compiler;
 use interpreter::{InterpErr, InterpUnwind, Interpreter};
 use resolver::Resolver;
 use scanner::{LoxValue, Scanner, Token, TokenType};
@@ -127,7 +129,7 @@ impl Lox {
 		}
 	}
 
-	fn run(&mut self, code: String, environment: Rc<RefCell<Environment>>) {
+	fn run(&mut self, code: String, environment: Rc<RefCell<Environment>>, compile: bool) {
 		let tokens = {
 			let mut scanner = Scanner::new(code, self);
 			scanner.scan_tokens()
@@ -149,7 +151,11 @@ impl Lox {
 		// Don't interpret if we had an error
 		if self.had_error { return; }
 
-		{
+		if compile {
+			let mut compiler = Compiler::new(self, environment);
+			compiler.compile(&program);
+		}
+		else {
 			let mut interpreter = Interpreter::new(self, environment);
 			interpreter.interpret(&program);
 		}
@@ -159,7 +165,15 @@ impl Lox {
 		let contents = std::fs::read_to_string(path)?;
 		let environment = Environment::new_with_globals();
 
-		self.run(contents, Rc::clone(&environment));
+		self.run(contents, Rc::clone(&environment), false);
+		Ok(())
+	}
+
+	fn compile(&mut self, path: String) -> std::io::Result<()> {
+		let contents = std::fs::read_to_string(path)?;
+		let environment = Environment::new_with_globals();
+
+		self.run(contents, Rc::clone(&environment), true);
 		Ok(())
 	}
 
@@ -175,7 +189,7 @@ impl Lox {
 				break;
 			};
 
-			self.run(line, Rc::clone(&environment));
+			self.run(line, Rc::clone(&environment), false);
 			self.had_error = false;
 		}
 	}
@@ -186,9 +200,18 @@ fn main() -> io::Result<()> {
 	let mut args: Vec<String> = env::args().collect();
 	let mut lox = Lox::new();
 
-	if args.len() > 2 {
-		println!("Usage: jlox [script]");
+	if args.len() > 3 {
+		println!("Usage: jlox [-c] [script]");
 		exit(64);
+	}
+	else if args.len() == 3{
+		if args[1] != "-c" {
+			println!("Usage: jlox [-c] [script]");
+			println!("Unknown argument {}", args[1]);
+			exit(64);
+		}
+
+		lox.compile(args.remove(2))?;
 	}
 	else if args.len() == 2 {
 		lox.run_file(args.remove(1))?;
