@@ -79,14 +79,13 @@ impl LoxCallable {
 				return result.map(|_| LoxValue::Nil);
 			}
 			LoxCallable::FnClass(class) => {
-				// TODO: It is possible that we will need to move new_instance to the interpreter when we
-				// add constructors. Somehow, then, the entire instance array will have to live in the interpreter..
-				// or maybe we can just invoke the constructor right here.
 				let instance = interpreter.lox.new_instance(Rc::clone(class));
 
 				if let Some(mut callable) = class.find_raw_method_bound_to("init", LoxValue::Instance(instance)) {
-					// TODO: Handle returns correctly
-					callable.call(interpreter, arguments);
+					// NOTE: This callable MUST return 'this', essentially, every time.
+					// This is handled by the FnLox logic aboce, but it might be easier to simply
+					// coerce the return values to the correct format here...
+					callable.call(interpreter, arguments)?;
 				}
 
 				return Ok(LoxValue::Instance(instance));
