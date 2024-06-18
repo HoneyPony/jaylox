@@ -190,7 +190,9 @@ impl<'a> Compiler<'a> {
 			},
 			Stmt::Class { name, methods, superclass } => todo!(),
 			Stmt::Expression(expr) => {
+				self.indent(into);
 				self.compile_expr(expr, into)?;
+				into.push_str(";\n");
 			},
 			Stmt::Function(fun) => {
 				let mut def = String::new();
@@ -272,7 +274,7 @@ impl<'a> Compiler<'a> {
 				// For now, we always get names from the surrounding closure.
 				self.add_name(name);
 				self.indent(into);
-				write!(into, "jay_put(NAME_{}, ", name.lexeme)?;
+				write!(into, "jay_put(scope, NAME_{}, ", name.lexeme)?;
 				match initializer {
 					Some(initializer) => { self.compile_expr(initializer, into)?; },
 					None => { into.push_str("jay_null()"); }
@@ -309,6 +311,10 @@ impl<'a> Compiler<'a> {
 		// TODO: Consider creating an efficient string writing system
 		// In particular, each function being compiled will need its own string...
 		self.push_indent();
+
+		self.indent(&mut main_fn);
+		// Create the scope for the main fn
+		writeln!(main_fn, "jay_instance *scope = jay_new_scope(closure);")?;
 		self.compile_stmts(stmts, &mut main_fn)?;
 		self.pop_indent();
 
