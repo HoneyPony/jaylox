@@ -8,6 +8,16 @@
 #include <stdlib.h>
 
 struct jay_value;
+struct jay_instance;
+
+typedef struct jay_value {
+	uint64_t tag;
+	union {
+		double               as_double;
+		struct jay_instance *as_instance;
+		char                *as_string;
+	};
+} jay_value;
 
 typedef struct {
 	size_t name;
@@ -17,12 +27,13 @@ typedef struct {
 typedef struct jay_instance {
 	jay_hash_entry *members;
 	size_t array_size;
+	size_t used_entries;
 
 	// The parent closure of this instance, if we're a callable.
-	jay_instance *closure;
+	struct jay_instance *closure;
 
 	// The class of this instance, or the superclass if we're a class.
-	jay_instance *klass;
+	struct jay_instance *class;
 
 	// For efficiency:
 	// Callables are just instances. The closure is the jay_instance object,
@@ -34,10 +45,10 @@ typedef struct jay_instance {
 	// For classes, this makes sense anyways, as the initializer *is* the
 	// callable.
 	int arity;
-	struct jay_value (*callable)(jay_value *args, jay_instance *closure); 
+	jay_value (*callable)(jay_value *args, struct jay_instance *closure); 
 } jay_instance;
 
-typedef struct jay_value (*jay_fn)(jay_value *args, jay_instance *closure);
+typedef jay_value (*jay_fn)(jay_value *args, jay_instance *closure);
 
 #define JAY_NIL 0
 #define JAY_TRUE 1
@@ -46,17 +57,12 @@ typedef struct jay_value (*jay_fn)(jay_value *args, jay_instance *closure);
 #define JAY_CALLABLE 4
 #define JAY_INSTANCE 5
 #define JAY_STRING 6
+#define JAY_CLASS 7
 
-#define JAY_NAME_TOMBSTONE ((size_t)0xFFFFFFFF)
+// Use 0 for the tombstone so that we can memset() the array to 0 / use calloc.
+#define JAY_NAME_TOMBSTONE 0
 
-typedef struct jay_value {
-	uint64_t tag;
-	union {
-		double        as_double;
-		jay_instance *as_instance;
-		char         *as_string;
-	};
-} jay_value;
+
 
 void
 oops(const char *message) {
@@ -73,6 +79,19 @@ jay_as_instance(jay_value value, const char *message) {
 	return value.as_instance;
 }
 
+jay_instance*
+jay_as_callable(jay_value value, size_t arity) {
+	if(value.tag != JAY_CALLABLE && value.tag != JAY_CLASS) {
+		oops("not a callable object");
+	}
+
+	if(value.as_instance->arity != arity) {
+		oops("incorrect number of arguments");
+	}
+
+	return value.as_instance;
+}
+
 double
 jay_as_number(jay_value value, const char *message) {
 	if(value.tag != JAY_NUMBER) {
@@ -80,6 +99,15 @@ jay_as_number(jay_value value, const char *message) {
 	}
 
 	return value.as_double;
+}
+
+/* --- Literals --- */
+
+jay_value
+jay_null() {
+	jay_value res;
+	res.tag = JAY_NIL;
+	return res;
 }
 
 jay_value
@@ -97,31 +125,7 @@ jay_boolean(bool input) {
 	return res;
 }
 
-jay_value
-jay_lookup(jay_instance *instance, size_t name) {
-
-}
-
-jay_instance*
-jay_find_method(jay_instance *klass, size_t name) {
-
-}
-
-jay_value
-jay_get(jay_value object, size_t name) {
-	jay_instance *instance = jay_as_instance(object, "can only look up members on objects");
-
-	name = name % instance->array_size;
-	size_t check = name;
-	while(instance->members[name].name != name) {
-		name = (name + 1) % instance->array_size;
-		if(name == check || instance->members[name].name == JAY_NAME_TOMBSTONE) {
-			oops("tried to get non-existent member");
-		}
-	}
-
-	return instance->members[name].value;
-}
+/* --- Operators --- */
 
 jay_value
 jay_add(jay_value a, jay_value b) {
@@ -226,6 +230,176 @@ jay_negate(jay_value v) {
 	double vd = jay_as_number(v, "negation expects a number");
 	return jay_number(-vd);
 }
+
+void*
+jay_malloc(size_t size) {
+	void *res = malloc(size);
+	if(!res) {
+		oops("out of memory");
+	}
+	return res;
+}
+
+// Creates a blank instance object with room for values in its table.
+jay_instance*
+jay_new_instance() {
+	// TODO: GC considerations, etc.
+	jay_instance *instance = jay_malloc(sizeof(*instance));
+	instance->array_size = 8;
+	instance->members = jay_malloc(sizeof(jay_hash_entry) * instance->array_size);
+	for(size_t i = 0;i < instance->array_size; ++i) {
+		// TODO: Use memset or something
+		instance->members[i].name = JAY_NAME_TOMBSTONE;
+	}
+	instance->closure = NULL;
+	instance->class = NULL;
+	instance->callable = NULL;
+	instance->arity = 0;
+
+	instance->used_entries = 0;
+}
+
+jay_instance*
+jay_new_scope(jay_instance *closure) {
+	jay_instance *instance = jay_new_instance();
+	instance->closure = closure;
+	return instance;
+}
+
+// Creates a new function object from a closure and a function pointer.
+jay_value
+jay_fun_from(jay_fn fn, jay_instance *closure) {
+	jay_instance *instance = jay_new_instance();
+	instance->callable = fn;
+	instance->closure = closure;
+
+	jay_value result;
+	result.tag = JAY_CALLABLE;
+	result.as_instance = instance;
+	return result;
+}
+
+// NOTE: This function is UNSAFE to call if you haven't guaranteed that there
+// is an empty bucket
+jay_hash_entry*
+jay_find_empty_bucket_in(jay_hash_entry *array, size_t array_size, size_t name) {
+	// TODO: Optimize to use &
+	name = name % array_size;
+	for(;;) {
+		name = (name + 1) % array_size;
+
+		// We MUST find a tombstone to exit the loop.
+		if(array[name].name == JAY_NAME_TOMBSTONE) {
+			return &array[name];
+		}
+	}
+}
+
+// NOTE: This function is UNSAFE to call if you haven't guaranteed that there
+// is an empty bucket
+jay_hash_entry*
+jay_find_empty_bucket(jay_instance *instance, size_t name) {
+	return jay_find_empty_bucket_in(instance->members, instance->array_size, name);
+}
+
+jay_hash_entry*
+jay_find_bucket_in(jay_hash_entry *array, size_t array_size, size_t name) {
+	// TODO: Optimize to use &
+	name = name % array_size;
+	size_t check = name;
+	while(array[name].name != name) {
+		// Linear probing
+		name = (name + 1) % array_size;
+
+		// Item doesn't exist
+		if(name == check || array[name].name == JAY_NAME_TOMBSTONE) {
+			return NULL;
+		}
+	}
+
+	return &array[name];
+}
+
+jay_hash_entry*
+jay_find_bucket(jay_instance *instance, size_t name) {
+	return jay_find_bucket_in(instance->members, instance->array_size, name);
+}
+
+void
+jay_rehash(jay_instance *instance) {
+	size_t new_size = instance->array_size * 2;
+	// TODO: calloc()
+	jay_hash_entry *new_array = jay_malloc(sizeof(*new_array) * new_size);
+
+	for(size_t i = 0; i < instance->array_size; ++i) {
+		if(instance->members[i].name != JAY_NAME_TOMBSTONE) {
+			// Note: here this should always return a tombstone, as all buckets
+			// should be empty...
+			jay_hash_entry *ptr = jay_find_empty_bucket_in(new_array, new_size, instance->members[i].name);
+			ptr->name = instance->members[i].name;
+			ptr->value = instance->members[i].value;
+		}
+	}
+
+	free(instance->members);
+
+	instance->members = new_array;
+	instance->array_size = new_size;
+}
+
+jay_value
+jay_put_new(jay_instance *scope, size_t name, jay_value value) {
+	if((scope->used_entries + 1) > scope->array_size / 2) {
+		jay_rehash(scope);
+	}
+	// We are guaranteed an empty bucket somewhere.
+	// TODO: Consider Hopgood-Davenport probing
+	jay_hash_entry *place = jay_find_empty_bucket(scope, name);
+	place->name = name;
+	place->value = value;
+
+	return value;
+}
+
+jay_value
+jay_put_existing(jay_instance *scope, size_t name, jay_value value) {
+	jay_hash_entry *place = jay_find_bucket(scope, name);
+	if(!place) {
+		oops("could not find the given name");
+	}
+	place->value = value;
+	return value;
+}
+
+jay_value
+jay_lookup(jay_instance *instance, size_t name) {
+	jay_hash_entry *place = jay_find_bucket(instance, name);
+	if(!place) {
+		oops("could not find the given name");
+	}
+	return place->value;
+}
+
+jay_instance*
+jay_find_method(jay_instance *class, size_t name) {
+
+}
+
+/*jay_value
+jay_get(jay_value object, size_t name) {
+	jay_instance *instance = jay_as_instance(object, "can only look up members on objects");
+
+	name = name % instance->array_size;
+	size_t check = name;
+	while(instance->members[name].name != name) {
+		name = (name + 1) % instance->array_size;
+		if(name == check || instance->members[name].name == JAY_NAME_TOMBSTONE) {
+			oops("tried to get non-existent member");
+		}
+	}
+
+	return instance->members[name].value;
+}*/
 
 /*
 fun example(param) {

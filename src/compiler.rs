@@ -180,7 +180,7 @@ impl<'a> Compiler<'a> {
 			},
 			Expr::Assign { name, value, resolved } => {
 				self.add_name(name);
-				write!(into, "jay_put(scope, NAME_{}, ", name.lexeme)?;
+				write!(into, "jay_put_existing(scope, NAME_{}, ", name.lexeme)?;
 				self.compile_expr(value, into)?;
 				into.push(')');
 			},
@@ -255,7 +255,7 @@ impl<'a> Compiler<'a> {
 				// ordering properties (e.g. not being visible beforehand).
 				self.indent(into);
 				self.add_name(&fun.name);
-				writeln!(into, "jay_put(NAME_{}, jay_fun_from({mangled_name}, scope));", fun.name.lexeme)?;
+				writeln!(into, "jay_put_new(scope, NAME_{}, jay_fun_from({mangled_name}, scope));", fun.name.lexeme)?;
 			},
 			Stmt::If { condition, then_branch, else_branch } => {
 				self.indent(into);
@@ -290,7 +290,7 @@ impl<'a> Compiler<'a> {
 				// For now, we always get names from the surrounding closure.
 				self.add_name(name);
 				self.indent(into);
-				write!(into, "jay_put(scope, NAME_{}, ", name.lexeme)?;
+				write!(into, "jay_put_new(scope, NAME_{}, ", name.lexeme)?;
 				match initializer {
 					Some(initializer) => { self.compile_expr(initializer, into)?; },
 					None => { into.push_str("jay_null()"); }
@@ -330,7 +330,7 @@ impl<'a> Compiler<'a> {
 
 		self.indent(&mut main_fn);
 		// Create the scope for the main fn
-		writeln!(main_fn, "jay_instance *scope = jay_new_scope(closure);")?;
+		writeln!(main_fn, "jay_instance *scope = jay_new_scope(NULL);")?;
 		self.compile_stmts(stmts, &mut main_fn)?;
 		self.pop_indent();
 
@@ -340,7 +340,8 @@ impl<'a> Compiler<'a> {
 		println!("\n/* --- NAME Definitions --- */\n");
 
 		// Second, NAME_ definitions
-		let mut name_value: usize = 0;
+		// Note that 0 is the TOMBSTONE so we cannot use it for a NAME
+		let mut name_value: usize = 1;
 		for name in &self.name_set {
 			println!("#define NAME_{name} ((size_t){name_value})");
 			name_value += 1;
