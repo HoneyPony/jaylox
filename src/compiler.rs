@@ -260,10 +260,10 @@ impl<'a> Compiler<'a> {
 			},
 			Stmt::If { condition, then_branch, else_branch } => {
 				self.indent(into);
-				into.push_str("if(");
+				into.push_str("if(jay_truthy(");
 				// TODO: Do we need a prelude for calls?
 				self.compile_expr(condition, into)?;
-				into.push_str(")\n");
+				into.push_str("))\n");
 				self.compile_stmt(then_branch, into)?;
 				if let Some(else_branch) = else_branch {
 					// Note: This should be OK because we should always add a '\n' after statements anyways...
@@ -300,9 +300,9 @@ impl<'a> Compiler<'a> {
 			},
 			Stmt::While { condition, body } => {
 				self.indent(into);
-				into.push_str("while(");
+				into.push_str("while(jay_truthy(");
 				self.compile_expr(condition, into)?;
-				into.push_str(")\n");
+				into.push_str("))\n");
 				self.compile_stmt(body, into)?;
 			},
 		}
