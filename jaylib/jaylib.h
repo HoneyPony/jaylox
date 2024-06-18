@@ -80,13 +80,9 @@ jay_as_instance(jay_value value, const char *message) {
 }
 
 jay_instance*
-jay_as_callable(jay_value value, size_t arity) {
+jay_as_callable(jay_value value, const char *message) {
 	if(value.tag != JAY_CALLABLE && value.tag != JAY_CLASS) {
-		oops("not a callable object");
-	}
-
-	if(value.as_instance->arity != arity) {
-		oops("incorrect number of arguments");
+		oops(message);
 	}
 
 	return value.as_instance;
@@ -126,6 +122,17 @@ jay_boolean(bool input) {
 }
 
 /* --- Operators --- */
+
+jay_value
+jay_call(jay_value callee, size_t arity, jay_value *args) {
+	jay_instance *instance = jay_as_callable(callee, "function calling expects a callable");
+	
+	if(instance->arity != arity) {
+		oops("incorrect number of arguments");
+	}
+
+	return instance->callable(args, instance->closure);
+}
 
 void
 jay_print(jay_value value) {
@@ -396,7 +403,10 @@ jay_value
 jay_put_existing(jay_instance *scope, size_t name, jay_value value) {
 	jay_hash_entry *place = jay_find_bucket(scope, name);
 	if(!place) {
-		oops("could not find the given name");
+		if(scope->closure) {
+			return jay_put_existing(scope->closure, name, value);
+		}
+		oops("assign: could not find the given name");
 	}
 	place->value = value;
 	return value;
@@ -406,7 +416,10 @@ jay_value
 jay_lookup(jay_instance *instance, size_t name) {
 	jay_hash_entry *place = jay_find_bucket(instance, name);
 	if(!place) {
-		oops("could not find the given name");
+		if(instance->closure) {
+			return jay_lookup(instance->closure, name);
+		}
+		oops("lookup: could not find the given name");
 	}
 	return place->value;
 }

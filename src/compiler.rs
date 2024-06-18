@@ -83,19 +83,19 @@ impl<'a> Compiler<'a> {
 				self.binary_op(into, left, operator, right)?;
 			},
 			Expr::Call { callee, paren, arguments } => {
-				write!(into, "(jay_as_callable(")?;
+				write!(into, "jay_call(")?;
 				self.compile_expr(callee, into)?;
-				// Look up the callable directly inside the returned struct. This should
-				// be somewhat inline-able..?
+				// To do the call, we have to look up both the function and the
+				// closure inside the jay_value.
 				//
-				// Well, anyway, jay_as_callable() can look up the argument count. We
-				// could also just use a function that acted as a way to call functions.
-				// It might be interesting to look into places where this could be turned
-				// into a much simpler call expression.
-				write!(into, ", {})->callable)(", arguments.len())?;
+				// In the case of simple functions, especially those without
+				// any needed closure, we could optimize this to not need to 
+				// go through another function just to call a function. But for
+				// now, this is how it is...
+				write!(into, ", {}, ", arguments.len())?;
 				if arguments.is_empty() {
 					// If we have no arguments, just pass a NULL.
-					write!(into, "NULL, ")?;
+					write!(into, "NULL")?;
 				}
 				else {
 					write!(into, " (jay_value[]){{")?;
@@ -107,12 +107,10 @@ impl<'a> Compiler<'a> {
 						self.compile_expr(arg, into)?;
 						comma = true;
 					}
-					write!(into, "}}, ")?;
+					write!(into, "}}")?;
 				}
-
-				// Finally, write the closure and end the expression. The closure
-				// is always the scope of the current function.
-				write!(into, "scope)")?;
+				// That's the end. The closure will be looked up inside the instance.
+				write!(into, ")")?;
 			},
 			Expr::Get { object, name } => {
 				into.push_str("jay_get(");
