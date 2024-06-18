@@ -1,0 +1,9 @@
+
+var sum = 0;
+var start = clock();
+while (sum < 10000000) {
+  sum = sum + 1;
+}
+
+print clock() - start;
+print sum;
