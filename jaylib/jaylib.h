@@ -313,13 +313,13 @@ jay_fun_from(jay_fn fn, jay_instance *closure) {
 jay_hash_entry*
 jay_find_empty_bucket_in(jay_hash_entry *array, size_t array_size, size_t name) {
 	// TODO: Optimize to use &
-	name = name % array_size;
+	size_t i = name % array_size;
 	for(;;) {
-		name = (name + 1) % array_size;
+		i = (i + 1) % array_size;
 
 		// We MUST find a tombstone to exit the loop.
-		if(array[name].name == JAY_NAME_TOMBSTONE) {
-			return &array[name];
+		if(array[i].name == JAY_NAME_TOMBSTONE) {
+			return &array[i];
 		}
 	}
 }
@@ -334,19 +334,19 @@ jay_find_empty_bucket(jay_instance *instance, size_t name) {
 jay_hash_entry*
 jay_find_bucket_in(jay_hash_entry *array, size_t array_size, size_t name) {
 	// TODO: Optimize to use &
-	name = name % array_size;
-	size_t check = name;
-	while(array[name].name != name) {
+	size_t i = name % array_size;
+	size_t check = i;
+	while(array[i].name != name) {
 		// Linear probing
-		name = (name + 1) % array_size;
+		i = (i + 1) % array_size;
 
 		// Item doesn't exist
-		if(name == check || array[name].name == JAY_NAME_TOMBSTONE) {
+		if(i == check || array[i].name == JAY_NAME_TOMBSTONE) {
 			return NULL;
 		}
 	}
 
-	return &array[name];
+	return &array[i];
 }
 
 jay_hash_entry*
@@ -386,6 +386,8 @@ jay_put_new(jay_instance *scope, size_t name, jay_value value) {
 	jay_hash_entry *place = jay_find_empty_bucket(scope, name);
 	place->name = name;
 	place->value = value;
+
+	scope->used_entries += 1;
 
 	return value;
 }
