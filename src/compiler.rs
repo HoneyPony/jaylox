@@ -204,6 +204,10 @@ impl<'a> Compiler<'a> {
 				// TODO: NAME MANGLING
 				let mangled_name = fun.name.lexeme.clone();
 
+				// Add the mangled name to the function definition list
+				writeln!(self.prelude, "jay_value {mangled_name}(jay_value *arguments, jay_instance *closure);")?;
+
+				// Start writing the function definition
 				writeln!(def, "jay_value\n{}(jay_value *arguments, jay_instance *closure) {{", mangled_name)?;
 				self.push_indent();
 
@@ -303,7 +307,7 @@ impl<'a> Compiler<'a> {
 
 	pub fn compile(&mut self, stmts: &Vec<Stmt>) -> fmt::Result {
 		// Write the first part of the prelude
-		writeln!(self.prelude, "/* C file created by jaylox */")?;
+		writeln!(self.prelude, "/*** This C file created by jaylox https://github.com/HoneyPony/jaylox ***/")?;
 		writeln!(self.prelude, "#include <jaylib.h>\n")?;
 
 		let mut main_fn = String::new();
@@ -318,10 +322,27 @@ impl<'a> Compiler<'a> {
 		self.compile_stmts(stmts, &mut main_fn)?;
 		self.pop_indent();
 
+		// First: prelude, containing all function declarations
 		print!("{}", self.prelude);
+
+		println!("\n/* --- NAME Definitions --- */\n");
+
+		// Second, NAME_ definitions
+		let mut name_value: usize = 0;
+		for name in &self.name_set {
+			println!("#define NAME_{name} ((size_t){name_value})");
+			name_value += 1;
+		}
+		println!("\n/* --- Function Definitions --- */\n");
+
+		// Third, function definitions
 		for fun in &self.function_defs {
 			print!("{}", fun);
 		}
+
+		println!("\n/* --- main() --- */\n");
+
+		// Last, main function definition (could go earlier too)
 		print!("int\nmain(void) {{\n{}}}\n", main_fn);
 
 		Ok(())
