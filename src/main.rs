@@ -49,7 +49,7 @@ impl LoxInstance {
 	}
 }
 
-struct Lox {
+pub struct Lox {
 	had_error: bool,
 	had_runtime_error: bool,
 

@@ -259,10 +259,10 @@ impl<'a> Resolver<'a> {
 				self.resolve_expr(value);
 				*resolved = self.resolve_name_now(name);
 			},
-			Expr::Get { object, name } => {
+			Expr::Get { object, .. } => {
 				self.resolve_expr(object);
 			},
-			Expr::Set { object, name, value } => {
+			Expr::Set { object, value, .. } => {
 				self.resolve_expr(object);
 				self.resolve_expr(value);
 			},
@@ -273,7 +273,7 @@ impl<'a> Resolver<'a> {
 				}
 				self.resolve_local(keyword, resolved);
 			},
-			Expr::Super { keyword, method, resolved } => {
+			Expr::Super { keyword, resolved, .. } => {
 				if self.current_class == ClassType::None {
 					self.lox.error_token(keyword, "Can't user 'super' outside of a class.");
 				}
