@@ -130,8 +130,8 @@ impl<'a> Compiler<'a> {
 				match value {
 					LoxValue::Nil => into.push_str("jay_null()"),
 					LoxValue::String(chars) => write!(into, "jay_string(\"{}\")", chars)?,
-					LoxValue::Number(value) => write!(into, "jay_number(value)")?,
-					LoxValue::Bool(value) => write!(into, "jay_boolean(value)")?,
+					LoxValue::Number(value) => write!(into, "jay_number({value})")?,
+					LoxValue::Bool(value) => write!(into, "jay_boolean({value})")?,
 					_ => panic!("Don't know how to compile a literal of this kind.")
 				}
 			},
