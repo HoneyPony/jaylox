@@ -127,9 +127,38 @@ jay_boolean(bool input) {
 
 /* --- Operators --- */
 
+void
+jay_print(jay_value value) {
+	switch(value.tag) {
+		case JAY_NIL:
+			puts("nil");
+			break;
+		case JAY_STRING:
+			puts(value.as_string);
+			break;
+		case JAY_TRUE:
+			puts("true");
+			break;
+		case JAY_FALSE:
+			puts("false");
+			break;
+		case JAY_NUMBER:
+			printf("%f\n", value.as_double);
+			break;
+		default:
+			puts("<ref value>");
+	}
+}
+
 jay_value
 jay_add(jay_value a, jay_value b) {
-
+	const char *message = "addition expects two numbers or two strings";
+	if(a.tag == JAY_NUMBER) {
+		double an = jay_as_number(a, message);
+		double bn = jay_as_number(b, message);
+		return jay_number(an + bn);
+	}
+	oops("string addition is TODO");
 }
 
 jay_value
