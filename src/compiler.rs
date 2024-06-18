@@ -323,7 +323,7 @@ impl<'a> Compiler<'a> {
 	pub fn compile(&mut self, stmts: &Vec<Stmt>) -> fmt::Result {
 		// Write the first part of the prelude
 		writeln!(self.prelude, "/*** This C file created by jaylox https://github.com/HoneyPony/jaylox ***/")?;
-		writeln!(self.prelude, "#include <jaylib.h>\n")?;
+		writeln!(self.prelude, "#include \"jaylib/jaylib.h\"\n")?;
 
 		let mut main_fn = String::new();
 
