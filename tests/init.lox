@@ -1,0 +1,23 @@
+class Vector {
+	init(x, y) {
+		this.x = x;
+		this.y = y;
+	}
+
+	add(other) {
+		this.x = this.x + other.x;
+		this.y = this.y + other.y;
+	}
+
+	printout() {
+		print this.x;
+		print this.y;
+	}
+}
+
+var a = Vector(2, 3);
+a.printout();
+var b = Vector(4, 5);
+b.printout();
+a.add(b);
+a.printout();

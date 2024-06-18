@@ -68,13 +68,22 @@ impl LoxClass {
 		))
 	}
 
-	pub fn find_method_bound_to(&self, name: &str, this_binding: LoxValue) -> Option<LoxValue> {
+	pub fn find_raw_method_bound_to(&self, name: &str, this_binding: LoxValue) -> Option<LoxCallable> {
 		self.methods.get(name).map(|(fun, env)| {
 			let bound_env = Environment::new_with_enclosing(Rc::clone(env));
 			bound_env.borrow_mut().define("this".into(), this_binding);
-			LoxValue::Callable(LoxCallable::FnLox(
-				Rc::clone(fun), bound_env
-			))
+				
+			LoxCallable::FnLox(Rc::clone(fun), bound_env)
 		})
+	}
+
+	pub fn find_method_bound_to(&self, name: &str, this_binding: LoxValue) -> Option<LoxValue> {
+		self.find_raw_method_bound_to(name, this_binding).map(|callable|
+			LoxValue::Callable(callable)
+		)
+	}
+
+	pub fn find_method_arity(&self, name: &str) -> Option<usize> {
+		self.methods.get(name).map(|(fun, _)| fun.parameters.len())
 	}
 }

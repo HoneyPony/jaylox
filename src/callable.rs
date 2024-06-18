@@ -67,7 +67,14 @@ impl LoxCallable {
 				// TODO: It is possible that we will need to move new_instance to the interpreter when we
 				// add constructors. Somehow, then, the entire instance array will have to live in the interpreter..
 				// or maybe we can just invoke the constructor right here.
-				return Ok(LoxValue::Instance(interpreter.lox.new_instance(Rc::clone(class))));
+				let instance = interpreter.lox.new_instance(Rc::clone(class));
+
+				if let Some(mut callable) = class.find_raw_method_bound_to("init", LoxValue::Instance(instance)) {
+					// TODO: Handle returns correctly
+					callable.call(interpreter, arguments);
+				}
+
+				return Ok(LoxValue::Instance(instance));
 			},
 		}
 	}
@@ -76,8 +83,9 @@ impl LoxCallable {
 		match self {
 			LoxCallable::FnClock => 0,
 			LoxCallable::FnLox(rc, _) => rc.parameters.len(),
-			// TODO: Real arity implementation.
-			LoxCallable::FnClass(_) => 0,
+			LoxCallable::FnClass(class) => {
+				class.find_method_arity("init").unwrap_or(0)
+			},
 		}
 	}
 }
