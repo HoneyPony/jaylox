@@ -1,4 +1,4 @@
-all: fib_gen fib_man
+all: fib_gen fib_man fib_c
 
 fib_gen: fib_generated.c
 	gcc $^ -o $@ $(CFLAGS)
@@ -6,5 +6,8 @@ fib_gen: fib_generated.c
 fib_man: fib_manual_opt.c
 	gcc $^ -o $@ $(CFLAGS)
 
+fib_c: in_c.c
+	gcc $^ -o $@ $(CFLAGS)
+
 clean:
-	rm fib_gen fib_man
+	rm -f fib_gen fib_man fib_c
