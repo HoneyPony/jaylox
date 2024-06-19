@@ -2,9 +2,6 @@ mod scanner;
 mod expr;
 mod stmt;
 mod parser;
-mod interpreter;
-mod environment;
-mod callable;
 mod resolver;
 mod compiler;
 
@@ -16,46 +13,13 @@ use std::io;
 use std::io::Write;
 
 use compiler::Compiler;
-use interpreter::{InterpErr, InterpUnwind, Interpreter};
 use resolver::Resolver;
 use scanner::{LoxValue, Scanner, Token, TokenType};
 use parser::Parser;
-use environment::Environment;
-use stmt::LoxClass;
-
-pub struct LoxInstance {
-	class: Rc<LoxClass>,
-
-	fields: HashMap<String, LoxValue>,
-
-	this_ptr: LoxRef,
-}
-
-impl LoxInstance {
-	pub fn new(class: Rc<LoxClass>, this_ptr: LoxRef) -> Self {
-		LoxInstance { class, fields: HashMap::new(), this_ptr }
-	}
-
-	pub fn get(&self, name: &Token) -> Result<LoxValue, InterpUnwind> {
-		if let Some(value) = self.class.find_method_bound_to(&name.lexeme, LoxValue::Instance(self.this_ptr)) {
-			return Ok(value);
-		}
-
-		self.fields.get(&name.lexeme).ok_or_else(|| InterpErr::new(name, format!("Undefined property {}.", name.lexeme))).cloned()
-	}
-
-	pub fn set(&mut self, name: &Token, value: LoxValue) {
-		// TODO: Can we avoid this clone in the case that the
-		// item already exists..?
-		self.fields.insert(name.lexeme.clone(), value);
-	}
-}
 
 pub struct Lox {
 	had_error: bool,
 	had_runtime_error: bool,
-
-	instances: Vec<LoxInstance>
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -67,32 +31,7 @@ impl Lox {
 		Lox {
 			had_error: false,
 			had_runtime_error: false,
-
-			instances: vec![]
 		}
-	}
-
-	pub fn new_instance(&mut self, class: Rc<LoxClass>) -> LoxRef {
-		let idx = self.instances.len();
-		self.instances.push(LoxInstance::new(class, LoxRef(idx)));
-
-		LoxRef(idx)
-	}
-
-	pub fn get(&self, ptr: LoxRef) -> &LoxInstance {
-		let idx = ptr.0;
-
-		// Safety: We only hand out LoxRef's to valid items in the array. And,
-		// at least for now... There's no garbage collection... :(
-		unsafe { self.instances.get_unchecked(idx) }
-	}
-
-	pub fn get_mut(&mut self, ptr: LoxRef) -> &mut LoxInstance {
-		let idx = ptr.0;
-
-		// Safety: We only hand out LoxRef's to valid items in the array. And,
-		// at least for now... There's no garbage collection... :(
-		unsafe { self.instances.get_unchecked_mut(idx) }
 	}
 
 	fn report(&mut self, line: i32, where_: &str, message: &str) {
@@ -113,23 +52,7 @@ impl Lox {
 		}
 	}
 
-	fn runtime_error(&mut self, err: &InterpUnwind) {
-		if let InterpUnwind::Error(err) = err {
-			eprintln!("{0}\n[line {1}]", err.message, err.token.line);
-			self.had_runtime_error = true;
-		}
-
-		// In the case that an InterpUnwind::ReturnValue makes it back to the top
-		// of the interpreter, we could consider that a fine thing...
-		//
-		// We could even use this as a way to implement the "exprs implicitly return
-		// in REPL" thing
-		if let InterpUnwind::ReturnValue(value) = err {
-			println!("=> {}", value.to_string());
-		}
-	}
-
-	fn run(&mut self, code: String, environment: Rc<RefCell<Environment>>, compile: bool) {
+	fn run(&mut self, code: String) {
 		let tokens = {
 			let mut scanner = Scanner::new(code, self);
 			scanner.scan_tokens()
@@ -148,50 +71,18 @@ impl Lox {
 			resolver.resolve_stmts(&mut program);
 		}
 
-		// Don't interpret if we had an error
+		// Don't compile if we had an error
 		if self.had_error { return; }
 
-		if compile {
-			let mut compiler = Compiler::new(self, environment);
-			compiler.compile(&program);
-		}
-		else {
-			let mut interpreter = Interpreter::new(self, environment);
-			interpreter.interpret(&program);
-		}
-	}
-
-	fn run_file(&mut self, path: String) -> std::io::Result<()> {
-		let contents = std::fs::read_to_string(path)?;
-		let environment = Environment::new_with_globals();
-
-		self.run(contents, Rc::clone(&environment), false);
-		Ok(())
+		let mut compiler = Compiler::new(self);
+		compiler.compile(&program);
 	}
 
 	fn compile(&mut self, path: String) -> std::io::Result<()> {
 		let contents = std::fs::read_to_string(path)?;
-		let environment = Environment::new_with_globals();
 
-		self.run(contents, Rc::clone(&environment), true);
+		self.run(contents);
 		Ok(())
-	}
-
-	fn run_prompt(&mut self) {
-		let environment = Environment::new_with_globals();
-
-		loop {
-			print!("> ");
-			let _ = io::stdout().flush();
-
-			let mut line = String::new();
-			let Ok(_) = io::stdin().read_line(&mut line) else {
-				break;
-			};
-
-			self.run(line, Rc::clone(&environment), false);
-			self.had_error = false;
-		}
 	}
 
 }
@@ -200,30 +91,14 @@ fn main() -> io::Result<()> {
 	let mut args: Vec<String> = env::args().collect();
 	let mut lox = Lox::new();
 
-	if args.len() > 3 {
-		println!("Usage: jlox [c] [script]");
+	if args.len() != 2 {
+		println!("Usage: jaylox [script]");
 		exit(64);
 	}
-	else if args.len() == 3{
-		if args[1] != "c" {
-			println!("Usage: jlox [c] [script]");
-			println!("Unknown argument {}", args[1]);
-			exit(64);
-		}
 
-		lox.compile(args.remove(2))?;
-	}
-	else if args.len() == 2 {
-		lox.run_file(args.remove(1))?;
-		if lox.had_error {
-			exit(65);
-		}
-		if lox.had_runtime_error {
-			exit(70);
-		}
-	}
-	else {
-		lox.run_prompt();
+	lox.compile(args.remove(1))?;
+	if lox.had_error {
+		exit(65);
 	}
 
 	exit(0);

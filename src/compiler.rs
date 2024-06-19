@@ -2,14 +2,13 @@ use core::fmt;
 use std::{cell::RefCell, collections::HashSet, fmt::Write, rc::Rc};
 
 use crate::stmt::Function;
-use crate::{environment::Environment, expr::Expr, scanner::Token, stmt::Stmt, Lox};
+use crate::{expr::Expr, scanner::Token, stmt::Stmt, Lox};
 use crate::scanner::LoxValue;
 use crate::scanner::TokenType::*;
 
 
 pub struct Compiler<'a> {
 	pub lox: &'a mut Lox,
-	pub environment: Rc<RefCell<Environment>>,
 
 	/// Contains the #include and all function forward-declarations.
 	prelude: String,
@@ -24,10 +23,9 @@ pub struct Compiler<'a> {
 }
 
 impl<'a> Compiler<'a> {
-	pub fn new(lox: &'a mut Lox, environment: Rc<RefCell<Environment>>) -> Self {
+	pub fn new(lox: &'a mut Lox) -> Self {
 		return Compiler {
 			lox,
-			environment,
 			prelude: String::new(),
 			function_defs: Vec::new(),
 			name_set: HashSet::new(),
