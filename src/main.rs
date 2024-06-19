@@ -5,32 +5,24 @@ mod parser;
 mod resolver;
 mod compiler;
 
-use std::cell::RefCell;
-use std::collections::HashMap;
-use std::{env, rc::Rc};
+use std::env;
 use std::process::exit;
 use std::io;
-use std::io::Write;
 
 use compiler::Compiler;
 use resolver::Resolver;
-use scanner::{LoxValue, Scanner, Token, TokenType};
+use scanner::{Scanner, Token, TokenType};
 use parser::Parser;
 
 pub struct Lox {
 	had_error: bool,
-	had_runtime_error: bool,
 }
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub struct LoxRef(usize);
 
 impl Lox {
 
 	fn new() -> Self {
 		Lox {
 			had_error: false,
-			had_runtime_error: false,
 		}
 	}
 
@@ -75,7 +67,12 @@ impl Lox {
 		if self.had_error { return; }
 
 		let mut compiler = Compiler::new(self);
-		compiler.compile(&program);
+		match compiler.compile(&program) {
+			Ok(_) => {},
+			Err(err) => {
+				println!("Compile codegen error: {}", err);
+			},
+		}
 	}
 
 	fn compile(&mut self, path: String) -> std::io::Result<()> {

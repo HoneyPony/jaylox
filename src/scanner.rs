@@ -1,6 +1,6 @@
 use std::{collections::HashMap, rc::Rc};
 
-use crate::{expr::Expr, Lox, LoxRef};
+use crate::{expr::Expr, Lox};
 
 #[derive(PartialEq, Eq, Debug, Clone, Copy)]
 pub enum TokenType {
@@ -33,19 +33,6 @@ impl ToString for LoxValue {
 		match self {
 			LoxValue::Nil => "nil".to_string(),
 			LoxValue::String(what) => format!("'{what}'"),
-			LoxValue::Number(num) => num.to_string(),
-			LoxValue::Bool(bool) => bool.to_string(),
-		}
-	}
-}
-
-impl LoxValue {
-	/// Prints what the user would expect in the case of a string.
-	/// That is, instead of seeing 'blah', you just see blah.
-	pub fn to_printable_string(&self, lox: &Lox) -> String {
-		match self {
-			LoxValue::Nil => "nil".to_string(),
-			LoxValue::String(what) => format!("{what}"),
 			LoxValue::Number(num) => num.to_string(),
 			LoxValue::Bool(bool) => bool.to_string(),
 		}

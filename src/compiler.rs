@@ -1,5 +1,5 @@
 use core::fmt;
-use std::{cell::RefCell, collections::HashSet, fmt::Write, rc::Rc};
+use std::{collections::HashSet, fmt::Write, rc::Rc};
 
 use crate::stmt::Function;
 use crate::{expr::Expr, scanner::Token, stmt::Stmt, Lox};
