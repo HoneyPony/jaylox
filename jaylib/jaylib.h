@@ -13,6 +13,9 @@ struct jay_value;
 struct jay_instance;
 struct jay_closure;
 
+// TODO: Figure out if we still need this
+static size_t JAY_THIS;
+
 typedef struct jay_value {
 	uint64_t tag;
 	union {
@@ -25,8 +28,8 @@ typedef struct jay_value {
 typedef jay_value (*jay_function_impl)(jay_value *args, struct jay_closure *closure);
 
 typedef struct jay_object {
-	jay_object *gc_next;
-	jay_object *gc_prev;
+	struct jay_object *gc_next;
+	struct jay_object *gc_prev;
 	uint32_t type;
 	uint32_t gc_info;
 } jay_object;
@@ -46,10 +49,22 @@ typedef struct jay_stackframe {
 
 typedef struct jay_function {
 	jay_object object;
-	jay_object *closure;
+	jay_closure *closure;
 	jay_function_impl implementation;
 	size_t arity;
 } jay_function;
+
+#define JAY_NIL 0
+#define JAY_TRUE 1
+#define JAY_FALSE 2
+#define JAY_NUMBER 3
+#define JAY_FUNCTION 4
+#define JAY_INSTANCE 5
+#define JAY_STRING 6
+#define JAY_CLASS 7
+
+// Use 0 for the tombstone so that we can memset() the array to 0 / use calloc.
+#define JAY_NAME_TOMBSTONE 0
 
 #define JAY_STACK_SIZE 1048576
 
@@ -58,6 +73,13 @@ static jay_value *jay_stack_ptr;
 
 static jay_stackframe *jay_frames[4096];
 static size_t jay_frames_ptr;
+
+static inline
+void
+oops(const char *message) {
+	printf("runtime error: %s\n", message);
+	exit(1);
+}
 
 static inline
 void
@@ -83,6 +105,17 @@ jay_value
 jay_pop() {
 	jay_stack_ptr -= 1;
 	return *jay_stack_ptr;
+}
+
+static inline bool
+jay_truthy(jay_value value) {
+	if(value.tag == JAY_FALSE || value.tag == JAY_NIL) return false;
+	return true;
+}
+
+static inline bool
+jay_pop_condition() {
+	return jay_truthy(jay_pop());
 }
 
 void
@@ -141,27 +174,12 @@ typedef struct jay_instance {
 	struct jay_instance *class;
 } jay_instance;
 
-typedef jay_value (*jay_fn)(jay_value *args, jay_instance *closure);
-
-#define JAY_NIL 0
-#define JAY_TRUE 1
-#define JAY_FALSE 2
-#define JAY_NUMBER 3
-#define JAY_FUNCTION 4
-#define JAY_INSTANCE 5
-#define JAY_STRING 6
-#define JAY_CLASS 7
-
-// Use 0 for the tombstone so that we can memset() the array to 0 / use calloc.
-#define JAY_NAME_TOMBSTONE 0
 
 
 
-void
-oops(const char *message) {
-	printf("runtime error: %s\n", message);
-	exit(1);
-}
+
+
+
 
 jay_instance*
 jay_as_instance(jay_value value, const char *message) {
@@ -206,12 +224,19 @@ jay_as_number(jay_value value, const char *message) {
 
 /* --- Literals --- */
 
+#define OP_LIT(name, param, arg) \
+static inline void \
+jay_op_ ## name (param arg) { \
+	jay_push(jay_ ## name (arg)); \
+}
+
 jay_value
 jay_null() {
 	jay_value res;
 	res.tag = JAY_NIL;
 	return res;
 }
+OP_LIT(null,,)
 
 jay_value
 jay_number(double input) {
@@ -220,6 +245,7 @@ jay_number(double input) {
 	res.as_double = input;
 	return res;
 }
+OP_LIT(number, double, input)
 
 jay_value
 jay_boolean(bool input) {
@@ -227,6 +253,7 @@ jay_boolean(bool input) {
 	res.tag = input ? JAY_TRUE : JAY_FALSE;
 	return res;
 }
+OP_LIT(boolean, bool, input)
 
 jay_value
 jay_class(jay_instance *class) {
@@ -237,7 +264,7 @@ jay_class(jay_instance *class) {
 }
 
 jay_value
-jay_function(jay_instance *function) {
+jay_mk_function(jay_instance *function) {
 	jay_value res;
 	res.tag = JAY_FUNCTION;
 	res.as_instance = function;
@@ -263,8 +290,23 @@ jay_string(const char *literal) {
 
 	return res;
 }
+OP_LIT(string, const char*, literal)
 
 /* --- Operators --- */
+
+#define OP_ONE(name) \
+static inline void \
+jay_op_ ## name (void) { \
+	jay_ ## name(jay_pop()); \
+}
+
+#define OP_TWO(name) \
+static inline void \
+jay_op_ ## name (void) { \
+	jay_value a = jay_pop(); \
+	jay_value b = jay_pop(); \
+	jay_push(jay_ ## name(a, b)); \
+}
 
 void
 jay_print(jay_value value) {
@@ -288,6 +330,7 @@ jay_print(jay_value value) {
 			puts("<ref value>");
 	}
 }
+OP_ONE(print)
 
 jay_value
 jay_add(jay_value a, jay_value b) {
@@ -299,6 +342,7 @@ jay_add(jay_value a, jay_value b) {
 	}
 	oops("string addition is TODO");
 }
+OP_TWO(add)
 
 jay_value
 jay_sub(jay_value a, jay_value b) {
@@ -307,6 +351,7 @@ jay_sub(jay_value a, jay_value b) {
 	double bn = jay_as_number(b, message);
 	return jay_number(an - bn);
 }
+OP_TWO(sub)
 
 jay_value
 jay_mul(jay_value a, jay_value b) {
@@ -315,6 +360,7 @@ jay_mul(jay_value a, jay_value b) {
 	double bn = jay_as_number(b, message);
 	return jay_number(an * bn);
 }
+OP_TWO(mul)
 
 jay_value
 jay_div(jay_value a, jay_value b) {
@@ -323,6 +369,7 @@ jay_div(jay_value a, jay_value b) {
 	double bn = jay_as_number(b, message);
 	return jay_number(an / bn);
 }
+OP_TWO(div)
 
 jay_value
 jay_gt(jay_value a, jay_value b) {
@@ -331,6 +378,7 @@ jay_gt(jay_value a, jay_value b) {
 	double bn = jay_as_number(b, message);
 	return jay_boolean(an > bn);
 }
+OP_TWO(gt)
 
 jay_value
 jay_ge(jay_value a, jay_value b) {
@@ -339,6 +387,7 @@ jay_ge(jay_value a, jay_value b) {
 	double bn = jay_as_number(b, message);
 	return jay_boolean(an >= bn);
 }
+OP_TWO(ge)
 
 jay_value
 jay_lt(jay_value a, jay_value b) {
@@ -347,6 +396,7 @@ jay_lt(jay_value a, jay_value b) {
 	double bn = jay_as_number(b, message);
 	return jay_boolean(an < bn);
 }
+OP_TWO(lt)
 
 jay_value
 jay_le(jay_value a, jay_value b) {
@@ -355,12 +405,9 @@ jay_le(jay_value a, jay_value b) {
 	double bn = jay_as_number(b, message);
 	return jay_boolean(an <= bn);
 }
+OP_TWO(le)
 
-bool
-jay_truthy(jay_value value) {
-	if(value.tag == JAY_FALSE || value.tag == JAY_NIL) return false;
-	return true;
-}
+
 
 bool
 jay_eq_impl(jay_value a, jay_value b) {
