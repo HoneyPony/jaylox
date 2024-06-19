@@ -1,0 +1,11 @@
+fun test() {
+	print "hello";
+}
+
+print test;
+
+test();
+
+test = 5;
+
+print test;
