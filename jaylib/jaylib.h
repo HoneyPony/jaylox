@@ -12,6 +12,7 @@
 struct jay_value;
 struct jay_instance;
 struct jay_closure;
+struct jay_function;
 
 // TODO: Figure out if we still need this
 static size_t JAY_THIS;
@@ -21,6 +22,7 @@ typedef struct jay_value {
 	union {
 		double               as_double;
 		struct jay_instance *as_instance;
+		struct jay_function *as_function;
 		char                *as_string;
 	};
 } jay_value;
@@ -54,6 +56,22 @@ typedef struct jay_function {
 	size_t arity;
 } jay_function;
 
+typedef struct {
+	size_t name;
+	struct jay_value value;
+} jay_hash_entry;
+
+typedef struct jay_instance {
+	jay_object object;
+
+	jay_hash_entry *members;
+	size_t array_size;
+	size_t used_entries;
+
+	// The class of this instance, or the superclass if we're a class.
+	struct jay_instance *class;
+} jay_instance;
+
 #define JAY_NIL 0
 #define JAY_TRUE 1
 #define JAY_FALSE 2
@@ -80,6 +98,40 @@ oops(const char *message) {
 	printf("runtime error: %s\n", message);
 	exit(1);
 }
+
+void*
+jay_malloc(size_t size) {
+	void *res = malloc(size);
+	if(!res) {
+		oops("out of memory");
+	}
+	return res;
+}
+
+jay_function*
+jay_as_function(jay_value value, const char *message) {
+	if(value.tag != JAY_FUNCTION) {
+		oops(message);
+	}
+
+	return value.as_function;
+}
+
+double
+jay_as_number(jay_value value, const char *message) {
+	if(value.tag != JAY_NUMBER) {
+		oops(message);
+	}
+
+	return value.as_double;
+}
+
+bool
+jay_is_null(jay_value value) {
+	return value.tag == JAY_NIL;
+}
+
+
 
 static inline
 void
@@ -131,96 +183,29 @@ jay_call(struct jay_function *fun, size_t arity) {
 	jay_push(result);
 }
 
-/*
-jay_value
-example_fn(jay_value *args, jay_closure *closure) {
-	struct {
-		size_t count;
-		jay_value values[10];
-	} frame;
-	jay_closure *scope = jay_new_closure(closure, 5);
-	jay_push_frame((jay_stackframe*)&frame);
+void
+jay_op_call(size_t arity) {
+	jay_value fun_value = jay_pop();
+	jay_function *fun = jay_as_function(fun_value, "can only call functions");
 
-	frame.values[0] = jay_pop();
-
-	jay_pop_frame();
+	jay_call(fun, arity);
 }
-*/
 
 jay_value
-other_example(jay_value *args, jay_closure *closure) {
-	struct {
-		size_t count;
-		jay_value values[10];
-	} locals;
-	locals.count = 10;
+jay_fun_from(jay_function_impl impl, size_t arity, jay_closure *closure) {
+	jay_function *f = jay_malloc(sizeof(*f));
+	f->arity = arity;
+	f->closure = closure;
+	f->implementation = impl;
 
-
+	jay_value v;
+	v.as_function = f;
+	// TODO: Move these tags to the jay_object; should only have a few for jay_value
+	v.tag = JAY_FUNCTION;
+	return v;
 }
 
-typedef struct {
-	size_t name;
-	struct jay_value value;
-} jay_hash_entry;
 
-typedef struct jay_instance {
-	jay_object object;
-
-	jay_hash_entry *members;
-	size_t array_size;
-	size_t used_entries;
-
-	// The class of this instance, or the superclass if we're a class.
-	struct jay_instance *class;
-} jay_instance;
-
-
-
-
-
-
-
-
-jay_instance*
-jay_as_instance(jay_value value, const char *message) {
-	if(value.tag != JAY_INSTANCE) {
-		oops(message);
-	}
-
-	return value.as_instance;
-}
-
-jay_instance*
-jay_as_callable(jay_value value, const char *message) {
-	if(value.tag != JAY_FUNCTION && value.tag != JAY_CLASS) {
-		oops(message);
-	}
-
-	return value.as_instance;
-}
-
-jay_instance*
-jay_as_class(jay_value value, const char *message) {
-	if(value.tag != JAY_CLASS) {
-		oops(message);
-	}
-
-	return value.as_instance;
-}
-
-bool
-jay_is_null(jay_value value) {
-	return value.tag == JAY_NIL;
-}
-
-double
-jay_as_number(jay_value value, const char *message) {
-	if(value.tag != JAY_NUMBER) {
-		oops(message);
-	}
-
-	return value.as_double;
-}
 
 /* --- Literals --- */
 
@@ -444,15 +429,6 @@ jay_value
 jay_negate(jay_value v) {
 	double vd = jay_as_number(v, "negation expects a number");
 	return jay_number(-vd);
-}
-
-void*
-jay_malloc(size_t size) {
-	void *res = malloc(size);
-	if(!res) {
-		oops("out of memory");
-	}
-	return res;
 }
 
 /* --- Builtin Functions (e.g. clock) --- */

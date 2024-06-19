@@ -1,0 +1,5 @@
+fun add_mul(a, b, c) {
+	return a + b * c;
+}
+
+print add_mul(1, 2, 3);

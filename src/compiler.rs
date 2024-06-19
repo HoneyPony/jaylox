@@ -90,7 +90,7 @@ impl<'a> Compiler<'a> {
 				// Push all args, push the callee, then do jay_op_call.
 
 				for arg in arguments {
-					self.compile_expr(expr, into)?;
+					self.compile_expr(arg, into)?;
 				}
 
 				self.compile_expr(callee, into)?;
@@ -180,10 +180,10 @@ impl<'a> Compiler<'a> {
 		self.current_indent = 0;
 
 		// Add the mangled name to the function definition list
-		writeln!(self.prelude, "jay_value {mangled_name}(jay_value *arguments, jay_instance *closure);")?;
+		writeln!(self.prelude, "jay_value {mangled_name}(jay_value *arguments, jay_closure *closure);")?;
 
 		// Start writing the function definition
-		writeln!(def, "jay_value\n{}(jay_value *args, jay_instance *closure) {{", mangled_name)?;
+		writeln!(def, "jay_value\n{}(jay_value *args, jay_closure *closure) {{", mangled_name)?;
 		self.push_indent();
 
 		// Create the 'locals' struct.
@@ -375,7 +375,7 @@ impl<'a> Compiler<'a> {
 
 		self.indent(&mut main_fn);
 		// Create the scope for the main fn
-		writeln!(main_fn, "jay_instance *scope = NULL;")?;
+		writeln!(main_fn, "jay_closure *scope = NULL;")?;
 		
 		// Compile the actual top-level code (any normal statements will go
 		// into main; other things will go into their own functions)
