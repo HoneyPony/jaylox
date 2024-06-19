@@ -6,6 +6,7 @@
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <time.h>
 
 struct jay_value;
@@ -55,7 +56,7 @@ typedef jay_value (*jay_fn)(jay_value *args, jay_instance *closure);
 #define JAY_TRUE 1
 #define JAY_FALSE 2
 #define JAY_NUMBER 3
-#define JAY_CALLABLE 4
+#define JAY_FUNCTION 4
 #define JAY_INSTANCE 5
 #define JAY_STRING 6
 #define JAY_CLASS 7
@@ -82,11 +83,25 @@ jay_as_instance(jay_value value, const char *message) {
 
 jay_instance*
 jay_as_callable(jay_value value, const char *message) {
-	if(value.tag != JAY_CALLABLE && value.tag != JAY_CLASS) {
+	if(value.tag != JAY_FUNCTION && value.tag != JAY_CLASS) {
 		oops(message);
 	}
 
 	return value.as_instance;
+}
+
+jay_instance*
+jay_as_class(jay_value value, const char *message) {
+	if(value.tag != JAY_CLASS) {
+		oops(message);
+	}
+
+	return value.as_instance;
+}
+
+bool
+jay_is_null(jay_value value) {
+	return value.tag == JAY_NIL;
 }
 
 double
@@ -119,6 +134,22 @@ jay_value
 jay_boolean(bool input) {
 	jay_value res;
 	res.tag = input ? JAY_TRUE : JAY_FALSE;
+	return res;
+}
+
+jay_value
+jay_class(jay_instance *class) {
+	jay_value res;
+	res.tag = JAY_CLASS;
+	res.as_instance = class;
+	return res;
+}
+
+jay_value
+jay_function(jay_instance *function) {
+	jay_value res;
+	res.tag = JAY_FUNCTION;
+	res.as_instance = function;
 	return res;
 }
 
@@ -296,6 +327,17 @@ jay_new_instance() {
 	instance->used_entries = 0;
 }
 
+jay_value
+jay_new_class_instance(jay_value class_value) {
+	jay_instance *class = jay_as_class(class_value, "only classes can be instantiated.");
+
+	jay_value v;
+	v.as_instance = jay_new_instance();
+	v.as_instance->class = class;
+	v.tag = JAY_INSTANCE;
+	return v;
+}
+
 jay_instance*
 jay_new_scope(jay_instance *closure) {
 	jay_instance *instance = jay_new_instance();
@@ -312,9 +354,44 @@ jay_fun_from(jay_fn fn, size_t arity, jay_instance *closure) {
 	instance->closure = closure;
 
 	jay_value result;
-	result.tag = JAY_CALLABLE;
+	result.tag = JAY_FUNCTION;
 	result.as_instance = instance;
 	return result;
+}
+
+jay_instance*
+jay_instance_clone(jay_instance *other) {
+	jay_instance *instance = jay_malloc(sizeof(*instance));
+
+	instance->array_size = other->array_size;
+	size_t bytes = instance->array_size * sizeof(*instance->members);
+	// TODO: calloc...? I guess not here...
+	instance->members = jay_malloc(bytes);
+	memcpy(instance->members, other->members, bytes);
+
+	instance->arity = other->arity;
+	instance->callable = other->callable;
+
+	instance->closure = other->closure;
+	instance->class = other->class;
+}
+
+jay_value
+jay_class_from(jay_instance *template, jay_instance *closure, jay_value superclass) {
+	jay_instance *class = jay_instance_clone(template);
+
+	// The two things not from the template are the closure and the superclass.
+	class->closure = closure;
+	
+	if(jay_is_null(superclass)) {
+		// Null superclass
+		class->class = NULL;
+	}
+	else {
+		class->class = jay_as_class(superclass, "superclass must be a class");
+	}
+
+	return jay_class(class);
 }
 
 // NOTE: This function is UNSAFE to call if you haven't guaranteed that there
@@ -408,6 +485,7 @@ jay_put_existing(jay_instance *scope, size_t name, jay_value value) {
 		if(scope->closure) {
 			return jay_put_existing(scope->closure, name, value);
 		}
+		printf("when assigning <%zu>:\n", name);
 		oops("assign: could not find the given name");
 	}
 	place->value = value;
@@ -421,14 +499,69 @@ jay_lookup(jay_instance *instance, size_t name) {
 		if(instance->closure) {
 			return jay_lookup(instance->closure, name);
 		}
+		printf("when looking up <%zu>:\n", name);
 		oops("lookup: could not find the given name");
 	}
 	return place->value;
 }
 
+/* --- Instance (of a class) related lookups --- */
+
 jay_instance*
 jay_find_method(jay_instance *class, size_t name) {
+	jay_hash_entry *place = jay_find_bucket(class, name);
+	if(place) {
+		// Classes are guaranteed to only store functions.
+		return jay_as_callable(place->value, "classes only store functions.");
+	}
 
+	if(class->class) {
+		// Lookup on superclass if needed.
+		return jay_find_method(class->class, name);
+	}
+
+	// No such method.
+	return NULL;
+}
+
+jay_instance*
+jay_bind_method(jay_instance *method, jay_instance *closure) {
+	jay_instance *bound = jay_instance_clone(method);
+	bound->closure = closure;
+	return bound;
+}
+
+static size_t JAY_THIS;
+
+jay_value
+jay_get(jay_value object, size_t name) {
+	jay_instance *instance = jay_as_instance(object, "can only look up fields on objects");
+
+	jay_instance *method = jay_find_method(instance->class, name);
+	if(method) {
+		// Create a new closure with 'this'
+		jay_instance *closure = jay_new_scope(instance->class->closure);
+		jay_put_new(closure, JAY_THIS, object);
+		return jay_function(jay_bind_method(method, closure));
+	}
+
+	// If there is no method, then look up the field... TODO, some kind of
+	// static analysis..?
+	// Note: This will oops when the value doesn't exist. But that's expected.
+	return jay_lookup(instance, name);
+}
+
+jay_value
+jay_set(jay_value object, size_t name, jay_value value) {
+	jay_instance *instance = jay_as_instance(object, "can only set fields on objects");
+
+	jay_hash_entry *place = jay_find_bucket(instance, name);
+	if(!place) {
+		jay_put_new(instance, name, value);
+	}
+	else {
+		place->value = value;
+	}
 }
 
 /* --- Builtin Functions (e.g. clock) --- */

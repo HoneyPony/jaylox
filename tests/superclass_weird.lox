@@ -1,0 +1,37 @@
+fun make_thing(Super) {
+	class Inner < Super {
+		init(value) {
+			this.value = value;
+		}
+
+		method(x, y) {
+			super.method(x, y);
+			print this.value;
+		}
+	}
+
+	return Inner;
+}
+
+class A {
+	method(x, y) {
+		print x;
+		print y;
+	}
+}
+
+class B {
+	method(x, y) {
+		print y;
+		print x;
+	}
+}
+
+var a = make_thing(A);
+var b = make_thing(B);
+
+print a;
+print b;
+
+print a("cat").method(1, 2);
+print b("dog").method(1, 2);

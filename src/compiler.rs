@@ -154,7 +154,14 @@ impl<'a> Compiler<'a> {
 				self.compile_expr(right, into)?;
 				write!(into, "))")?;
 			}
-			Expr::Set { object, name, value } => todo!(),
+			Expr::Set { object, name, value } => {
+				write!(into, "jay_set(")?;
+				self.compile_expr(object, into)?;
+				self.add_name(name);
+				write!(into, ", NAME_{}, ", name.lexeme)?;
+				self.compile_expr(value, into)?;
+				write!(into, ")")?;
+			},
 			Expr::Super { keyword, method, resolved } => todo!(),
 			Expr::This { keyword, resolved } => {
 				write!(into, "jay_lookup(scope, NAME_this)")?;
@@ -207,7 +214,7 @@ impl<'a> Compiler<'a> {
 			for (idx, arg) in args.iter().enumerate() {
 				self.indent(def);
 				self.add_name(arg);
-				writeln!(def, "jay_put(NAME_{}, arguments[{idx}]);", arg.lexeme)?;
+				writeln!(def, "jay_put_new(scope, NAME_{}, arguments[{idx}]);", arg.lexeme)?;
 			}
 		}
 
@@ -276,12 +283,33 @@ impl<'a> Compiler<'a> {
 				// For optimization, of course, they should all still share the same method table.
 				// We can't quite do that yet (although, it's a relatively straightforward optimization, perhaps)
 				// but for now... I guess we need essentially a factory that produces instances...
+				//
+				// But wait... It still can have its own closure... The set of methods is always the same.
+				// That said, the superclass could be different. 
+				//
+				// To summarize...
+				// With the whole jay_instance setup, what we need to do is:
+				// 1. Create a "template" instance of the class
+				// 2. Duplicate the table from that template when we call jay_class_from
 				
 				let mut init_idx = None;
-				let mut method_table = String::new();
 
 				// TODO Name mangling
 				let mangled_class_name = name.lexeme.clone();
+
+				// We create the function that creates the template instance of the class.
+				// This function is called by jay_class_from() to get the template, and then
+				// that template is copied.
+				// The only reason we do this as a function is because it is somewhat annoying
+				// to populate the table without using jay_put_new().
+				//
+				// The template ONLY needs to set the members and the arity/callable.
+
+				let mut class_template_fn = String::new();
+				writeln!(class_template_fn, "jay_instance*\n{}(void) {{", mangled_class_name)?;
+				writeln!(class_template_fn, "\tstatic jay_instance *template = NULL;")?;
+				writeln!(class_template_fn, "\tif(template) return template;\n")?;
+				writeln!(class_template_fn, "\ttemplate = jay_new_instance();\n")?;
 				
 				// First, generate inner methods and collect their names into the code
 				// for generating the class table inside init().
@@ -294,14 +322,14 @@ impl<'a> Compiler<'a> {
 						let mangled_name = format!("{}_{}", name.lexeme, method.name.lexeme);
 						
 						// Compile the function
-						self.compile_function(method, &mangled_name);
+						self.compile_function(method, &mangled_name)?;
 
 						// Write the method to the table. Note that, because the closure must be bound
 						// later, when we find_method, here we can just put NULL.
 						//
 						// Later we will of course have to create a bound copy of the function.
-						writeln!(method_table, "\t\tjay_put_new(&{mangled_class_name}, NAME_{}, jay_fun_from({mangled_name}, NULL));",
-							method.name.lexeme)?;
+						writeln!(class_template_fn, "\tjay_put_new(template, NAME_{}, jay_fun_from({}, {}, NULL));",
+							method.name.lexeme, mangled_name, method.parameters.len())?;
 					}
 				}
 
@@ -316,28 +344,55 @@ impl<'a> Compiler<'a> {
 					init_idx.map(|idx| &methods[idx].parameters),
 					&mut init_def)?;
 
-				// The initializer will perform the task of setting up the method table.
-				writeln!(init_def, "\tstatic bool initialize = true;")?;
-				writeln!(init_def, "\tif(initialize) {{")?;
-				writeln!(init_def, "\t\tinitialize = false;")?;
-				write!(init_def, "{}", method_table)?;
-				writeln!(init_def, "\t}}")?;
+				// What the initializer always does is stores a new instance for 'this'.
+				writeln!(init_def, "\tjay_put_new(scope, NAME_this, jay_new_class_instance(jay_lookup(scope, NAME_{})));"
+					, name.lexeme)?;
 
-				// Compile the initializer body if there is one.
+				// Compile the initializer body if there is one. Track the arity for
+				// storing in the template (it will be copied inside lox_class_from).
 				// TODO: Make the 'return' statements here return 'this' somehow.
-				if let Some(init_idx) = init_idx {
-					self.compile_stmts(&methods[init_idx].body, &mut init_def)?;
-				}
+				let init_arity = match init_idx {
+					Some(init_idx) => {
+						self.compile_stmts(&methods[init_idx].body, &mut init_def)?;
+						methods[init_idx].parameters.len()
+					},
+					None => 0
+				};
 
 				self.end_fun(init_def, "jay_lookup(scope, NAME_this)")?;
 
 				self.current_indent = enclosing_indent;
 
+				// Put the init function into the class scope in case we look it up
+				// explicitly. Note: 'init' added in compile.
+				writeln!(class_template_fn, "\tjay_put_new(template, NAME_init, jay_fun_from({}, {}, NULL));",
+					init_mangled_name, init_arity)?;
+
+				// Finish up the template function using the arity information.
+				writeln!(class_template_fn, "\ttemplate->arity = {init_arity};")?;
+				writeln!(class_template_fn, "\ttemplate->callable = {init_mangled_name};")?;
+				writeln!(class_template_fn, "}}")?;
+
+				// Make sure the class_template_fn is added to the vector and prelude.
+				self.function_defs.push(class_template_fn);
+				writeln!(self.prelude, "jay_instance* {}(void);", mangled_class_name)?;
+
+				// If the class has a superclass, then that value depends on the current scope.
+				// (see superclass_weird.lox for an example).
+				let superclass_str = match &superclass.0 {
+					Some(name) => {
+						self.add_name(name);
+						format!("jay_lookup(scope, NAME_{})", name.lexeme)
+					},
+					None => "jay_null()".into(),
+				};
+
 				// Add the class as a value to the parent scope
 				self.indent(into);
 				self.add_name(name);
-				writeln!(into, "jay_put_new(scope, NAME_{}, jay_class_from({}, scope));",
-					name.lexeme, )?;
+				// Note that the template function is called
+				writeln!(into, "jay_put_new(scope, NAME_{}, jay_class_from({}(), scope, {}));",
+					name.lexeme, mangled_class_name, superclass_str)?;
 			},
 			Stmt::Expression(expr) => {
 				self.indent(into);
@@ -424,6 +479,8 @@ impl<'a> Compiler<'a> {
 		// Setup 'this' and 'super' names so that they always work
 		self.add_name_str("this");
 		self.add_name_str("super");
+		// Also 'init' for convenience.
+		self.add_name_str("init");
 
 		// Write the first part of the prelude
 		writeln!(self.prelude, "/*** This C file created by jaylox https://github.com/HoneyPony/jaylox ***/")?;
@@ -434,6 +491,10 @@ impl<'a> Compiler<'a> {
 		// TODO: Consider creating an efficient string writing system
 		// In particular, each function being compiled will need its own string...
 		self.push_indent();
+
+		self.indent(&mut main_fn);
+		// Setup the JAY_THIS for use in jaylib.h
+		writeln!(main_fn, "JAY_THIS = NAME_this;")?;
 
 		self.indent(&mut main_fn);
 		// Create the scope for the main fn
