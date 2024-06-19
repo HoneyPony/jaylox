@@ -117,6 +117,7 @@ fn generate_ty_impl(file: &mut File, ty: &ExprTy, roottyname: &str) -> io::Resul
 
 fn generate_ast_file(file: &mut File, tyname: &str, tys: &Vec<ExprTy>) -> io::Result<()> {
 	writeln!(file, "use crate::scanner::*;")?;
+	writeln!(file, "use crate::VarRef;")?;
 	writeln!(file, "")?;
 
 	writeln!(file, "pub enum {} {{", tyname)?;
@@ -148,19 +149,19 @@ fn generate_ast_files(expr: &mut File, stmt: &mut File) -> io::Result<()> {
 		ty("Super", vec![arg("keyword", "Token"), arg("method", "Token"), arg("resolved", "Option<u32>")]),
 		ty("This", vec![arg("keyword", "Token"), arg("resolved", "Option<u32>")]),
 		ty("Unary", vec![arg("operator", "Token"), arg("right", "Expr")]),
-		ty("Variable", vec![arg("name", "Token"), arg("resolved", "Option<u32>")]),
-		ty("Assign", vec![arg("name", "Token"), arg("value", "Expr"), arg("resolved", "Option<u32>")]),
+		ty("Variable", vec![arg("name", "Token"), arg("identity", "VarRef")]),
+		ty("Assign", vec![arg("name", "Token"), arg("value", "Expr"), arg("identity", "VarRef")]),
 	];
 
 	let tys_stmt: Vec<ExprTy> = vec![
 		ty("Block", vec![arg_stmt("statements", "Vec<Stmt>")]),
 		ty("Class", vec![arg_stmt("name", "Token"), arg_stmt("methods", "Vec<Rc<Function>>"), arg_stmt("superclass", "(Option<Token>, Option<u32>)")]),
 		ty("Expression", vec![arg_stmt("expression", "Expr")]),
-		ty("Function", vec![arg_stmt("function", "Rc<Function>")]),
+		ty("Function", vec![arg_stmt("function", "Function")]),
 		ty("If", vec![arg_stmt("condition", "Expr"), arg_stmt("then_branch", "Stmt"), arg_stmt("else_branch", "Option<Stmt>")]),
 		ty("Print", vec![arg_stmt("expression", "Expr")]),
 		ty("Return", vec![arg_stmt("keyword", "Token"), arg_stmt("value", "Option<Expr>")]),
-		ty("Var", vec![arg_stmt("name", "Token"), arg_stmt("initializer", "Option<Expr>")]),
+		ty("Var", vec![arg_stmt("name", "Token"), arg_stmt("initializer", "Option<Expr>"), arg_stmt("identity", "VarRef")]),
 		ty("While", vec![arg_stmt("condition", "Expr"), arg_stmt("body", "Stmt")]),
 	];
 

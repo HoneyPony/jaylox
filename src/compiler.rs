@@ -2,6 +2,7 @@ use core::fmt;
 use std::{collections::HashSet, fmt::Write, rc::Rc};
 
 use crate::stmt::Function;
+use crate::VarRef;
 use crate::{expr::Expr, scanner::Token, stmt::Stmt, Lox};
 use crate::scanner::LoxValue;
 use crate::scanner::TokenType::*;
@@ -177,55 +178,70 @@ impl<'a> Compiler<'a> {
 				write!(into, "{op}(")?;
 				self.compile_expr(right, into)?;
 			},
-			Expr::Variable { name, resolved } => {
-				self.add_name(name);
-				// TODO: For variables and this and etc, also used the "resolved"
-				// information to speed up lookups
-				//
-				// Of course, we could also add another compiler pass to move variables
-				// out of the closures entirely for more speed...
-				write!(into, "jay_lookup(scope, NAME_{})", name.lexeme)?;
+			Expr::Variable { name, identity } => {
+				self.compile_var(*identity, into);
 			},
-			Expr::Assign { name, value, resolved } => {
-				self.add_name(name);
-				write!(into, "jay_put_existing(scope, NAME_{}, ", name.lexeme)?;
+			Expr::Assign { name, value, identity } => {
+				write!(into, "(")?;
+				self.compile_var(*identity, into);
+				write!(into, " = ")?;
 				self.compile_expr(value, into)?;
-				into.push(')');
+				write!(into, ")")?;
 			},
 		}
 
 		Ok(())
 	}
 
-	fn begin_fun(&mut self, mangled_name: &String, args: Option<&Vec<Token>>, def: &mut String) -> fmt::Result {
+	fn compile_var(&mut self, var: VarRef, into: &mut String) -> fmt::Result {
+		match self.lox.get_var_type(var) {
+			crate::VarType::Local => {
+				write!(into, "locals.at[{}]", self.lox.get_var_mut(var).index)
+			},
+			crate::VarType::Parameter => {
+				write!(into, "args[{}]", self.lox.get_var_mut(var).index)
+			},
+			crate::VarType::Captured => todo!(),
+			crate::VarType::Global => {
+				write!(into, "globals[{}]", self.lox.get_var_mut(var).index)
+			}
+		}
+	}
+
+	// NOTE: Provide 'into' if the function should be stored in the scope
+	// (So set to None when generated methods)
+	fn compile_function(&mut self, fun: &Function, mangled_name: &String) -> fmt::Result {
+		let mut def = String::new();
+
+		// Reset indent for top-level functions
+		let enclosing_indent = self.current_indent;
+		self.current_indent = 0;
+
 		// Add the mangled name to the function definition list
 		writeln!(self.prelude, "jay_value {mangled_name}(jay_value *arguments, jay_instance *closure);")?;
 
 		// Start writing the function definition
-		writeln!(def, "jay_value\n{}(jay_value *arguments, jay_instance *closure) {{", mangled_name)?;
+		writeln!(def, "jay_value\n{}(jay_value *args, jay_instance *closure) {{", mangled_name)?;
 		self.push_indent();
 
-		// For now, because all args are in the closure, convert any parameters into closure values
-		// And, always allocate the "scope" closure for the current fun.
-		self.indent(def);
-		writeln!(def, "jay_instance *scope = jay_new_scope(closure);")?;
+		// Create the 'locals' struct.
+		writeln!(def,r#"	struct {{
+		size_t count;
+		jay_value at[{0}];
+	}} locals;
+	locals.count = {0};
+	jay_push_frame(&locals);"#, fun.local_count)?;
 
-		if let Some(args) = args {
-			// Iterate through each parameter and put it into the current scope
-			for (idx, arg) in args.iter().enumerate() {
-				self.indent(def);
-				self.add_name(arg);
-				writeln!(def, "jay_put_new(scope, NAME_{}, arguments[{idx}]);", arg.lexeme)?;
-			}
-		}
+		// TODO: Determine which functions create a new closure, and which ones simply
+		// pass down their parent closure.
+		writeln!(def, "\tjay_instance *scope = NULL;\n")?;
 
-		Ok(())
-	}
+		// Generate the code inside the function.
+		self.compile_stmts(&fun.body, &mut def)?;
 
-	fn end_fun(&mut self, mut def: String, default_ret: &str) -> fmt::Result {
 		// Finally, put a default return value.
-		self.indent(&mut def);
-		writeln!(def, "return {};", default_ret)?;
+		writeln!(def, "\tjay_pop_frame();")?;
+		writeln!(def, "\treturn jay_null();")?;
 
 		// End the function.
 		self.pop_indent();
@@ -233,27 +249,7 @@ impl<'a> Compiler<'a> {
 
 		self.function_defs.push(def);
 
-		Ok(())
-	}
-
-	// NOTE: Provide 'into' if the function should be stored in the scope
-	// (So set to None when generated methods)
-	fn compile_function(&mut self, fun: &Rc<Function>, mangled_name: &String) -> fmt::Result {
-		let mut def = String::new();
-
-		// Reset indent for top-level functions
-		let enclosing_indent = self.current_indent;
-		self.current_indent = 0;
-
-		self.begin_fun(mangled_name, Some(&fun.parameters), &mut def)?;
-
-		// Generate the code inside the function.
-		self.compile_stmts(&fun.body, &mut def)?;
-
-		self.end_fun(def, "jay_null()")?;
-
 		self.current_indent = enclosing_indent;
-		
 		
 		Ok(())
 	}
@@ -270,130 +266,7 @@ impl<'a> Compiler<'a> {
 				into.push_str("}\n");
 			},
 			Stmt::Class { name, methods, superclass } => {
-				// Each Class is a jay_instance that:
-				// - When called, does the init() method
-				// - Stores the superclass of that class
-				// - Stores the methods of that class in the jay_instance
-				//    -> (to optimize this, we would use a different structure with a vtable or similar..)
-				// For now, we can initialize the jay_instance table once, inside
-				// the initializer. (This only works because it's single-threaded)
-				//
-				// No wait, that doesn't quite work. A class may have a separate closure scope,
-				// so each copy of the class needs to have its own closure..
-				//
-				// For optimization, of course, they should all still share the same method table.
-				// We can't quite do that yet (although, it's a relatively straightforward optimization, perhaps)
-				// but for now... I guess we need essentially a factory that produces instances...
-				//
-				// But wait... It still can have its own closure... The set of methods is always the same.
-				// That said, the superclass could be different. 
-				//
-				// To summarize...
-				// With the whole jay_instance setup, what we need to do is:
-				// 1. Create a "template" instance of the class
-				// 2. Duplicate the table from that template when we call jay_class_from
-				
-				let mut init_idx = None;
-
-				// TODO Name mangling
-				let mangled_class_name = name.lexeme.clone();
-
-				// We create the function that creates the template instance of the class.
-				// This function is called by jay_class_from() to get the template, and then
-				// that template is copied.
-				// The only reason we do this as a function is because it is somewhat annoying
-				// to populate the table without using jay_put_new().
-				//
-				// The template ONLY needs to set the members and the arity/callable.
-
-				let mut class_template_fn = String::new();
-				writeln!(class_template_fn, "jay_instance*\n{}(void) {{", mangled_class_name)?;
-				writeln!(class_template_fn, "\tstatic jay_instance *template = NULL;")?;
-				writeln!(class_template_fn, "\tif(template) return template;\n")?;
-				writeln!(class_template_fn, "\ttemplate = jay_new_instance();\n")?;
-				
-				// First, generate inner methods and collect their names into the code
-				// for generating the class table inside init().
-				for (idx, method) in methods.iter().enumerate() {
-					if method.name.lexeme == "init" {
-						init_idx = Some(idx);
-					}
-					else {
-						// TODO: Real name mangling (this one has issues)
-						let mangled_name = format!("{}_{}", name.lexeme, method.name.lexeme);
-						
-						// Compile the function
-						self.compile_function(method, &mangled_name)?;
-
-						// Write the method to the table. Note that, because the closure must be bound
-						// later, when we find_method, here we can just put NULL.
-						//
-						// Later we will of course have to create a bound copy of the function.
-						writeln!(class_template_fn, "\tjay_put_new(template, NAME_{}, jay_fun_from({}, {}, NULL));",
-							method.name.lexeme, mangled_name, method.parameters.len())?;
-					}
-				}
-
-				let enclosing_indent = self.current_indent;
-				self.current_indent = 0;
-				
-				let mut init_def = String::new();
-				// TODO: NAME MANGLING
-				let init_mangled_name = format!("init_{}", name.lexeme);
-
-				self.begin_fun(&init_mangled_name, 
-					init_idx.map(|idx| &methods[idx].parameters),
-					&mut init_def)?;
-
-				// What the initializer always does is stores a new instance for 'this'.
-				writeln!(init_def, "\tjay_put_new(scope, NAME_this, jay_new_class_instance(jay_lookup(scope, NAME_{})));"
-					, name.lexeme)?;
-
-				// Compile the initializer body if there is one. Track the arity for
-				// storing in the template (it will be copied inside lox_class_from).
-				// TODO: Make the 'return' statements here return 'this' somehow.
-				let init_arity = match init_idx {
-					Some(init_idx) => {
-						self.compile_stmts(&methods[init_idx].body, &mut init_def)?;
-						methods[init_idx].parameters.len()
-					},
-					None => 0
-				};
-
-				self.end_fun(init_def, "jay_lookup(scope, NAME_this)")?;
-
-				self.current_indent = enclosing_indent;
-
-				// Put the init function into the class scope in case we look it up
-				// explicitly. Note: 'init' added in compile.
-				writeln!(class_template_fn, "\tjay_put_new(template, NAME_init, jay_fun_from({}, {}, NULL));",
-					init_mangled_name, init_arity)?;
-
-				// Finish up the template function using the arity information.
-				writeln!(class_template_fn, "\ttemplate->arity = {init_arity};")?;
-				writeln!(class_template_fn, "\ttemplate->callable = {init_mangled_name};")?;
-				writeln!(class_template_fn, "}}")?;
-
-				// Make sure the class_template_fn is added to the vector and prelude.
-				self.function_defs.push(class_template_fn);
-				writeln!(self.prelude, "jay_instance* {}(void);", mangled_class_name)?;
-
-				// If the class has a superclass, then that value depends on the current scope.
-				// (see superclass_weird.lox for an example).
-				let superclass_str = match &superclass.0 {
-					Some(name) => {
-						self.add_name(name);
-						format!("jay_lookup(scope, NAME_{})", name.lexeme)
-					},
-					None => "jay_null()".into(),
-				};
-
-				// Add the class as a value to the parent scope
-				self.indent(into);
-				self.add_name(name);
-				// Note that the template function is called
-				writeln!(into, "jay_put_new(scope, NAME_{}, jay_class_from({}(), scope, {}));",
-					name.lexeme, mangled_class_name, superclass_str)?;
+				todo!()
 			},
 			Stmt::Expression(expr) => {
 				self.indent(into);
@@ -413,8 +286,10 @@ impl<'a> Compiler<'a> {
 				// ordering properties (e.g. not being visible beforehand).
 			
 				self.indent(into);
-				self.add_name(&fun.name);
-				writeln!(into, "jay_put_new(scope, NAME_{}, jay_fun_from({}, {}, scope));", fun.name.lexeme, mangled_name, fun.parameters.len())?;
+				// Essentially, generate an assignment with the var.
+				self.compile_var(fun.identity, into)?;
+				writeln!(into, " = jay_fun_from({}, {}, scope);",
+					mangled_name, fun.param_count)?;
 			},
 			Stmt::If { condition, then_branch, else_branch } => {
 				self.indent(into);
@@ -445,16 +320,23 @@ impl<'a> Compiler<'a> {
 				};
 				into.push_str(";\n");
 			},
-			Stmt::Var { name, initializer } => {
-				// For now, we always get names from the surrounding closure.
-				self.add_name(name);
+			Stmt::Var { name, initializer, identity } => {
+				// The only real role this statement plays, given that the variables are
+				// all generally "initialized" already, is explicitly initializing them
+				// to jay_null().
+				//
+				// Note that this could be perhaps 'optimized' by simply getting rid of it...
+				// But there's likely little/no value to that.
+
 				self.indent(into);
-				write!(into, "jay_put_new(scope, NAME_{}, ", name.lexeme)?;
+				self.compile_var(*identity, into)?;
+				write!(into, " = ")?;
+				
 				match initializer {
 					Some(initializer) => { self.compile_expr(initializer, into)?; },
 					None => { into.push_str("jay_null()"); }
 				}
-				into.push_str(");\n");
+				into.push_str(";\n");
 			},
 			Stmt::While { condition, body } => {
 				self.indent(into);
@@ -476,7 +358,7 @@ impl<'a> Compiler<'a> {
 		Ok(())
 	}
 
-	pub fn compile(&mut self, stmts: &Vec<Stmt>) -> fmt::Result {
+	pub fn compile(&mut self, stmts: &Vec<Stmt>, globals_count: u32) -> fmt::Result {
 		// Setup 'this' and 'super' names so that they always work
 		self.add_name_str("this");
 		self.add_name_str("super");
@@ -486,6 +368,9 @@ impl<'a> Compiler<'a> {
 		// Write the first part of the prelude
 		writeln!(self.prelude, "/*** This C file created by jaylox https://github.com/HoneyPony/jaylox ***/")?;
 		writeln!(self.prelude, "#include \"jaylib/jaylib.h\"\n")?;
+
+		// Write the globals array to the prelude
+		writeln!(self.prelude, "static jay_value globals[{globals_count}];");
 
 		let mut main_fn = String::new();
 

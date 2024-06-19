@@ -1,3 +1,6 @@
+use std::collections::HashMap;
+use std::collections::HashSet;
+use std::hash::Hash;
 use std::rc::Rc;
 
 use crate::expr::*;
@@ -6,10 +9,35 @@ use crate::scanner::*;
 
 use crate::scanner::TokenType::*;
 use crate::Lox;
+use crate::VarRef;
+use crate::VarType;
+
+struct Scope {
+	variables: HashMap<String, VarRef>
+}
+
+struct FunScope {
+	variables: HashSet<VarRef>
+}
+
+impl Scope {
+	pub fn new() -> Self {
+		return Scope { variables: HashMap::new() }
+	}
+}
+
+impl FunScope {
+	pub fn new() -> Self {
+		return FunScope { variables: HashSet::new() }
+	}
+}
 
 pub struct Parser<'a> {
 	tokens: Vec<Token>,
 	current: usize,
+
+	scopes: Vec<Scope>,
+	fun_scopes: Vec<FunScope>,
 
 	lox: &'a mut Lox
 }
@@ -19,8 +47,67 @@ impl<'a> Parser<'a> {
 		Parser {
 			tokens,
 			current: 0,
-			lox
+			lox,
+
+			scopes: vec![],
+			fun_scopes: vec![],
 		}
+	}
+
+	fn push_scope(&mut self) {
+		self.scopes.push(Scope::new());
+	}
+
+	fn pop_scope(&mut self) {
+		self.scopes.pop();
+	}
+
+	fn push_fun_scope(&mut self) {
+		self.fun_scopes.push(FunScope::new());
+	}
+
+	fn pop_fun_scope(&mut self) -> FunScope {
+		self.fun_scopes.pop().unwrap()
+	}
+
+	fn find_variable(&mut self, name: &str) -> Option<VarRef> {
+		for scope in self.scopes.iter().rev() {
+			if let Some(var) = scope.variables.get(name) {
+				return Some(*var);
+			}
+		}
+
+		return None;
+	}
+
+	fn find_variable_previous(&mut self)-> Option<VarRef> {
+		for scope in self.scopes.iter().rev() {
+			if let Some(var) = scope.variables.get(&self.previous().lexeme) {
+				return Some(*var);
+			}
+		}
+
+		return None;
+	}
+
+	fn declare_variable(&mut self, name: String) -> Result<VarRef, ExprErr> {
+		// NOTE: We must always have at least one scope.
+		let scope = self.scopes.last_mut().unwrap();
+		let fun_scope = self.fun_scopes.last_mut().unwrap();
+
+		let variable = self.lox.new_var();
+		fun_scope.variables.insert(variable);
+
+		let had = 
+			scope.variables
+			.insert(name, variable)
+			.is_some();
+
+		if had {
+			self.error(self.previous().clone(), "Cannot redeclare variable in same scope.")?;
+		}
+
+		Ok(variable)
 	}
 
 	fn is_at_end(&self) -> bool {
@@ -99,8 +186,8 @@ impl<'a> Parser<'a> {
 			let equals = self.previous().clone();
 			let value = self.assignment()?;
 
-			if let Expr::Variable { name, resolved: _ } = expr {
-				return Ok(Expr::assign(name, value, None));
+			if let Expr::Variable { name, identity } = expr {
+				return Ok(Expr::assign(name, value, identity));
 			}
 			else if let Expr::Get { object, name } = expr {
 				// Transform end-of-chain getter into setter. (Others remain as getters)
@@ -262,7 +349,13 @@ impl<'a> Parser<'a> {
 		}
 
 		if self.match_one(Identifier) {
-			return Ok(Expr::variable(self.previous().clone(), None));
+			let identity = self.find_variable_previous();
+			// May need to be changed to not error out because the variable might be global...
+			// Maybe just add the variable to the global array here...?
+			let Some(identity) = identity else {
+				return self.error_expr(self.previous().clone(), "Unknown identifier.");
+			};
+			return Ok(Expr::variable(self.previous().clone(), identity));
 		}
 
 		if self.match_one(LeftParen) {
@@ -289,9 +382,14 @@ impl<'a> Parser<'a> {
 	fn block(&mut self) -> Result<Vec<Stmt>, ExprErr> {
 		let mut statements = vec![];
 
+		// Blocks introduce a new scope.
+		self.push_scope();
+
 		while !self.check(RightBrace) && !self.is_at_end() {
 			statements.push(self.declaration().ok_or(ExprErr)?);
 		}
+
+		self.pop_scope();
 
 		self.consume(RightBrace, "Expect '}' after block.")?;
 		return Ok(statements);
@@ -403,27 +501,82 @@ impl<'a> Parser<'a> {
 		}
 
 		self.consume(Semicolon, "Expect ';' after variable declaration.")?;
-		return Ok(Stmt::var(name, initializer));
+
+		let identity = self.declare_variable(self.previous().lexeme.clone())?;
+
+		return Ok(Stmt::var(name, initializer, identity));
 	}
 
-	fn function(&mut self, kind: &str) -> Result<Rc<Function>, ExprErr> {
+	fn function(&mut self, kind: &str) -> Result<Function, ExprErr> {
 		let name = self.consume(Identifier, &format!("Expect {kind} name."))?;
 
 		self.consume(LeftParen, &format!("Expect '(' after {kind} name."))?;
-		let mut parameters = vec![];
+
+		// The function itself must exist as a variable inside the enclosing scope.
+		let identity = self.declare_variable(name.lexeme.clone())?;
+
+		let mut parameters_tokens = vec![];
 		
 		if !self.check(RightParen) {
-			parameters.push(self.consume(Identifier, "Expect parameter name.")?);
+			parameters_tokens.push(self.consume(Identifier, "Expect parameter name.")?);
 			while self.match_one(Comma) {
-				parameters.push(self.consume(Identifier, "Expect parameter name.")?);
+				parameters_tokens.push(self.consume(Identifier, "Expect parameter name.")?);
 			}
+		}
+
+		self.push_fun_scope();
+		self.push_scope();
+
+		let mut param_idx = 0;
+		// Create parameter variables.
+		for param in parameters_tokens {
+			let var = self.declare_variable(param.lexeme.clone())?;
+			self.lox.get_var_mut(var).typ = VarType::Parameter;
+			// Assign parameter indices here.
+			self.lox.get_var_mut(var).index = param_idx;
+			param_idx += 1;
 		}
 
 		self.consume(RightParen, "Expect ')' after parameters.")?;
 
 		self.consume(LeftBrace, &format!("Expect '{{' before {kind} body."))?;
 		let body = self.block()?;
-		return Ok(Function::new_as_rc(name, parameters, body, false));
+
+		self.pop_scope();
+
+		// Get the fun scope so that variable indices can be assigned.
+		let funscope = self.pop_fun_scope();
+
+		let mut locals_idx = 0;
+		let mut captures_idx = 0;
+		for var in &funscope.variables {
+			match self.lox.get_var_mut(*var).typ {
+				VarType::Local => {
+					self.lox.get_var_mut(*var).index = locals_idx;
+					locals_idx += 1;
+				},
+				VarType::Parameter => { /* already assigned */ },
+				VarType::Captured => {
+					self.lox.get_var_mut(*var).index = captures_idx;
+					captures_idx += 1;
+				},
+				VarType::Global => {
+					/* Either this won't be possible here, or we won't do anything
+					 * anyways. */
+				}
+			}
+		}
+
+		return Ok(Function {
+			name,
+			identity,
+			vars: funscope.variables,
+			param_count: param_idx,
+			local_count: locals_idx,
+			capture_count: captures_idx,
+			body,
+			is_initializer: false
+		});
 	}
 
 	fn class_declaration(&mut self) -> StmtRes {
@@ -443,7 +596,10 @@ impl<'a> Parser<'a> {
 
 		self.consume(RightBrace, "Expect '}' after class body.")?;
 
-		Ok(Stmt::class(name, methods, (superclass, None)))
+		self.lox.error_token(&self.previous().clone(), "Classes unimplemented at the momemt");
+		return Err(ExprErr);
+
+		//Ok(Stmt::class(name, methods, (superclass, None)))
 	}
 
 	fn declaration(&mut self) -> Option<Stmt> {
@@ -482,13 +638,26 @@ impl<'a> Parser<'a> {
 		}
 	}
 
-	pub fn parse(&mut self) -> Vec<Stmt> {
+	pub fn parse(&mut self) -> (Vec<Stmt>, u32) {
 		let mut result = vec![];
+
+		// Create the initial scopes
+		self.push_scope();
+		self.push_fun_scope();
 
 		while !self.is_at_end() {
 			if let Some(next) = self.declaration() { result.push(next); }
 		}
 
-		result
+		// Every variable in the top-level fun-scope is marked as global.
+		let mut global_index = 0;
+		for var in &self.fun_scopes[0].variables {
+			self.lox.get_var_mut(*var).typ = VarType::Global;
+			self.lox.get_var_mut(*var).index = global_index;
+			global_index += 1;
+		}
+
+		// Return the globals count
+		(result, global_index)
 	}
 }

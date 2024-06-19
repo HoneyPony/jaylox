@@ -2,7 +2,7 @@ mod scanner;
 mod expr;
 mod stmt;
 mod parser;
-mod resolver;
+//mod resolver;
 mod compiler;
 
 use std::env;
@@ -10,12 +10,30 @@ use std::process::exit;
 use std::io;
 
 use compiler::Compiler;
-use resolver::Resolver;
+//use resolver::Resolver;
 use scanner::{Scanner, Token, TokenType};
 use parser::Parser;
 
+#[derive(Clone, Copy, PartialEq)]
+pub enum VarType {
+	Local,
+	Parameter,
+	Captured,
+	Global,
+}
+
+pub struct Variable {
+	index: u32,
+	typ: VarType,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub struct VarRef(usize);
+
 pub struct Lox {
 	had_error: bool,
+
+	variables: Vec<Variable>
 }
 
 impl Lox {
@@ -23,7 +41,23 @@ impl Lox {
 	fn new() -> Self {
 		Lox {
 			had_error: false,
+
+			variables: vec![]
 		}
+	}
+
+	fn new_var(&mut self) -> VarRef {
+		self.variables.push(Variable { index: 0, typ: VarType::Local });
+		return VarRef(self.variables.len() - 1);
+	}
+
+	fn get_var_mut(&mut self, ptr: VarRef) -> &mut Variable {
+		// Safety: we only ever hand out valid VarRefs.
+		unsafe { self.variables.get_unchecked_mut(ptr.0) }
+	}
+
+	fn get_var_type(&self, ptr: VarRef) -> VarType {
+		unsafe { self.variables.get_unchecked(ptr.0).typ }
 	}
 
 	fn report(&mut self, line: i32, where_: &str, message: &str) {
@@ -50,7 +84,7 @@ impl Lox {
 			scanner.scan_tokens()
 		};
 
-		let mut program = {
+		let (mut program, globals_count) = {
 			let mut parser = Parser::new(tokens, self);
 			parser.parse()
 		};
@@ -58,16 +92,16 @@ impl Lox {
 		// Don't resolve if we had an error
 		if self.had_error { return; }
 
-		{
-			let mut resolver = Resolver::new(self);
-			resolver.resolve_stmts(&mut program);
-		}
+		//{
+		//	let mut resolver = Resolver::new(self);
+		//	resolver.resolve_stmts(&mut program);
+		//}
 
 		// Don't compile if we had an error
-		if self.had_error { return; }
+		//if self.had_error { return; }
 
 		let mut compiler = Compiler::new(self);
-		match compiler.compile(&program) {
+		match compiler.compile(&program, globals_count) {
 			Ok(_) => {},
 			Err(err) => {
 				println!("Compile codegen error: {}", err);
