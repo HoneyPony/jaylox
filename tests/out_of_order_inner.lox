@@ -1,0 +1,18 @@
+fun inner() {
+	fun mutual_one(a) {
+		print "one";
+		mutual_two(a - 1);
+	}
+
+	fun mutual_two(b) {
+		if(b < 0) {
+			return;
+		}
+		print "two";
+		mutual_one(b - 1);
+	}
+
+	mutual_one(10);
+}
+
+inner();
