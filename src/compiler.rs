@@ -292,6 +292,11 @@ impl<'a> Compiler<'a> {
 						into.push_str("jay_op_null();\n"); 
 					}
 				};
+
+				// Must always pop the stack frame as well.
+				self.indent(into);
+				into.push_str("jay_pop_frame();\n");
+
 				self.indent(into);
 				into.push_str("return jay_pop();\n");
 			},
