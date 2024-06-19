@@ -16,16 +16,15 @@ jay_value
 fib(jay_value *args, jay_closure *closure) {
 	jay_instance *scope = NULL;
 
-	if(jay_truthy(jay_le(args[0], jay_number(1)))) {
+	if(args[0].as_double <= 1) {
 		return args[0];
 	}
-	jay_push(jay_sub(args[0], jay_number(2)));
-	jay_op_call_direct(globals[1].as_function, 1);
-	jay_push(jay_sub(args[0], jay_number(1)));
-	jay_op_call_direct(globals[1].as_function, 1);
-	jay_op_add();
-	return jay_pop();
-	return jay_null();
+	jay_push(jay_number(args[0].as_double - 2));
+	double a = jay_call(globals[1].as_function, 1).as_double;
+	jay_push(jay_number(args[0].as_double - 1));
+	double b = jay_call(globals[1].as_function, 1).as_double;
+
+	return jay_number(a + b);
 }
 
 /* --- main() --- */
@@ -47,14 +46,14 @@ main(void) {
 	{
 		globals[0] = jay_number(0);
 		for(;;) {
-			if(!jay_truthy(jay_lt(globals[0], jay_number(ITERS)))) { break; }
+			if(!(globals[0].as_double < ITERS)) { break; }
 			{
 				{
 					jay_push(globals[0]);
 					jay_op_call_direct(globals[1].as_function, 1);
 					jay_op_print();
 				}
-				globals[0] = jay_add(globals[0], jay_number(1));
+				globals[0].as_double += 1;
 			}
 		}
 	}
