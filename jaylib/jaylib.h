@@ -170,7 +170,8 @@ jay_pop_condition() {
 	return jay_truthy(jay_pop());
 }
 
-void
+static inline
+jay_value
 jay_call(struct jay_function *fun, size_t arity) {
 	if(arity != fun->arity) {
 		oops("wrong arity");
@@ -180,15 +181,25 @@ jay_call(struct jay_function *fun, size_t arity) {
 	jay_value result = fun->implementation(jay_stack_ptr - arity, fun->closure);
 
 	jay_stack_ptr -= arity;
+	
+	return result;
+}
+
+static inline
+void
+jay_op_call_direct(struct jay_function *fun, size_t arity) {
+	jay_value result = jay_call(fun, arity);
 	jay_push(result);
 }
 
+static inline
 void
 jay_op_call(size_t arity) {
 	jay_value fun_value = jay_pop();
 	jay_function *fun = jay_as_function(fun_value, "can only call functions");
 
-	jay_call(fun, arity);
+	jay_value result = jay_call(fun, arity);
+	jay_push(result);
 }
 
 jay_value
