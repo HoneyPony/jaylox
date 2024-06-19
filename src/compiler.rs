@@ -370,7 +370,7 @@ impl<'a> Compiler<'a> {
 		writeln!(self.prelude, "#include \"jaylib/jaylib.h\"\n")?;
 
 		// Write the globals array to the prelude
-		writeln!(self.prelude, "static jay_value globals[{globals_count}];");
+		writeln!(self.prelude, "static jay_value globals[{globals_count}];")?;
 
 		let mut main_fn = String::new();
 
@@ -382,15 +382,13 @@ impl<'a> Compiler<'a> {
 		// Setup the JAY_THIS for use in jaylib.h
 		writeln!(main_fn, "JAY_THIS = NAME_this;")?;
 
+		// Note: Built-in functions will also be set up in main, but this requires
+		// parser support..?
+
 		self.indent(&mut main_fn);
 		// Create the scope for the main fn
-		writeln!(main_fn, "jay_instance *scope = jay_new_scope(NULL);")?;
-		// Place global variables into the top-level scope (might change if
-		// we ever implement optimizations)
-		self.add_name_str("clock");
-		self.indent(&mut main_fn);
-		writeln!(main_fn, "jay_put_new(scope, NAME_clock, jay_fun_from(jay_std_clock, 0, scope));")?;
-
+		writeln!(main_fn, "jay_instance *scope = NULL;")?;
+		
 		// Compile the actual top-level code (any normal statements will go
 		// into main; other things will go into their own functions)
 		self.compile_stmts(stmts, &mut main_fn)?;

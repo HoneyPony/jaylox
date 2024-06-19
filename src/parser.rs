@@ -502,7 +502,7 @@ impl<'a> Parser<'a> {
 
 		self.consume(Semicolon, "Expect ';' after variable declaration.")?;
 
-		let identity = self.declare_variable(self.previous().lexeme.clone())?;
+		let identity = self.declare_variable(name.lexeme.clone())?;
 
 		return Ok(Stmt::var(name, initializer, identity));
 	}
