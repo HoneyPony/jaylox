@@ -107,6 +107,7 @@ oops(const char *message) {
 
 #endif
 
+static inline
 void*
 jay_malloc(size_t size) {
 	void *res = malloc(size);
@@ -116,6 +117,7 @@ jay_malloc(size_t size) {
 	return res;
 }
 
+static inline
 jay_function*
 jay_as_function(jay_value value, const char *message) {
 	if(value.tag != JAY_FUNCTION) {
@@ -125,6 +127,7 @@ jay_as_function(jay_value value, const char *message) {
 	return value.as_function;
 }
 
+static inline
 double
 jay_as_number(jay_value value, const char *message) {
 	if(value.tag != JAY_NUMBER) {
@@ -134,12 +137,11 @@ jay_as_number(jay_value value, const char *message) {
 	return value.as_double;
 }
 
+static inline
 bool
 jay_is_null(jay_value value) {
 	return value.tag == JAY_NIL;
 }
-
-
 
 static inline
 void
@@ -210,6 +212,7 @@ jay_op_call(size_t arity) {
 	jay_push(result);
 }
 
+static inline
 jay_value
 jay_fun_from(jay_function_impl impl, size_t arity, jay_closure *closure) {
 	jay_function *f = jay_malloc(sizeof(*f));
@@ -234,6 +237,7 @@ jay_op_ ## name (param arg) { \
 	jay_push(jay_ ## name (arg)); \
 }
 
+static inline
 jay_value
 jay_null() {
 	jay_value res;
@@ -242,6 +246,7 @@ jay_null() {
 }
 OP_LIT(null,,)
 
+static inline
 jay_value
 jay_number(double input) {
 	jay_value res;
@@ -251,6 +256,7 @@ jay_number(double input) {
 }
 OP_LIT(number, double, input)
 
+static inline
 jay_value
 jay_boolean(bool input) {
 	jay_value res;
@@ -259,6 +265,7 @@ jay_boolean(bool input) {
 }
 OP_LIT(boolean, bool, input)
 
+static inline
 jay_value
 jay_class(jay_instance *class) {
 	jay_value res;
@@ -267,6 +274,7 @@ jay_class(jay_instance *class) {
 	return res;
 }
 
+static inline
 jay_value
 jay_mk_function(jay_instance *function) {
 	jay_value res;
@@ -275,6 +283,7 @@ jay_mk_function(jay_instance *function) {
 	return res;
 }
 
+static inline
 jay_value
 jay_string_into(char *ptr) {
 	jay_value res;
@@ -283,6 +292,7 @@ jay_string_into(char *ptr) {
 	return res;
 }
 
+static inline
 jay_value
 jay_string(const char *literal) {
 	jay_value res;
@@ -312,6 +322,7 @@ jay_op_ ## name (void) { \
 	jay_push(jay_ ## name(a, b)); \
 }
 
+static inline
 void
 jay_print(jay_value value) {
 	switch(value.tag) {
@@ -336,6 +347,7 @@ jay_print(jay_value value) {
 }
 OP_ONE(print)
 
+static inline
 jay_value
 jay_add(jay_value a, jay_value b) {
 	const char *message = "addition expects two numbers or two strings";
@@ -348,6 +360,7 @@ jay_add(jay_value a, jay_value b) {
 }
 OP_TWO(add)
 
+static inline
 jay_value
 jay_sub(jay_value a, jay_value b) {
 	const char *message = "subtraction expects two numbers";
@@ -357,6 +370,7 @@ jay_sub(jay_value a, jay_value b) {
 }
 OP_TWO(sub)
 
+static inline
 jay_value
 jay_mul(jay_value a, jay_value b) {
 	const char *message = "multiplication expects two numbers";
@@ -366,6 +380,7 @@ jay_mul(jay_value a, jay_value b) {
 }
 OP_TWO(mul)
 
+static inline
 jay_value
 jay_div(jay_value a, jay_value b) {
 	const char *message = "division expects two numbers";
@@ -375,6 +390,7 @@ jay_div(jay_value a, jay_value b) {
 }
 OP_TWO(div)
 
+static inline
 jay_value
 jay_gt(jay_value a, jay_value b) {
 	const char *message = "comparison (>) expects two numbers";
@@ -384,6 +400,7 @@ jay_gt(jay_value a, jay_value b) {
 }
 OP_TWO(gt)
 
+static inline
 jay_value
 jay_ge(jay_value a, jay_value b) {
 	const char *message = "comparison (>=) expects two numbers";
@@ -393,6 +410,7 @@ jay_ge(jay_value a, jay_value b) {
 }
 OP_TWO(ge)
 
+static inline
 jay_value
 jay_lt(jay_value a, jay_value b) {
 	const char *message = "comparison (<) expects two numbers";
@@ -402,6 +420,7 @@ jay_lt(jay_value a, jay_value b) {
 }
 OP_TWO(lt)
 
+static inline
 jay_value
 jay_le(jay_value a, jay_value b) {
 	const char *message = "comparison (<=) expects two numbers";
@@ -411,8 +430,7 @@ jay_le(jay_value a, jay_value b) {
 }
 OP_TWO(le)
 
-
-
+static inline
 bool
 jay_eq_impl(jay_value a, jay_value b) {
 	if(a.tag != b.tag) {
@@ -429,21 +447,25 @@ jay_eq_impl(jay_value a, jay_value b) {
 	return a.as_instance == b.as_instance;
 }
 
+static inline
 jay_value
 jay_neq(jay_value a, jay_value b) {
 	return jay_boolean(!jay_eq_impl(a, b));
 }
 
+static inline
 jay_value
 jay_eq(jay_value a, jay_value b) {
 	return jay_boolean(jay_eq_impl(a, b));
 }
 
+static inline
 jay_value
 jay_not(jay_value v) {
 	return jay_boolean(!jay_truthy(v));
 }
 
+static inline
 jay_value
 jay_negate(jay_value v) {
 	double vd = jay_as_number(v, "negation expects a number");
@@ -452,6 +474,7 @@ jay_negate(jay_value v) {
 
 /* --- Builtin Functions (e.g. clock) --- */
 
+static
 jay_value
 jay_std_clock(jay_value *args, jay_instance *closure) {
 	clock_t time = clock();
