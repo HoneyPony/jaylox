@@ -92,12 +92,20 @@ static jay_value *jay_stack_ptr;
 static jay_stackframe *jay_frames[4096];
 static size_t jay_frames_ptr;
 
+#ifdef JAY_ASSUME_CORRECT
+
+#define oops(message) __builtin_unreachable()
+
+#else
+
 static inline
 void
 oops(const char *message) {
 	printf("runtime error: %s\n", message);
 	exit(1);
 }
+
+#endif
 
 void*
 jay_malloc(size_t size) {
