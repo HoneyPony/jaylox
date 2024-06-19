@@ -148,8 +148,7 @@ impl<'a> Compiler<'a> {
 				self.indent(into);
 				write!(into, "jay_push(")?;
 				self.compile_var(*identity, into)?;
-				write!(into, " = ")?;
-				write!(into, ");\n")?;
+				write!(into, " = jay_pop());\n")?;
 			},
 		}
 
@@ -232,9 +231,9 @@ impl<'a> Compiler<'a> {
 				todo!()
 			},
 			Stmt::Expression(expr) => {
-				self.indent(into);
 				self.compile_expr(expr, into)?;
 				// After the expression is done, pop the unused value.
+				self.indent(into);
 				into.push_str("jay_pop();\n");
 			},
 			Stmt::Function(fun) => {
@@ -290,7 +289,7 @@ impl<'a> Compiler<'a> {
 					Some(value) => { self.compile_expr(value, into)?; },
 					None => {
 						self.indent(into); 
-						into.push_str("jay_op_null()"); 
+						into.push_str("jay_op_null();\n"); 
 					}
 				};
 				self.indent(into);
@@ -308,7 +307,7 @@ impl<'a> Compiler<'a> {
 					Some(initializer) => { self.compile_expr(initializer, into)?; },
 					None => {
 						self.indent(into);
-						into.push_str("jay_op_null()");
+						into.push_str("jay_op_null();\n");
 					}
 				}
 
@@ -322,6 +321,7 @@ impl<'a> Compiler<'a> {
 
 				self.push_indent();
 				self.compile_expr(condition, into)?;
+				self.indent(into);
 				into.push_str("if(!jay_pop_condition()) { break; }\n");
 
 				self.compile_stmt(body, into)?;

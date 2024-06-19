@@ -303,8 +303,8 @@ jay_op_ ## name (void) { \
 #define OP_TWO(name) \
 static inline void \
 jay_op_ ## name (void) { \
-	jay_value a = jay_pop(); \
 	jay_value b = jay_pop(); \
+	jay_value a = jay_pop(); \
 	jay_push(jay_ ## name(a, b)); \
 }
 
