@@ -1,0 +1,30 @@
+fun make_maker(a) {
+	fun maker_adder(b) {
+		fun add(c) {
+			return a + b + c;
+		}
+		return add;
+	}
+	return maker_adder;
+}
+
+var maker_three = make_maker(3);
+var maker_four = make_maker(4);
+
+var maker_three_10 = maker_three(10);
+var maker_three_20 = maker_three(20);
+
+var maker_four_10 = maker_four(10);
+var maker_four_20 = maker_four(20);
+
+print maker_three_10(0);
+print maker_three_10(1);
+
+print maker_four_10(0);
+print maker_four_10(1);
+
+print maker_three_20(0);
+print maker_three_20(1);
+
+print maker_four_20(0);
+print maker_four_20(1);
