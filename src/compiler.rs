@@ -275,7 +275,7 @@ impl<'a> Compiler<'a> {
 				self.compile_expr(condition, into)?;
 				self.indent(into);
 				// Note: We have to use braces due to the fact that expressions can be multi-line.
-				into.push_str("if(jay_pop_condition()) {");
+				into.push_str("if(jay_pop_condition()) {\n");
 
 				self.push_indent();
 				self.compile_stmt(then_branch, into)?;
