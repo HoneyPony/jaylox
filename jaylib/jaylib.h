@@ -46,6 +46,7 @@ typedef struct jay_closure {
 
 typedef struct jay_stackframe {
 	size_t count;
+	jay_closure *gc_scope;
 	jay_value values[];
 } jay_stackframe;
 
@@ -233,7 +234,14 @@ jay_fun_from(jay_function_impl impl, size_t arity, jay_closure *closure) {
 	return v;
 }
 
-
+jay_closure*
+jay_new_scope(jay_closure *parent, size_t count) {
+	size_t bytes = sizeof(jay_closure) + (count * sizeof(jay_value));
+	jay_closure *closure = jay_malloc(bytes);
+	closure->count = count;
+	closure->parent = parent;
+	// Do we want to zero out the 'values' array..?
+}
 
 /* --- Literals --- */
 

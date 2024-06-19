@@ -80,10 +80,33 @@ impl<'a> Parser<'a> {
 		return None;
 	}
 
+	fn check_closure(&mut self, ptr: VarRef) {
+		// If it's in the current function scope, it's definitely not a closure.
+		if self.fun_scopes.last().unwrap().variables.contains(&ptr) {
+			return;
+		}
+
+		// Similarly, if it's in the top-level function scope, it's not a closure.
+		if self.fun_scopes.first().unwrap().variables.contains(&ptr) {
+			return;
+		}
+
+		// Otherwise, this variable should be in a closure. If it's already in a closure,
+		// great, otherwise, set it to be in one.
+		//
+		// In terms of resolving them... I think the main thing to do is, in the compiler,
+		// walk down the tree, and keep track of current closure variables. Then, increment
+		// their pointer-chase value each time we step into a new function THAT HAS A CLOSURE,
+		// and simiarly decrement it afterwards.
+		self.lox.get_var_mut(ptr).typ = VarType::Captured;
+	}
+
 	fn find_variable_previous(&mut self)-> Option<VarRef> {
 		for scope in self.scopes.iter().rev() {
-			if let Some(var) = scope.variables.get(&self.previous().lexeme) {
-				return Some(*var);
+			// Must deref var so that we can call check_closure. TODO: Why doesn't as_deref() do that..?
+			if let Some(var) = scope.variables.get(&self.previous().lexeme).map(|var| *var) {
+				self.check_closure(var);
+				return Some(var);
 			}
 		}
 
@@ -552,6 +575,7 @@ impl<'a> Parser<'a> {
 
 		let mut locals_idx = 0;
 		let mut captures_idx = 0;
+		let mut captured = vec![];
 		for var in &funscope.variables {
 			match self.lox.get_var_mut(*var).typ {
 				VarType::Local => {
@@ -562,6 +586,8 @@ impl<'a> Parser<'a> {
 				VarType::Captured => {
 					self.lox.get_var_mut(*var).index = captures_idx;
 					captures_idx += 1;
+
+					captured.push(*var);
 				},
 				VarType::Global => {
 					/* Either this won't be possible here, or we won't do anything
@@ -576,8 +602,8 @@ impl<'a> Parser<'a> {
 			vars: funscope.variables,
 			param_count: param_idx,
 			local_count: locals_idx,
-			capture_count: captures_idx,
 			body,
+			captured,
 			is_initializer: false
 		});
 	}

@@ -14,7 +14,9 @@ pub struct Function {
 	pub vars: HashSet<VarRef>,
 	pub param_count: u32,
 	pub local_count: u32,
-	pub capture_count: u32,
+
+	pub captured: Vec<VarRef>,
+
 	pub body: Vec<Stmt>,
 	pub is_initializer: bool,
 }

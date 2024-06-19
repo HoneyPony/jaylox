@@ -1,4 +1,5 @@
 use core::fmt;
+use std::collections::HashMap;
 use std::{collections::HashSet, fmt::Write, rc::Rc};
 
 use crate::stmt::Function;
@@ -24,6 +25,15 @@ pub struct Compiler<'a> {
 
 	/// Tracks whether we currently have a 'locals' frame (wrt 'return' statements.)
 	has_locals_frame: bool,
+
+	/// Keeps track of how many hops each captured variable is from the current function.
+	/// Each function that creates a dynamic scope / closure will increase the hops
+	/// of all captured variables by 1 (and add its own); otherwise, the hops stay the same,
+	/// which should reduce pointer chasing.
+	/// 
+	/// (We could implement it in a way with even less pointer chasing, but this is a good
+	/// starting point)
+	captured_depths: HashMap<VarRef, u32>,
 }
 
 impl<'a> Compiler<'a> {
@@ -37,6 +47,8 @@ impl<'a> Compiler<'a> {
 
 			// The main function has no locals frame.
 			has_locals_frame: false,
+
+			captured_depths: HashMap::new()
 		}
 	}
 
@@ -208,7 +220,35 @@ impl<'a> Compiler<'a> {
 			crate::VarType::Parameter => {
 				write!(into, "args[{}]", self.lox.get_var_mut(var).index)
 			},
-			crate::VarType::Captured => todo!(),
+			crate::VarType::Captured => {
+				// Here, based on the depth, we add some number of "parent" traversals
+				// to the current "closure".
+				//
+				// In particular, "closure" == depth of 1.
+				// "scope" == depth of 0.
+				// "closure->parent" == depth of 2.
+				//
+				// This is due to the fact that we distinguish between the current
+				// scope and the closure passed in.
+				let depth = *self.captured_depths.get(&var)
+					.expect("Internal compiler error: Tried to access invalid captured variable info.");
+				let index = self.lox.get_var_mut(var).index;
+
+				if depth == 0 {
+					write!(into, "scope->values[{index}]")?;
+				}
+				else {
+					write!(into, "closure->")?;
+					// Walk up depth - 1 numbers of parents.
+					for _ in 0..depth - 1 {
+						write!(into, "parent->")?;
+					}
+					// Finally, access the values array.
+					write!(into, "values[{index}]")?;
+				}
+
+				Ok(())
+			},
 			crate::VarType::Global => {
 				write!(into, "globals[{}]", self.lox.get_var_mut(var).index)
 			}
@@ -235,19 +275,55 @@ impl<'a> Compiler<'a> {
 		writeln!(def, "jay_value\n{}(jay_value *args, jay_closure *closure) {{", mangled_name)?;
 		self.push_indent();
 
+		// There are two separate but related 'scope' variables.
+		// First is 'scope', which is passed down the call chain so that lower-down
+		// functions can use the closure.
+		//
+		// Second is 'gc_scope', which is part of the 'stackframe' stack. This
+		// scope can simply be left as NULL if we don't need to hang on to any
+		// other scope in the garbage collector.
+		let mut gc_scope = "NULL";
+
+		// If we have any captured vars, then we need to increase the depth of
+		// all the current ones, and add our own.
+		if fun.captured.len() > 0 {
+			for (_, v) in &mut self.captured_depths {
+				*v += 1;
+			}
+			// Add the new variables. Note that "captured" here means a function
+			// LOWER DOWN the chain captured them. Our own function sort of
+			// treats them as normal variables.
+			for v in &fun.captured {
+				let None = self.captured_depths.insert(*v, 0) else {
+					// Safety check that everything is working as expected
+					panic!("Captured variables should only come from one function");
+				};
+			}
+
+			// Finally, the "scope" value for this function will be a new scope,
+			// instead of being the same as the parent scope.
+			// We allocate as many variables as are captured from this function.
+			writeln!(def, "\tjay_closure *scope = jay_new_scope(closure, {});\n", fun.captured.len())?;
+
+			gc_scope = "scope";
+		}
+		else {
+			writeln!(def, "\tjay_closure *scope = closure;\n")?;
+		}
+
 		// Create the 'locals' struct.
 		if self.has_locals_frame {
 			writeln!(def,r#"	struct {{
 		size_t count;
+		jay_closure *gc_scope;
 		jay_value at[{0}];
 	}} locals;
 	locals.count = {0};
-	jay_push_frame(&locals);"#, fun.local_count)?;
+	locals.gc_scope = {1};
+	jay_push_frame(&locals);"#, fun.local_count, gc_scope)?;
 		}
 
-		// TODO: Determine which functions create a new closure, and which ones simply
-		// pass down their parent closure.
-		writeln!(def, "\tjay_instance *scope = NULL;\n")?;
+		
 
 		// Generate the code inside the function.
 		self.compile_stmts(&fun.body, &mut def)?;
