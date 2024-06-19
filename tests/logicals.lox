@@ -1,0 +1,5 @@
+print true and "other";
+print false and "other";
+
+print true or "other";
+print false or "other";

@@ -4,7 +4,7 @@ use std::{collections::HashSet, fmt::Write, rc::Rc};
 use crate::stmt::Function;
 use crate::VarRef;
 use crate::{expr::Expr, scanner::Token, stmt::Stmt, Lox};
-use crate::scanner::LoxValue;
+use crate::scanner::{LoxValue, TokenType};
 use crate::scanner::TokenType::*;
 
 
@@ -121,7 +121,46 @@ impl<'a> Compiler<'a> {
 				write!(into, ";\n")?;
 			},
 			Expr::Logical { left, operator, right } => {
-				todo!();
+				// We must implement the short-circuiting semantic. This is actually
+				// somewhat straightforward, as if we, for example, "push" the left
+				// expression and then find that we need to short circuit, we simply
+				// skip doing anything with the right operand. Otherwise, we pop,
+				// and then simply push the right operand.
+
+				// To understand this:
+				// For and, if !truthy(left), we want to return left. But, entering the
+				// if statement means we rreturn right. So for and, we do 
+				// if(truthy(left)) { evaluate(right) }
+				// 
+				// Which is somewhat different from how it was implemented in the
+				// interpreter.
+				let invert = 
+				match operator.typ {
+					TokenType::And => ' ',
+					TokenType::Or  => '!',
+					_ => unreachable!()
+				};
+
+				// First, generate the left expression.
+				self.compile_expr(left, into)?;
+				// Check if the left expression should short-circuit.
+				self.indent(into);
+				write!(into, "if({}jay_truthy(jay_top())) {{\n", invert)?;
+
+				self.push_indent();
+
+				// If it's not short-circuiting, pop it, then evaluate the right 
+				// expression (and leave it on top of the stack).
+				self.indent(into);
+				write!(into, "jay_pop();\n")?;
+
+				self.compile_expr(right, into)?;
+				self.pop_indent();
+				
+				self.indent(into);
+				write!(into, "}}\n")?;
+
+				// Done!
 			}
 			Expr::Set { object, name, value } => {
 				todo!();

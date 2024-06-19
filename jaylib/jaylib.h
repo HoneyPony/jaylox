@@ -169,6 +169,12 @@ jay_pop() {
 	return *jay_stack_ptr;
 }
 
+static inline
+jay_value
+jay_top() {
+	return jay_stack_ptr[-1];
+}
+
 static inline bool
 jay_truthy(jay_value value) {
 	if(value.tag == JAY_FALSE || value.tag == JAY_NIL) return false;
