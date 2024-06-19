@@ -60,24 +60,23 @@ impl<'a> Compiler<'a> {
 
 	fn binary_op(&mut self, into: &mut String, left: &Expr, op: &Token, right: &Expr) -> fmt::Result {
 		let fun = match op.typ {
-			Minus => "jay_sub",
-			Plus => "jay_add",
-			Slash => "jay_div",
-			Star => "jay_mul",
-			BangEqual => "jay_neq",
-			EqualEqual => "jay_eq",
-			Greater => "jay_gt",
-			GreaterEqual => "jay_ge",
-			Less => "jay_lt",
-			LessEqual => "jay_le",
+			Minus => "jay_op_sub",
+			Plus => "jay_op_add",
+			Slash => "jay_op_div",
+			Star => "jay_op_mul",
+			BangEqual => "jay_op_neq",
+			EqualEqual => "jay_op_eq",
+			Greater => "jay_op_gt",
+			GreaterEqual => "jay_op_ge",
+			Less => "jay_op_lt",
+			LessEqual => "jay_op_le",
 			_ => unreachable!()
 		};
 
-		write!(into, "{fun}(")?;
 		self.compile_expr(left, into)?;
-		into.write_str(", ")?;
 		self.compile_expr(right, into)?;
-		into.write_str(")")?;
+		self.indent(into);
+		write!(into, "{fun}();\n")?;
 
 		Ok(())
 	}
@@ -88,105 +87,69 @@ impl<'a> Compiler<'a> {
 				self.binary_op(into, left, operator, right)?;
 			},
 			Expr::Call { callee, paren, arguments } => {
-				write!(into, "jay_call(")?;
+				// Push all args, push the callee, then do jay_op_call.
+
+				for arg in arguments {
+					self.compile_expr(expr, into)?;
+				}
+
 				self.compile_expr(callee, into)?;
-				// To do the call, we have to look up both the function and the
-				// closure inside the jay_value.
-				//
-				// In the case of simple functions, especially those without
-				// any needed closure, we could optimize this to not need to 
-				// go through another function just to call a function. But for
-				// now, this is how it is...
-				write!(into, ", {}, ", arguments.len())?;
-				if arguments.is_empty() {
-					// If we have no arguments, just pass a NULL.
-					write!(into, "NULL")?;
-				}
-				else {
-					write!(into, " (jay_value[]){{")?;
-					let mut comma = false;
-					for arg in arguments {
-						if comma {
-							into.push_str(", ");
-						}
-						self.compile_expr(arg, into)?;
-						comma = true;
-					}
-					write!(into, "}}")?;
-				}
-				// That's the end. The closure will be looked up inside the instance.
-				write!(into, ")")?;
+
+				self.indent(into);
+				write!(into, "jay_op_call({});\n", arguments.len())?;
 			},
 			Expr::Get { object, name } => {
-				into.push_str("jay_get(");
-				self.compile_expr(object, into)?;
-				self.add_name(name);
-				write!(into, ", NAME_{})", name.lexeme)?;
+				todo!();
 			},
 			Expr::Grouping(inner) => {
-				// Note: I don't know if it's really necessary to do parens here, but whatever..
-				into.push('(');
 				self.compile_expr(inner, into)?;
-				into.push(')');
 			},
 			Expr::Literal(value) => {
+				self.indent(into);
 				match value {
-					LoxValue::Nil => into.push_str("jay_null()"),
-					LoxValue::String(chars) => write!(into, "jay_string(\"{}\")", chars)?,
-					LoxValue::Number(value) => write!(into, "jay_number({value})")?,
-					LoxValue::Bool(value) => write!(into, "jay_boolean({value})")?,
-					_ => panic!("Don't know how to compile a literal of this kind.")
+					LoxValue::Nil => into.push_str("jay_op_null()"),
+					LoxValue::String(chars) => write!(into, "jay_op_string(\"{}\")", chars)?,
+					LoxValue::Number(value) => write!(into, "jay_op_number({value})")?,
+					LoxValue::Bool(value) => write!(into, "jay_op_boolean({value})")?,
 				}
+				write!(into, ";\n")?;
 			},
 			Expr::Logical { left, operator, right } => {
-				// Note: C logical operators are short-circuiting. So, if we use them,
-				// we can implement Lox's short-circuiting operations without too much hassle.
-				let op = match operator.typ {
-					Or => "||",
-					And => "&&",
-					_ => unreachable!()
-				};
-
-				write!(into, "(jay_truthy(")?;
-				self.compile_expr(left, into)?;
-				write!(into, ") {op} (jay_truthy(")?;
-				self.compile_expr(right, into)?;
-				write!(into, "))")?;
+				todo!();
 			}
 			Expr::Set { object, name, value } => {
-				write!(into, "jay_set(")?;
-				self.compile_expr(object, into)?;
-				self.add_name(name);
-				write!(into, ", NAME_{}, ", name.lexeme)?;
-				self.compile_expr(value, into)?;
-				write!(into, ")")?;
+				todo!();
 			},
 			Expr::Super { keyword, method, resolved } => {
-				self.add_name(method);
-				write!(into, "jay_get_super(scope, NAME_{})", method.lexeme)?;
+				todo!();
 			},
 			Expr::This { keyword, resolved } => {
-				write!(into, "jay_lookup(scope, NAME_this)")?;
+				todo!();
 			}
 			Expr::Unary { operator, right } => {
 				let op = match operator.typ {
-					Bang => "jay_not",
-					Minus => "jay_negate",
+					Bang => "jay_op_not",
+					Minus => "jay_op_negate",
 					_ => unreachable!()
 				};
 
-				write!(into, "{op}(")?;
+				self.indent(into);
 				self.compile_expr(right, into)?;
+				write!(into, "{op}();\n")?;
 			},
 			Expr::Variable { name, identity } => {
-				self.compile_var(*identity, into);
+				self.indent(into);
+				write!(into, "jay_push(")?;
+				self.compile_var(*identity, into)?;
+				write!(into, ");\n")?;
 			},
 			Expr::Assign { name, value, identity } => {
-				write!(into, "(")?;
-				self.compile_var(*identity, into);
-				write!(into, " = ")?;
 				self.compile_expr(value, into)?;
-				write!(into, ")")?;
+				self.indent(into);
+				write!(into, "jay_push(")?;
+				self.compile_var(*identity, into)?;
+				write!(into, " = ")?;
+				write!(into, ");\n")?;
 			},
 		}
 
@@ -271,7 +234,8 @@ impl<'a> Compiler<'a> {
 			Stmt::Expression(expr) => {
 				self.indent(into);
 				self.compile_expr(expr, into)?;
-				into.push_str(";\n");
+				// After the expression is done, pop the unused value.
+				into.push_str("jay_pop();\n");
 			},
 			Stmt::Function(fun) => {
 				let mangled_name = fun.name.lexeme.clone();
@@ -292,33 +256,45 @@ impl<'a> Compiler<'a> {
 					mangled_name, fun.param_count)?;
 			},
 			Stmt::If { condition, then_branch, else_branch } => {
-				self.indent(into);
-				into.push_str("if(jay_truthy(");
-				// TODO: Do we need a prelude for calls?
 				self.compile_expr(condition, into)?;
-				into.push_str("))\n");
+				self.indent(into);
+				// Note: We have to use braces due to the fact that expressions can be multi-line.
+				into.push_str("if(jay_pop_condition()) {");
+
+				self.push_indent();
 				self.compile_stmt(then_branch, into)?;
+				self.pop_indent();
+
+				self.indent(into);
+				into.push_str("}\n");
 				if let Some(else_branch) = else_branch {
 					// Note: This should be OK because we should always add a '\n' after statements anyways...
 					self.indent(into);
-					into.push_str("else\n");
+					into.push_str("else {\n");
+
+					self.push_indent();
 					self.compile_stmt(&else_branch, into)?;
+					self.pop_indent();
+
+					self.indent(into);
+					into.push_str("}\n");
 				}
 			},
 			Stmt::Print(expr) => {
-				self.indent(into);
-				into.push_str("jay_print(");
 				self.compile_expr(expr, into)?;
-				into.push_str(");\n");
+				self.indent(into);
+				into.push_str("jay_op_print();\n");
 			},
 			Stmt::Return { keyword, value } => {
-				self.indent(into);
-				into.push_str("return ");
 				match value {
 					Some(value) => { self.compile_expr(value, into)?; },
-					None => { into.push_str("jay_null()"); }
+					None => {
+						self.indent(into); 
+						into.push_str("jay_op_null()"); 
+					}
 				};
-				into.push_str(";\n");
+				self.indent(into);
+				into.push_str("return jay_pop();\n");
 			},
 			Stmt::Var { name, initializer, identity } => {
 				// The only real role this statement plays, given that the variables are
@@ -328,22 +304,31 @@ impl<'a> Compiler<'a> {
 				// Note that this could be perhaps 'optimized' by simply getting rid of it...
 				// But there's likely little/no value to that.
 
-				self.indent(into);
-				self.compile_var(*identity, into)?;
-				write!(into, " = ")?;
-				
 				match initializer {
 					Some(initializer) => { self.compile_expr(initializer, into)?; },
-					None => { into.push_str("jay_null()"); }
+					None => {
+						self.indent(into);
+						into.push_str("jay_op_null()");
+					}
 				}
-				into.push_str(";\n");
+
+				self.indent(into);
+				self.compile_var(*identity, into)?;
+				write!(into, " = jay_pop();\n")?;
 			},
 			Stmt::While { condition, body } => {
 				self.indent(into);
-				into.push_str("while(jay_truthy(");
+				into.push_str("for(;;) {\n");
+
+				self.push_indent();
 				self.compile_expr(condition, into)?;
-				into.push_str("))\n");
+				into.push_str("if(!jay_pop_condition()) { break; }\n");
+
 				self.compile_stmt(body, into)?;
+
+				self.pop_indent();
+				self.indent(into);
+				into.push_str("}\n");
 			},
 		}
 
