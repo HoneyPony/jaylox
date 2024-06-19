@@ -153,6 +153,26 @@ jay_function(jay_instance *function) {
 	return res;
 }
 
+jay_value
+jay_string_into(char *ptr) {
+	jay_value res;
+	res.tag = JAY_STRING;
+	res.as_string = ptr;
+	return res;
+}
+
+jay_value
+jay_string(const char *literal) {
+	jay_value res;
+	res.tag = JAY_STRING;
+
+	size_t bytes = strlen(literal) + 1;
+	res.as_string = malloc(bytes);
+	memcpy(res.as_string, literal, bytes);
+
+	return res;
+}
+
 /* --- Operators --- */
 
 jay_value
@@ -509,6 +529,10 @@ jay_lookup(jay_instance *instance, size_t name) {
 
 jay_instance*
 jay_find_method(jay_instance *class, size_t name) {
+	if(!class) {
+		oops("can only look up a method on a class");
+	}
+
 	jay_hash_entry *place = jay_find_bucket(class, name);
 	if(place) {
 		// Classes are guaranteed to only store functions.
@@ -549,6 +573,22 @@ jay_get(jay_value object, size_t name) {
 	// static analysis..?
 	// Note: This will oops when the value doesn't exist. But that's expected.
 	return jay_lookup(instance, name);
+}
+
+jay_value
+jay_get_super(jay_instance *scope, size_t name) {
+	// First, find the 'this' value
+	jay_value this_value = jay_lookup(scope, JAY_THIS);
+	// Next, get the object and class
+	jay_instance *this = jay_as_instance(this_value, "super requires an instance");
+
+	jay_instance *method = jay_find_method(this->class->class, name);
+	if(method) {
+		// Create a 'this' closure, but based on the superclass environment
+		jay_instance *closure = jay_new_scope(this->class->class->closure);
+		jay_put_new(closure, JAY_THIS, this_value);
+		return jay_function(jay_bind_method(method, closure));
+	}
 }
 
 jay_value

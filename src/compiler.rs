@@ -162,7 +162,10 @@ impl<'a> Compiler<'a> {
 				self.compile_expr(value, into)?;
 				write!(into, ")")?;
 			},
-			Expr::Super { keyword, method, resolved } => todo!(),
+			Expr::Super { keyword, method, resolved } => {
+				self.add_name(method);
+				write!(into, "jay_get_super(scope, NAME_{})", method.lexeme)?;
+			},
 			Expr::This { keyword, resolved } => {
 				write!(into, "jay_lookup(scope, NAME_this)")?;
 			}
