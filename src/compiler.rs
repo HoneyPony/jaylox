@@ -21,6 +21,9 @@ pub struct Compiler<'a> {
 	name_set: HashSet<String>,
 
 	current_indent: i32,
+
+	/// Tracks whether we currently have a 'locals' frame (wrt 'return' statements.)
+	has_locals_frame: bool,
 }
 
 impl<'a> Compiler<'a> {
@@ -31,6 +34,9 @@ impl<'a> Compiler<'a> {
 			function_defs: Vec::new(),
 			name_set: HashSet::new(),
 			current_indent: 0,
+
+			// The main function has no locals frame.
+			has_locals_frame: false,
 		}
 	}
 
@@ -175,6 +181,10 @@ impl<'a> Compiler<'a> {
 	fn compile_function(&mut self, fun: &Function, mangled_name: &String) -> fmt::Result {
 		let mut def = String::new();
 
+		// Track 'has_locals_frame' down the call stack
+		let enclosing_locals = self.has_locals_frame;
+		self.has_locals_frame = (fun.local_count > 0);
+
 		// Reset indent for top-level functions
 		let enclosing_indent = self.current_indent;
 		self.current_indent = 0;
@@ -187,12 +197,14 @@ impl<'a> Compiler<'a> {
 		self.push_indent();
 
 		// Create the 'locals' struct.
-		writeln!(def,r#"	struct {{
+		if self.has_locals_frame {
+			writeln!(def,r#"	struct {{
 		size_t count;
 		jay_value at[{0}];
 	}} locals;
 	locals.count = {0};
 	jay_push_frame(&locals);"#, fun.local_count)?;
+		}
 
 		// TODO: Determine which functions create a new closure, and which ones simply
 		// pass down their parent closure.
@@ -202,7 +214,9 @@ impl<'a> Compiler<'a> {
 		self.compile_stmts(&fun.body, &mut def)?;
 
 		// Finally, put a default return value.
-		writeln!(def, "\tjay_pop_frame();")?;
+		if self.has_locals_frame {
+			writeln!(def, "\tjay_pop_frame();")?;
+		}
 		writeln!(def, "\treturn jay_null();")?;
 
 		// End the function.
@@ -212,6 +226,9 @@ impl<'a> Compiler<'a> {
 		self.function_defs.push(def);
 
 		self.current_indent = enclosing_indent;
+
+		// Restore locals
+		self.has_locals_frame = enclosing_locals;
 		
 		Ok(())
 	}
@@ -293,9 +310,11 @@ impl<'a> Compiler<'a> {
 					}
 				};
 
-				// Must always pop the stack frame as well.
-				self.indent(into);
-				into.push_str("jay_pop_frame();\n");
+				// Pop the locals frame if we have it.
+				if self.has_locals_frame {
+					self.indent(into);
+					into.push_str("jay_pop_frame();\n");
+				}
 
 				self.indent(into);
 				into.push_str("return jay_pop();\n");
