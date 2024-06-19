@@ -39,6 +39,17 @@ impl ToString for LoxValue {
 	}
 }
 
+impl LoxValue {
+	// Note: This MUST match the C implementation, otherwise constant folding
+	// can change the program behavior.
+	pub fn is_truthy(&self) -> bool {
+		match self {
+			Self::Nil | Self::Bool(false) => false,
+			_ => true
+		}
+	}
+}
+
 impl Into<Expr> for LoxValue {
 	fn into(self) -> Expr {
 		return Expr::literal(self);

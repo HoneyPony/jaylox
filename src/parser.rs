@@ -231,6 +231,8 @@ impl<'a> Parser<'a> {
 		while self.match_either(BangEqual, EqualEqual) {
 			let operator = self.previous().clone();
 			let right = self.comparison()?;
+
+			// TODO: Consider folding
 			expr = Expr::binary(expr, operator, right);
 		}
 
@@ -243,7 +245,7 @@ impl<'a> Parser<'a> {
 		while self.match_four(Greater, GreaterEqual, Less, LessEqual) {
 			let operator = self.previous().clone();
 			let right = self.term()?;
-			expr = Expr::binary(expr, operator, right);
+			expr = Expr::binary_folded(expr, operator, right, self.lox)?;
 		}
 
 		Ok(expr)
@@ -255,7 +257,8 @@ impl<'a> Parser<'a> {
 		while self.match_either(Minus, Plus) {
 			let operator = self.previous().clone();
 			let right = self.factor()?;
-			expr = Expr::binary(expr, operator, right);
+			
+			expr = Expr::binary_folded(expr, operator, right, self.lox)?;
 		}
 
 		Ok(expr)
@@ -267,7 +270,7 @@ impl<'a> Parser<'a> {
 		while self.match_either(Slash, Star) {
 			let operator = self.previous().clone();
 			let right = self.unary()?;
-			expr = Expr::binary(expr, operator, right);
+			expr = Expr::binary_folded(expr, operator, right, self.lox)?;
 		}
 
 		Ok(expr)
