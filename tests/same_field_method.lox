@@ -1,0 +1,20 @@
+class Ouch {
+	debug() {
+		print "Ouch::debug";
+	}
+}
+
+fun outer() {
+	print "outer";
+}
+
+var ouch = Ouch();
+ouch.debug();
+var ouch_method = ouch.debug;
+ouch_method();
+
+ouch.debug = outer;
+ouch.debug();
+ouch_method = ouch.debug;
+ouch_method();
+

@@ -1,6 +1,9 @@
 #ifndef JAYLIB_H
 #define JAYLIB_H
 
+// TODO: Make this a compiler option or something
+#define JAY_FULL_COMPAT
+
 #include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
@@ -160,7 +163,7 @@ static size_t jay_frames_ptr;
 #else
 
 static inline
-void
+_Noreturn void 
 oops(const char *message) {
 	printf("runtime error: %s\n", message);
 	exit(1);
@@ -517,6 +520,29 @@ jay_bind(jay_method *method, jay_instance *this) {
 	return jay_bound_method_to_value(result);
 }
 
+#ifdef JAY_FULL_COMPAT
+
+static inline
+jay_value
+jay_get(jay_value v, size_t name) {
+	jay_instance *instance = jay_as_instance(v, "can only look up properties on an instance");
+
+	// In compat mode, we have to look up the field first.
+	jay_hash_entry *place = jay_find_bucket(instance, name);
+	if(place) {
+		return place->value;
+	}
+
+	jay_method *method = instance->class->dispatcher(instance->class, name);
+	if(method) {
+		return jay_bind(method, instance);
+	}
+
+	oops("tried to get non-exist property");
+}
+
+#else
+
 static inline
 jay_value
 jay_get(jay_value v, size_t name) {
@@ -535,6 +561,8 @@ jay_get(jay_value v, size_t name) {
 
 	return place->value;
 }
+
+#endif
 
 static inline
 jay_value
@@ -712,6 +740,44 @@ jay_op_call(size_t arity) {
 	}
 }
 
+#ifdef JAY_FULL_COMPAT
+
+static inline
+void
+jay_op_invoke(size_t name, size_t arity) {
+	// Leave "this" on top in case we have to do a jay_op_get() and jay_op_call()
+	jay_value target = jay_top();
+
+	jay_instance *instance = jay_as_instance(target, "can only get properties on an instance");
+
+	// In full compat mode, we have to look up the field first.
+	jay_hash_entry *field = jay_find_bucket(instance, name);
+	if(field) {
+		jay_push(field->value);
+		jay_op_call(arity);
+		return;
+	}
+
+	// Then, look up the method.
+	jay_method *method = instance->class->dispatcher(instance->class, name);
+	if(!method) {
+		oops("tried to invoke non-existent property");
+	}
+
+	// Okay, we have a valid method, we can actually still leave "this" on top
+	// as it's the last argument for the method...
+	jay_value result = jay_call_any(
+		method->implementation,
+		instance->class->closure,
+		method->arity,
+		arity + 1
+	);
+
+	jay_push(result);
+}
+
+#else
+
 static inline
 void
 jay_op_invoke(size_t name, size_t arity) {
@@ -743,6 +809,8 @@ jay_op_invoke(size_t name, size_t arity) {
 
 	jay_push(result);
 }
+
+#endif
 
 static inline
 jay_value
