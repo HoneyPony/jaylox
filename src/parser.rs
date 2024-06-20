@@ -416,7 +416,7 @@ impl<'a> Parser<'a> {
 				// some point. If we never see a declaration, than something is wrong.
 
 				if self.fun_scopes.len() <= 1 {
-					return self.error_expr(self.previous().clone(), "At top level: Unknown identifier. (Note that, outside a function, you cannot use a global variable before it's defined.)");
+					return self.error_expr(self.previous().clone(), "At top level: Unknown identifier.\nExtra info: Outside a function, you cannot use a global variable before it's declared.");
 				}
 
 				// Okay, the variable should be valid. Create it and add it to the global scopes,
@@ -737,6 +737,20 @@ impl<'a> Parser<'a> {
 			self.lox.get_var_mut(*var).typ = VarType::Global;
 			self.lox.get_var_mut(*var).index = global_index;
 			global_index += 1;
+		}
+
+		// If we have any undeclared global variables, report an error.
+		for var in &self.undeclared_globals {
+			let mut name = "<unknown>";
+			// This is an unhappy path, so although this is very inefficient, it
+			// should be OK...
+			for (k, v) in &self.scopes[0].variables {
+				if *v == *var {
+					name = &k;
+					break;
+				}
+			}
+			self.lox.error_general(&format!("Global variable '{}' has not been declared.", name));
 		}
 
 		// Return the globals count

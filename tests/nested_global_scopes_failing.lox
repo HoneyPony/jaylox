@@ -1,0 +1,7 @@
+// This program should make sure that an unknown identifier in a nested global
+// scope fails, even if it is declared later.
+
+{
+	print a;
+}
+a = 5;

@@ -68,6 +68,12 @@ impl Lox {
 		self.had_error = true;
 	}
 
+	// For errors where we aren't tracking any location info.
+	fn error_general(&mut self, message: &str) {
+		eprintln!("Error: {}", message);
+		self.had_error = true;
+	}
+
 	fn error(&mut self, line: i32, message: &str) {
 		self.report(line, "", message);
 	}
