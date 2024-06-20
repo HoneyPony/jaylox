@@ -498,6 +498,9 @@ impl<'a> Compiler<'a> {
 		// just always checking for the superclass...
 		writeln!(def, "\tclass->dispatcher = &{dispatcher_mangled};")?;
 
+		// The class tracks the closure for all methods.
+		writeln!(def, "\tclass->closure = closure;")?;
+
 		// Fill in the superclass
 		// If it is nil, then the superclass is NULL, otherwise, it must be
 		// a jay_class
