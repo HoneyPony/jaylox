@@ -390,6 +390,8 @@ jay_new_scope(jay_closure *parent, size_t count) {
 	closure->count = count;
 	closure->parent = parent;
 	// Do we want to zero out the 'values' array..?
+
+	return closure;
 }
 
 jay_instance*
@@ -407,6 +409,8 @@ jay_new_instance(jay_class *class) {
 	// in the instance
 	instance->members = jay_malloc(instance->array_size * sizeof(*instance->members));
 	instance->used_entries = 0;
+
+	return instance;
 }
 
 /* --- Call Operators */
@@ -895,6 +899,8 @@ jay_set(jay_value object, size_t name, jay_value value) {
 	else {
 		place->value = value;
 	}
+
+	return value;
 }
 
 static inline
