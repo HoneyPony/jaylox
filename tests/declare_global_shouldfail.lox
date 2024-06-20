@@ -1,0 +1,6 @@
+// clox will accept this program as long as we don't call example(). But, in
+// the interest of efficiency, jaylox should have this be a compile error (otherwise,
+// we need a way to dynamically look up global variables, which seems unnecessary).
+fun example() {
+	print a;
+}

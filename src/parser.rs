@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::env::var;
 use std::hash::Hash;
 use std::rc::Rc;
 
@@ -39,6 +40,8 @@ pub struct Parser<'a> {
 	scopes: Vec<Scope>,
 	fun_scopes: Vec<FunScope>,
 
+	undeclared_globals: HashSet<VarRef>,
+
 	lox: &'a mut Lox
 }
 
@@ -51,6 +54,8 @@ impl<'a> Parser<'a> {
 
 			scopes: vec![],
 			fun_scopes: vec![],
+
+			undeclared_globals: HashSet::new(),
 		}
 	}
 
@@ -119,6 +124,21 @@ impl<'a> Parser<'a> {
 	}
 
 	fn declare_variable(&mut self, name: String) -> Result<VarRef, ExprErr> {
+		// Special case: If we're at the top-level scope (and implicitly, fun_scope),
+		// then we want to check the undeclared variable set. It's possible that
+		// we've simply reached the declaration for an undeclared variable, in which
+		// case, we just want to remove it from the set, and then return its existing
+		// identity.
+		if self.scopes.len() == 1 {
+			let scope = self.scopes.first_mut().unwrap();
+			if let Some(existing) = scope.variables.get(&name) {
+				// It should be the case that this value was in the undeclared set,
+				// otherwise we would have already declared it.
+				assert!(self.undeclared_globals.remove(existing));
+				return Ok(*existing);
+			}
+		}
+
 		// NOTE: We must always have at least one scope.
 		let scope = self.scopes.last_mut().unwrap();
 		let fun_scope = self.fun_scopes.last_mut().unwrap();
@@ -381,10 +401,35 @@ impl<'a> Parser<'a> {
 
 		if self.match_one(Identifier) {
 			let identity = self.find_variable_previous();
-			// May need to be changed to not error out because the variable might be global...
-			// Maybe just add the variable to the global array here...?
+
 			let Some(identity) = identity else {
-				return self.error_expr(self.previous().clone(), "Unknown identifier.");
+				// If we didn't find the variable, it is undeclared. So, the only
+				// possibility that lets the program compile is that it is a global
+				// variable that will be declared later.
+				//
+				// If we're at the top-level, i.e. fun_scopes.len() == 1, then
+				// it's not allowed to access a variable before it's defined, so
+				// we should error out.
+				//
+				// Otherwise, we should add the variable to the globals array,
+				// but also remember that we want to see a declaration for it at
+				// some point. If we never see a declaration, than something is wrong.
+
+				if self.fun_scopes.len() <= 1 {
+					return self.error_expr(self.previous().clone(), "At top level: Unknown identifier. (Note that, outside a function, you cannot use a global variable before it's defined.)");
+				}
+
+				// Okay, the variable should be valid. Create it and add it to the global scopes,
+				// plus the undeclared set.
+				let variable = self.lox.new_var();
+				let varname = self.previous().lexeme.clone();
+
+				self.scopes.first_mut().unwrap().variables.insert(varname, variable);
+				self.fun_scopes.first_mut().unwrap().variables.insert(variable);
+
+				self.undeclared_globals.insert(variable);
+
+				return Ok(Expr::variable(self.previous().clone(), variable));
 			};
 			return Ok(Expr::variable(self.previous().clone(), identity));
 		}
