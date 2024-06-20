@@ -26,6 +26,9 @@ pub struct Compiler<'a> {
 	/// Tracks whether we currently have a 'locals' frame (wrt 'return' statements.)
 	has_locals_frame: bool,
 
+	/// Tracks whether we currently have a 'captures' frame.
+	has_captures_frame: bool,
+
 	/// Keeps track of how many hops each captured variable is from the current function.
 	/// Each function that creates a dynamic scope / closure will increase the hops
 	/// of all captured variables by 1 (and add its own); otherwise, the hops stay the same,
@@ -45,8 +48,9 @@ impl<'a> Compiler<'a> {
 			name_set: HashSet::new(),
 			current_indent: 0,
 
-			// The main function has no locals frame.
+			// The main function has no locals frame or captures frame.
 			has_locals_frame: false,
+			has_captures_frame: false,
 
 			captured_depths: HashMap::new()
 		}
@@ -224,23 +228,38 @@ impl<'a> Compiler<'a> {
 				// Here, based on the depth, we add some number of "parent" traversals
 				// to the current "closure".
 				//
-				// In particular, "closure" == depth of 1.
-				// "scope" == depth of 0.
-				// "closure->parent" == depth of 2.
+				// If this function created a new scope than:
+				//   "closure" == depth of 1.
+				//   "scope" == depth of 0.
+				//   "closure->parent" == depth of 2.
+				// otherwise,
+				//   "closure" == "scope" == depth of 0.
+				//   "closure->parent" == depth of 1.
 				//
+				// Note that we could always do scope = 0, scope->parent = 1,
+				// and so forth, but this doesn't let us make use of the fact
+				// that scope->parent == closure in some cases.
+				// 
 				// This is due to the fact that we distinguish between the current
 				// scope and the closure passed in.
 				let depth = *self.captured_depths.get(&var)
 					.expect("Internal compiler error: Tried to access invalid captured variable info.");
 				let index = self.lox.get_var_mut(var).index;
 
-				if depth == 0 {
+				if depth == 0 && self.has_captures_frame {
 					write!(into, "scope->values[{index}]")?;
 				}
 				else {
+					// The hops amount is 'depth' if our scope == closure. This is because
+					// hopping to closure would usually hop us up one, but because we didn't
+					// create a scope, it instead hopped us up 0.
+					//
+					// If captures does hop us up 1, then to get to depth only requires depth - 1
+					// more steps.
+					let hops = if self.has_captures_frame { depth - 1 } else { depth };
 					write!(into, "closure->")?;
-					// Walk up depth - 1 numbers of parents.
-					for _ in 0..depth - 1 {
+					// Walk up correct number of parents.
+					for _ in 0..hops {
 						write!(into, "parent->")?;
 					}
 					// Finally, access the values array.
@@ -263,6 +282,9 @@ impl<'a> Compiler<'a> {
 		// Track 'has_locals_frame' down the call stack
 		let enclosing_locals = self.has_locals_frame;
 		self.has_locals_frame = (fun.local_count > 0);
+
+		let enclosing_captures = self.has_captures_frame;
+		self.has_captures_frame = fun.captured.len() > 0;
 
 		// Reset indent for top-level functions
 		let enclosing_indent = self.current_indent;
@@ -342,8 +364,9 @@ impl<'a> Compiler<'a> {
 
 		self.current_indent = enclosing_indent;
 
-		// Restore locals
+		// Restore locals and captures
 		self.has_locals_frame = enclosing_locals;
+		self.has_captures_frame = enclosing_captures;
 		
 		Ok(())
 	}
