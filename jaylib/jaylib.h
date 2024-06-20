@@ -203,7 +203,7 @@ jay_as_class(jay_value value, const char *message) {
 static inline
 jay_bound_method*
 jay_as_bound_method(jay_value value, const char *message) {
-	if(value.tag != JAY_FUNCTION) {
+	if(value.tag != JAY_BOUND_METHOD) {
 		oops(message);
 	}
 
@@ -453,12 +453,12 @@ jay_op_call(size_t arity) {
 	jay_value fun_value = jay_pop();
 
 	if(jay_is_function(fun_value)) {
-		jay_function *fun = jay_as_function(fun_value, "jay_op_call error");
+		jay_function *fun = jay_as_function(fun_value, "jay_op_call error (function)");
 		jay_value result = jay_call(fun, arity);
 		jay_push(result);
 	}
 	else if(jay_is_bound_method(fun_value)) {
-		jay_bound_method *method = jay_as_bound_method(fun_value, "jay_op_call error");
+		jay_bound_method *method = jay_as_bound_method(fun_value, "jay_op_call error (bound method)");
 
 		// For bound methods, push 'this' to the end of the args array
 		// Note: An important semantic point with 'this' is that it can be
@@ -468,16 +468,21 @@ jay_op_call(size_t arity) {
 		// Maybe the compiler can literally just add a 'this' variable to
 		// the array when parsing a function?
 		jay_push(jay_instance_to_value(method->this));
+
+		// Note that we add 1 to the passed-in arity. That is, we're expecting
+		// the compiler to NOT add the 'this' value at any point, and also,
+		// if the compiler ever compares a call site to the method definition,
+		// it should account for the call site arity == method arity - 1
 		jay_value result = jay_call_any(
 			method->implementation,
 			method->closure,
 			method->arity,
-			arity
+			arity + 1
 		);
 		jay_push(result);
 	}
 	else if(jay_is_class(fun_value)) {
-		jay_class *class = jay_as_class(fun_value, "jay_op_call error");
+		jay_class *class = jay_as_class(fun_value, "jay_op_call error (class)");
 
 		// We have to push the "this" as the last argument. But, this is calling
 		// "init". So, we actually just create a new instance here. That is,
@@ -486,7 +491,8 @@ jay_op_call(size_t arity) {
 		// special-cased, as then it can easily be called again or bound, like
 		// any other class method.
 
-		jay_push(jay_instance_to_value(jay_new_instance(class)));
+		jay_value new_this = jay_instance_to_value(jay_new_instance(class));
+		jay_push(new_this);
 
 		jay_value result = jay_call_any(
 			class->methods[0].implementation,
@@ -494,7 +500,12 @@ jay_op_call(size_t arity) {
 			class->methods[0].arity,
 			arity
 		);
-		jay_push(result);
+		
+		// For initializers, we can simply ignore the return value...
+		// That said, we do need to implement the actual returning of 'this'
+		// inside initializers in the compiler, otherwise the semantic won't
+		// be right when we re-call an initializer
+		jay_push(new_this);
 	}
 	else {
 		oops("can only call callable objects");
