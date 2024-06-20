@@ -690,12 +690,15 @@ impl<'a> Parser<'a> {
 
 		self.consume(LeftBrace, "Expect '{' before class body.")?;
 
-		let mut methods = vec![];
-		let mut init = None;
+		// Because init is always at 0th index, place some kind of init there.
+		let mut methods = vec![Function::empty_init()];
+
 		while !self.check(RightBrace) && !self.is_at_end() {
 			let method = self.function("method", true)?;
 			if method.name.lexeme == "init" {
-				init = Some(method);
+				// If we find a real init, place it into the 0th index instead
+				// of the empty one.
+				methods[0] = method;
 			}
 			else {
 				methods.push(method);
@@ -708,7 +711,6 @@ impl<'a> Parser<'a> {
 		Ok(Stmt::class(crate::stmt::Class {
 			name,
 			methods,
-			init,
 			superclass: None,
 			identity,
 		}))

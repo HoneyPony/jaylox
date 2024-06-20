@@ -81,10 +81,7 @@ typedef struct jay_class {
 	// The same closure is used for all methods inside a class
 	jay_closure *closure;
 
-	// Store the init data directly in the class, as all classes have it.
-	jay_function_impl init;
-	size_t init_arity;
-
+	// The first method inside each class will be its init.
 	jay_method methods[];
 } jay_class;
 
@@ -420,10 +417,20 @@ jay_op_call(size_t arity) {
 	}
 	else if(jay_is_class(fun_value)) {
 		jay_class *class = jay_as_class(fun_value, "jay_op_call error");
+
+		// We have to push the "this" as the last argument. But, this is calling
+		// "init". So, we actually just create a new instance here. That is,
+		// the caller of a class object is responsible for creating a new 'this'
+		// and pushing it to the end of the array. This helps keep 'init' less
+		// special-cased, as then it can easily be called again or bound, like
+		// any other class method.
+
+		jay_push(jay_instance_to_value(jay_new_instance(class)));
+
 		jay_value result = jay_call_any(
-			class->init,
+			class->methods[0].implementation,
 			class->closure,
-			class->init_arity,
+			class->methods[0].arity,
 			arity
 		);
 		jay_push(result);
@@ -455,6 +462,23 @@ jay_new_scope(jay_closure *parent, size_t count) {
 	closure->count = count;
 	closure->parent = parent;
 	// Do we want to zero out the 'values' array..?
+}
+
+jay_instance*
+jay_new_instance(jay_class *class) {
+	jay_instance *instance = jay_malloc(sizeof(*instance));
+	
+	instance->class = class;
+
+	// Set up "hash" table
+	instance->array_size = 8;
+	// TODO: jay_malloc? Somehow make the table a jay_object for GC..?
+	// Actually, it doesn't really need to be GC, because it's owned by the
+	// instance...
+	// Also, consider a small-instance optimization that would keep this array
+	// in the instance
+	instance->members = jay_malloc(instance->array_size * sizeof(*instance->members));
+	instance->used_entries = 0;
 }
 
 /* --- Operators --- */

@@ -23,10 +23,29 @@ pub struct Function {
 	pub is_initializer: bool,
 }
 
+impl Function {
+	pub fn empty_init() -> Function {
+		return Function {
+			name: Token::new(TokenType::Identifier, "init".into(), LoxValue::Nil, 0),
+
+			identity: None, // This is a method which doesn't have identity
+			vars: HashSet::new(),
+			param_count: 0,
+			local_count: 0,
+
+			captured: vec![],
+
+			body: vec![],
+
+			// TODO: Do we want/need this flag?
+			is_initializer: true
+		};
+	}
+}
+
 pub struct Class {
 	pub name: Token,
 	pub methods: Vec<Function>,
-	pub init: Option<Function>,
 	pub superclass: Option<VarRef>,
 	pub identity: VarRef,
 }
