@@ -188,9 +188,6 @@ impl<'a> Compiler<'a> {
 			Expr::Super { keyword, method, resolved } => {
 				todo!();
 			},
-			Expr::This { keyword, resolved } => {
-				todo!();
-			}
 			Expr::Unary { operator, right } => {
 				let op = match operator.typ {
 					Bang => "jay_op_not",
@@ -202,7 +199,9 @@ impl<'a> Compiler<'a> {
 				self.compile_expr(right, into)?;
 				write!(into, "{op}();\n")?;
 			},
-			Expr::Variable { name, identity } => {
+			// Variables and This are essentially equivalent. Actually... I guess we could
+			// scrap Expr::This, and then just generate Expr::Variable in its place...
+			Expr::Variable { identity, .. } | Expr::This { identity, .. } => {
 				self.indent(into);
 				write!(into, "jay_push(")?;
 				self.compile_var(*identity, into)?;

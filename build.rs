@@ -147,7 +147,7 @@ fn generate_ast_files(expr: &mut File, stmt: &mut File) -> io::Result<()> {
 		ty("Logical", vec![arg("left", "Expr"), arg("operator", "Token"), arg("right", "Expr")]),
 		ty("Set", vec![arg("object", "Expr"), arg("name", "Token"), arg("value", "Expr")]),
 		ty("Super", vec![arg("keyword", "Token"), arg("method", "Token"), arg("resolved", "Option<u32>")]),
-		ty("This", vec![arg("keyword", "Token"), arg("resolved", "Option<u32>")]),
+		ty("This", vec![arg("keyword", "Token"), arg("identity", "VarRef")]),
 		ty("Unary", vec![arg("operator", "Token"), arg("right", "Expr")]),
 		ty("Variable", vec![arg("name", "Token"), arg("identity", "VarRef")]),
 		ty("Assign", vec![arg("name", "Token"), arg("value", "Expr"), arg("identity", "VarRef")]),

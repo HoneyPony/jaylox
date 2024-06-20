@@ -398,7 +398,17 @@ impl<'a> Parser<'a> {
 		}
 
 		if self.match_one(This) {
-			return Ok(Expr::this(self.previous().clone(), None));
+			let identity = self.find_variable("this");
+
+			// For the "this" variable, it MUST exist in the current scope,
+			// otherwise it is located somewhere that is invalid. As such,
+			// simply check, otherwise throw an error.
+			let Some(identity) = identity else {
+				return self.error_expr(self.previous().clone(), 
+					"Invalid use of 'this'.");
+			};
+
+			return Ok(Expr::this(self.previous().clone(), identity));
 		}
 
 		if self.match_one(Super) {
@@ -577,9 +587,12 @@ impl<'a> Parser<'a> {
 				self.error_report(&keyword, "'return' in initializer can't return a value");
 			}
 
+			let identity = self.find_variable("this")
+				.expect("Internal error: 'this' should have been defined in an initializer");
+
 			let this_token = Token::new(TokenType::This, "this".into(), LoxValue::Nil,
 				keyword.line);
-			value = Some(Expr::this(this_token, None));
+			value = Some(Expr::this(this_token, identity));
 		}
 
 		return Ok(Stmt::return_(keyword, value));
