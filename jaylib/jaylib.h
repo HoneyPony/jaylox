@@ -705,6 +705,94 @@ jay_negate(jay_value v) {
 	return jay_number(-vd);
 }
 
+/* --- Instance Related "Hash" Map Stuff */
+
+// NOTE: This function is UNSAFE to call if you haven't guaranteed that there
+// is an empty bucket
+jay_hash_entry*
+jay_find_empty_bucket_in(jay_hash_entry *array, size_t array_size, size_t name) {
+	// TODO: Optimize to use &
+	size_t i = name % array_size;
+	for(;;) {
+		i = (i + 1) % array_size;
+
+		// We MUST find a tombstone to exit the loop.
+		if(array[i].name == JAY_NAME_TOMBSTONE) {
+			return &array[i];
+		}
+	}
+}
+
+// NOTE: This function is UNSAFE to call if you haven't guaranteed that there
+// is an empty bucket
+jay_hash_entry*
+jay_find_empty_bucket(jay_instance *instance, size_t name) {
+	return jay_find_empty_bucket_in(instance->members, instance->array_size, name);
+}
+
+jay_hash_entry*
+jay_find_bucket_in(jay_hash_entry *array, size_t array_size, size_t name) {
+	// TODO: Optimize to use &
+	size_t i = name % array_size;
+	size_t check = i;
+	while(array[i].name != name) {
+		// Linear probing
+		i = (i + 1) % array_size;
+
+		// Item doesn't exist
+		if(i == check || array[i].name == JAY_NAME_TOMBSTONE) {
+			return NULL;
+		}
+	}
+
+	return &array[i];
+}
+
+jay_hash_entry*
+jay_find_bucket(jay_instance *instance, size_t name) {
+	return jay_find_bucket_in(instance->members, instance->array_size, name);
+}
+
+void
+jay_rehash(jay_instance *instance) {
+	size_t new_size = instance->array_size * 2;
+	// TODO: calloc()
+	jay_hash_entry *new_array = jay_malloc(sizeof(*new_array) * new_size);
+
+	for(size_t i = 0; i < instance->array_size; ++i) {
+		if(instance->members[i].name != JAY_NAME_TOMBSTONE) {
+			// Note: here this should always return a tombstone, as all buckets
+			// should be empty...
+			jay_hash_entry *ptr = jay_find_empty_bucket_in(new_array, new_size, instance->members[i].name);
+			ptr->name = instance->members[i].name;
+			ptr->value = instance->members[i].value;
+		}
+	}
+
+	free(instance->members);
+
+	instance->members = new_array;
+	instance->array_size = new_size;
+}
+
+jay_value
+jay_put_new(jay_instance *scope, size_t name, jay_value value) {
+	if((scope->used_entries + 1) > scope->array_size / 2) {
+		jay_rehash(scope);
+	}
+	// We are guaranteed an empty bucket somewhere.
+	// TODO: Consider Hopgood-Davenport probing
+	jay_hash_entry *place = jay_find_empty_bucket(scope, name);
+	place->name = name;
+	place->value = value;
+
+	scope->used_entries += 1;
+
+	return value;
+}
+
+/* --- Instance Related Methods --- */
+
 static inline
 jay_value
 jay_bind(jay_method *method, jay_instance *this) {
@@ -730,13 +818,50 @@ jay_get(jay_value v, size_t name) {
 		return jay_bind(method, instance);
 	}
 
-	oops("fields aren't implemented yet");
+	// Look up the field on the object.
+	jay_hash_entry *place = jay_find_bucket(instance, name);
+	if(!place) {
+		oops("tried to look up non-existent property");
+	}
+
+	return place->value;
+}
+
+static inline
+jay_value
+jay_set(jay_value object, size_t name, jay_value value) {
+	jay_instance *instance = jay_as_instance(object, "can only set fields on an instance");
+
+	jay_hash_entry *place = jay_find_bucket(instance, name);
+	if(!place) {
+		// Slow path is creating a new value on the object. This shouldn't happen
+		// too often.
+		// TODO: One optimization is that jay_find_bucket() could return
+		// the tombstone when it fails, and then, if we don't need to rehash,
+		// we could just put the item in that bucket right here...
+		//
+		// I guess that could be a variant of jay_find_bucket()?
+		jay_put_new(instance, name, value);
+	}
+	else {
+		place->value = value;
+	}
 }
 
 static inline
 void
 jay_op_get(size_t name) {
 	jay_push(jay_get(jay_pop(), name));
+}
+
+static inline
+void
+jay_op_set(size_t name) {
+	// This is an expression, so it must leave a value on the stack. For efficiency,
+	// just don't pop the value. I.e. the stack top = object, then value; just pop
+	// object.
+	jay_value object = jay_pop();
+	jay_set(object, name, jay_top());
 }
 
 /* --- Builtin Functions (e.g. clock) --- */

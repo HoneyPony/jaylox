@@ -183,7 +183,12 @@ impl<'a> Compiler<'a> {
 				// Done!
 			}
 			Expr::Set { object, name, value } => {
-				todo!();
+				self.compile_expr(value, into)?;
+				self.compile_expr(object, into)?;
+				
+				self.add_name(name);
+				self.push_indent();
+				writeln!(into, "jay_op_set(NAME_{});", name.lexeme)?
 			},
 			Expr::Super { keyword, method, resolved } => {
 				todo!();
