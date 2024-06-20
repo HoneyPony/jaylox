@@ -562,7 +562,17 @@ impl<'a> Compiler<'a> {
 				// and creates a class accordingly.
 				// As such, the associated local variable is initialized by
 				// calling this function.
-				writeln!(into, " = {mangled_name}(/* superclass = */ jay_null(), scope);")?;
+				write!(into, " = {mangled_name}(/* superclass = */ ")?;
+
+				// Compile the superclass variable/null
+				if let Some(superclass) = class.superclass {
+					self.compile_var(superclass, into)?;
+				}
+				else {
+					write!(into, "jay_null()")?;
+				}
+
+				writeln!(into, ", scope);")?;
 			},
 			Stmt::Expression(expr) => {
 				self.compile_expr(expr, into)?;
