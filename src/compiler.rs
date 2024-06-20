@@ -187,7 +187,7 @@ impl<'a> Compiler<'a> {
 				self.compile_expr(object, into)?;
 				
 				self.add_name(name);
-				self.push_indent();
+				self.indent(into);
 				writeln!(into, "jay_op_set(NAME_{});", name.lexeme)?
 			},
 			Expr::Super { keyword, method, resolved } => {
