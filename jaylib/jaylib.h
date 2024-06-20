@@ -20,14 +20,21 @@ static size_t JAY_THIS;
 typedef struct jay_value {
 	uint64_t tag;
 	union {
-		double               as_double;
-		struct jay_instance *as_instance;
-		struct jay_function *as_function;
-		char                *as_string;
+		double                   as_double;
+		struct jay_instance     *as_instance;
+		struct jay_function     *as_function;
+		struct jay_bound_method *as_bound_method;
+		struct jay_class        *as_class;
+		char                    *as_string;
 	};
 } jay_value;
 
 typedef jay_value (*jay_function_impl)(jay_value *args, struct jay_closure *closure);
+
+// The "dispatcher" is the function that looks up methods inside a class. It
+// essentially maps from NAME_ constants to offsets inside that classes stored
+// jay_function array. 
+typedef jay_function* (*jay_dispatcher_impl)(jay_value *class, size_t name);
 
 typedef struct jay_object {
 	struct jay_object *gc_next;
@@ -57,6 +64,57 @@ typedef struct jay_function {
 	size_t arity;
 } jay_function;
 
+typedef struct jay_method {
+	// Unlike a function, a jay_method is not a jay_object
+
+	// Hold on to the class for the garbage collector and to find the closure
+	struct jay_class *parent;
+	jay_function_impl implementation;
+	size_t arity;
+} jay_method;
+
+typedef struct jay_class {
+	jay_object object;
+
+	struct jay_class *superclass;
+
+	// The same closure is used for all methods inside a class
+	jay_closure *closure;
+
+	// Store the init data directly in the class, as all classes have it.
+	jay_function_impl init;
+	size_t init_arity;
+
+	jay_method methods[];
+} jay_class;
+
+typedef struct jay_bound_method {
+	jay_object object;
+
+	// The bound method is everything needed to call a method with a given
+	// 'this'.
+	// It does not need to hold on to the jay_class or the jay_method, because
+	// all it actually needs is the method implementation and arity, as well
+	// as the closure for that method.
+	//
+	// So, it is possible for a jay_bound_method to exist when both the associated
+	// class and method have been garbage collected. Maybe at some point a demo
+	// program showing this can be added.
+	//
+	// Of course, ideally, we just call the method directly without first allocating
+	// a new jay_bound_method, which is just more allocation pressure (and GC pressure).
+	// I think that will be an important optimization, which could win a lot over
+	// clox, and is also very relevant for implementing e.g. PonieScript... where
+	// there is very little reason to heap allocate a struct just to call a C
+	// function...
+	jay_function_impl implementation;
+	size_t arity;
+
+	jay_closure *closure;
+
+	jay_instance *this;
+} jay_bound_method;
+
 typedef struct {
 	size_t name;
 	struct jay_value value;
@@ -81,6 +139,8 @@ typedef struct jay_instance {
 #define JAY_INSTANCE 5
 #define JAY_STRING 6
 #define JAY_CLASS 7
+// TODO: Move this tag to the jay_object, and then do NaN boxing, etc..
+#define JAY_BOUND_METHOD 8
 
 // Use 0 for the tombstone so that we can memset() the array to 0 / use calloc.
 #define JAY_NAME_TOMBSTONE 0
@@ -129,6 +189,26 @@ jay_as_function(jay_value value, const char *message) {
 }
 
 static inline
+jay_class*
+jay_as_class(jay_value value, const char *message) {
+	if(value.tag != JAY_CLASS) {
+		oops(message);
+	}
+
+	return value.as_class;
+}
+
+static inline
+jay_bound_method*
+jay_as_bound_method(jay_value value, const char *message) {
+	if(value.tag != JAY_FUNCTION) {
+		oops(message);
+	}
+
+	return value.as_function;
+}
+
+static inline
 double
 jay_as_number(jay_value value, const char *message) {
 	if(value.tag != JAY_NUMBER) {
@@ -142,6 +222,24 @@ static inline
 bool
 jay_is_null(jay_value value) {
 	return value.tag == JAY_NIL;
+}
+
+static inline
+bool
+jay_is_function(jay_value value) {
+	return value.tag == JAY_FUNCTION;
+}
+
+static inline
+bool
+jay_is_class(jay_value value) {
+	return value.tag == JAY_CLASS;
+}
+
+static inline
+bool
+jay_is_bound_method(jay_value value) {
+	return value.tag == JAY_BOUND_METHOD;
 }
 
 static inline
@@ -187,62 +285,6 @@ jay_pop_condition() {
 	return jay_truthy(jay_pop());
 }
 
-static inline
-jay_value
-jay_call(struct jay_function *fun, size_t arity) {
-	if(arity != fun->arity) {
-		oops("wrong arity");
-	}
-
-	// The arguments remain on the stack until the function returns.
-	jay_value result = fun->implementation(jay_stack_ptr - arity, fun->closure);
-
-	jay_stack_ptr -= arity;
-	
-	return result;
-}
-
-static inline
-void
-jay_op_call_direct(struct jay_function *fun, size_t arity) {
-	jay_value result = jay_call(fun, arity);
-	jay_push(result);
-}
-
-static inline
-void
-jay_op_call(size_t arity) {
-	jay_value fun_value = jay_pop();
-	jay_function *fun = jay_as_function(fun_value, "can only call functions");
-
-	jay_value result = jay_call(fun, arity);
-	jay_push(result);
-}
-
-static inline
-jay_value
-jay_fun_from(jay_function_impl impl, size_t arity, jay_closure *closure) {
-	jay_function *f = jay_malloc(sizeof(*f));
-	f->arity = arity;
-	f->closure = closure;
-	f->implementation = impl;
-
-	jay_value v;
-	v.as_function = f;
-	// TODO: Move these tags to the jay_object; should only have a few for jay_value
-	v.tag = JAY_FUNCTION;
-	return v;
-}
-
-jay_closure*
-jay_new_scope(jay_closure *parent, size_t count) {
-	size_t bytes = sizeof(jay_closure) + (count * sizeof(jay_value));
-	jay_closure *closure = jay_malloc(bytes);
-	closure->count = count;
-	closure->parent = parent;
-	// Do we want to zero out the 'values' array..?
-}
-
 /* --- Literals --- */
 
 #define OP_LIT(name, param, arg) \
@@ -281,19 +323,10 @@ OP_LIT(boolean, bool, input)
 
 static inline
 jay_value
-jay_class(jay_instance *class) {
+jay_instance_to_value(jay_instance *instance) {
 	jay_value res;
-	res.tag = JAY_CLASS;
-	res.as_instance = class;
-	return res;
-}
-
-static inline
-jay_value
-jay_mk_function(jay_instance *function) {
-	jay_value res;
-	res.tag = JAY_FUNCTION;
-	res.as_instance = function;
+	res.tag = JAY_INSTANCE;
+	res.as_instance = instance;
 	return res;
 }
 
@@ -319,6 +352,110 @@ jay_string(const char *literal) {
 	return res;
 }
 OP_LIT(string, const char*, literal)
+
+/* --- Call Operators */
+
+static inline
+jay_value
+jay_call_any(jay_function_impl fun, jay_closure *closure, size_t actual_arity, size_t tried_arity) {
+	if(actual_arity != tried_arity) {
+		oops("wrong arity");
+	}
+
+	jay_value result = fun(jay_stack_ptr - actual_arity, closure);
+
+	return result;
+}
+
+static inline
+jay_value
+jay_call(struct jay_function *fun, size_t arity) {
+	if(arity != fun->arity) {
+		oops("wrong arity");
+	}
+
+	// The arguments remain on the stack until the function returns.
+	jay_value result = fun->implementation(jay_stack_ptr - arity, fun->closure);
+
+	jay_stack_ptr -= arity;
+	
+	return result;
+}
+
+static inline
+void
+jay_op_call_direct(struct jay_function *fun, size_t arity) {
+	jay_value result = jay_call(fun, arity);
+	jay_push(result);
+}
+
+static inline
+void
+jay_op_call(size_t arity) {
+	jay_value fun_value = jay_pop();
+
+	if(jay_is_function(fun_value)) {
+		jay_function *fun = jay_as_function(fun_value, "jay_op_call error");
+		jay_value result = jay_call(fun, arity);
+		jay_push(result);
+	}
+	else if(jay_is_bound_method(fun_value)) {
+		jay_bound_method *method = jay_as_bound_method(fun_value, "jay_op_call error");
+
+		// For bound methods, push 'this' to the end of the args array
+		// Note: An important semantic point with 'this' is that it can be
+		// captured by a closure. So, it is easiest to treat it as 'another
+		// local variable'. The compiler will have to be careful somehow.
+		//
+		// Maybe the compiler can literally just add a 'this' variable to
+		// the array when parsing a function?
+		jay_push(jay_instance_to_value(method->this));
+		jay_value result = jay_call_any(
+			method->implementation,
+			method->closure,
+			method->arity,
+			arity
+		);
+		jay_push(result);
+	}
+	else if(jay_is_class(fun_value)) {
+		jay_class *class = jay_as_class(fun_value, "jay_op_call error");
+		jay_value result = jay_call_any(
+			class->init,
+			class->closure,
+			class->init_arity,
+			arity
+		);
+		jay_push(result);
+	}
+	else {
+		oops("can only call callable objects");
+	}
+}
+
+static inline
+jay_value
+jay_fun_from(jay_function_impl impl, size_t arity, jay_closure *closure) {
+	jay_function *f = jay_malloc(sizeof(*f));
+	f->arity = arity;
+	f->closure = closure;
+	f->implementation = impl;
+
+	jay_value v;
+	v.as_function = f;
+	// TODO: Move these tags to the jay_object; should only have a few for jay_value
+	v.tag = JAY_FUNCTION;
+	return v;
+}
+
+jay_closure*
+jay_new_scope(jay_closure *parent, size_t count) {
+	size_t bytes = sizeof(jay_closure) + (count * sizeof(jay_value));
+	jay_closure *closure = jay_malloc(bytes);
+	closure->count = count;
+	closure->parent = parent;
+	// Do we want to zero out the 'values' array..?
+}
 
 /* --- Operators --- */
 

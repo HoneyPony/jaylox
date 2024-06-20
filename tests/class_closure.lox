@@ -1,4 +1,9 @@
 fun example(param) {
+	// The methods inside the class must essentially be able to refer to values
+	// inside 'example'.
+	// Note that, as an optimization, if a class doesn't have any dynamic state
+	// like this, it could be transformed into a global variable (and then, from
+	// there, transformed into a known class, i.e. constant propagation, etc..)
 	class Inner {
 		init(x) {
 			this.value = param + x;

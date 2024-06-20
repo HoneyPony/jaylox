@@ -1,0 +1,30 @@
+class Maker {
+	init(a, b) {
+		this.a = a;
+		this.b = b;
+	}
+
+	factory() {
+		fun clang() {
+			this.a = this.a + 1;
+			this.b = this.b + 2;
+		}
+
+		return clang;
+	}
+
+	clong() {
+		print this.a;
+		print this.b;
+	}
+}
+
+var maker = Maker(1, 2);
+maker.clong();
+
+var factory = maker.factory();
+factory();
+maker.clong();
+
+factory();
+maker.clong();
