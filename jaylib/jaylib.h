@@ -405,12 +405,17 @@ jay_new_instance(jay_class *class) {
 
 	// Set up "hash" table
 	instance->array_size = 8;
+	size_t table_bytes = instance->array_size * sizeof(*instance->members);
 	// TODO: jay_malloc? Somehow make the table a jay_object for GC..?
 	// Actually, it doesn't really need to be GC, because it's owned by the
 	// instance...
 	// Also, consider a small-instance optimization that would keep this array
 	// in the instance
-	instance->members = jay_malloc(instance->array_size * sizeof(*instance->members));
+	instance->members = jay_malloc(table_bytes);
+
+	// We MUST reset the instances to tombstones, otherwise we will have problems.
+	memset(instance->members, 0, table_bytes); // Calloc?
+
 	instance->used_entries = 0;
 
 	return instance;
@@ -467,8 +472,10 @@ jay_find_bucket(jay_instance *instance, size_t name) {
 void
 jay_rehash(jay_instance *instance) {
 	size_t new_size = instance->array_size * 2;
+	size_t array_bytes = sizeof(jay_hash_entry) * new_size;
 	// TODO: calloc()
-	jay_hash_entry *new_array = jay_malloc(sizeof(*new_array) * new_size);
+	jay_hash_entry *new_array = jay_malloc(array_bytes);
+	memset(new_array, 0, array_bytes); // Must reset to TOMBSTONEs
 
 	for(size_t i = 0; i < instance->array_size; ++i) {
 		if(instance->members[i].name != JAY_NAME_TOMBSTONE) {
@@ -759,7 +766,7 @@ jay_op_invoke_super(jay_value object, size_t name, jay_value superclass, size_t 
 	if(method) {
 		// Push 'this' on to the stack, then call the method.
 		jay_push(object);
-		
+
 		jay_value result = jay_call_any(
 			method->implementation,
 			instance->class->closure,
