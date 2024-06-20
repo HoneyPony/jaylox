@@ -13,6 +13,7 @@ struct jay_value;
 struct jay_instance;
 struct jay_closure;
 struct jay_function;
+struct jay_method;
 
 // TODO: Figure out if we still need this
 static size_t JAY_THIS;
@@ -34,7 +35,7 @@ typedef jay_value (*jay_function_impl)(jay_value *args, struct jay_closure *clos
 // The "dispatcher" is the function that looks up methods inside a class. It
 // essentially maps from NAME_ constants to offsets inside that classes stored
 // jay_function array. 
-typedef jay_function* (*jay_dispatcher_impl)(jay_value *class, size_t name);
+typedef struct jay_method* (*jay_dispatcher_impl)(struct jay_class *class, size_t name);
 
 typedef struct jay_object {
 	struct jay_object *gc_next;
@@ -112,7 +113,7 @@ typedef struct jay_bound_method {
 
 	jay_closure *closure;
 
-	jay_instance *this;
+	struct jay_instance *this;
 } jay_bound_method;
 
 typedef struct {
@@ -127,8 +128,8 @@ typedef struct jay_instance {
 	size_t array_size;
 	size_t used_entries;
 
-	// The class of this instance, or the superclass if we're a class.
-	struct jay_instance *class;
+
+	jay_class *class;
 } jay_instance;
 
 #define JAY_NIL 0
@@ -206,7 +207,7 @@ jay_as_bound_method(jay_value value, const char *message) {
 		oops(message);
 	}
 
-	return value.as_function;
+	return value.as_bound_method;
 }
 
 static inline
@@ -217,6 +218,16 @@ jay_as_number(jay_value value, const char *message) {
 	}
 
 	return value.as_double;
+}
+
+static inline
+jay_instance*
+jay_as_instance(jay_value value, const char *message) {
+	if(value.tag != JAY_INSTANCE) {
+		oops(message);
+	}
+
+	return value.as_instance;
 }
 
 static inline
@@ -333,6 +344,15 @@ jay_instance_to_value(jay_instance *instance) {
 
 static inline
 jay_value
+jay_bound_method_to_value(jay_bound_method *bound_method) {
+	jay_value res;
+	res.tag = JAY_BOUND_METHOD;
+	res.as_bound_method = bound_method;
+	return res;
+}
+
+static inline
+jay_value
 jay_class_to_value(jay_class *class) {
 	jay_value res;
 	res.tag = JAY_CLASS;
@@ -362,6 +382,34 @@ jay_string(const char *literal) {
 	return res;
 }
 OP_LIT(string, const char*, literal)
+
+/* --- Allocators --- */
+
+jay_closure*
+jay_new_scope(jay_closure *parent, size_t count) {
+	size_t bytes = sizeof(jay_closure) + (count * sizeof(jay_value));
+	jay_closure *closure = jay_malloc(bytes);
+	closure->count = count;
+	closure->parent = parent;
+	// Do we want to zero out the 'values' array..?
+}
+
+jay_instance*
+jay_new_instance(jay_class *class) {
+	jay_instance *instance = jay_malloc(sizeof(*instance));
+	
+	instance->class = class;
+
+	// Set up "hash" table
+	instance->array_size = 8;
+	// TODO: jay_malloc? Somehow make the table a jay_object for GC..?
+	// Actually, it doesn't really need to be GC, because it's owned by the
+	// instance...
+	// Also, consider a small-instance optimization that would keep this array
+	// in the instance
+	instance->members = jay_malloc(instance->array_size * sizeof(*instance->members));
+	instance->used_entries = 0;
+}
 
 /* --- Call Operators */
 
@@ -478,32 +526,6 @@ jay_method_from(jay_class *class, jay_function_impl impl, size_t arity) {
 		.implementation = impl,
 		.arity = arity
 	};
-}
-
-jay_closure*
-jay_new_scope(jay_closure *parent, size_t count) {
-	size_t bytes = sizeof(jay_closure) + (count * sizeof(jay_value));
-	jay_closure *closure = jay_malloc(bytes);
-	closure->count = count;
-	closure->parent = parent;
-	// Do we want to zero out the 'values' array..?
-}
-
-jay_instance*
-jay_new_instance(jay_class *class) {
-	jay_instance *instance = jay_malloc(sizeof(*instance));
-	
-	instance->class = class;
-
-	// Set up "hash" table
-	instance->array_size = 8;
-	// TODO: jay_malloc? Somehow make the table a jay_object for GC..?
-	// Actually, it doesn't really need to be GC, because it's owned by the
-	// instance...
-	// Also, consider a small-instance optimization that would keep this array
-	// in the instance
-	instance->members = jay_malloc(instance->array_size * sizeof(*instance->members));
-	instance->used_entries = 0;
 }
 
 /* --- Operators --- */
@@ -672,6 +694,40 @@ jay_value
 jay_negate(jay_value v) {
 	double vd = jay_as_number(v, "negation expects a number");
 	return jay_number(-vd);
+}
+
+static inline
+jay_value
+jay_bind(jay_method *method, jay_instance *this) {
+	jay_bound_method *result = jay_malloc(sizeof(*result));
+	result->implementation = method->implementation;
+	result->arity = method->arity;
+	result->closure = method->parent->closure;
+
+	// TODO: Do we want to be able to have a non-jay_instance "this"?
+	// probably not, as it might impede certain optimizations.. but for now,
+	// it is a bit silly that we support it in all but name
+	result->this = this;
+	return jay_bound_method_to_value(result);
+}
+
+static inline
+jay_value
+jay_get(jay_value v, size_t name) {
+	jay_instance *instance = jay_as_instance(v, "can only look up properties on an instance");
+
+	jay_method *method = instance->class->dispatcher(instance->class, name);
+	if(method) {
+		return jay_bind(method, instance);
+	}
+
+	oops("fields aren't implemented yet");
+}
+
+static inline
+void
+jay_op_get(size_t name) {
+	jay_push(jay_get(jay_pop(), name));
 }
 
 /* --- Builtin Functions (e.g. clock) --- */

@@ -121,7 +121,11 @@ impl<'a> Compiler<'a> {
 				write!(into, "jay_op_call({});\n", arguments.len())?;
 			},
 			Expr::Get { object, name } => {
-				todo!();
+				self.compile_expr(object, into)?;
+
+				self.add_name(name);
+				self.indent(into);
+				write!(into, "jay_op_get(NAME_{});\n", name.lexeme)?;
 			},
 			Expr::Grouping(inner) => {
 				self.compile_expr(inner, into)?;
