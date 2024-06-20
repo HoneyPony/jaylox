@@ -37,6 +37,13 @@ pub struct Compiler<'a> {
 	/// (We could implement it in a way with even less pointer chasing, but this is a good
 	/// starting point)
 	captured_depths: HashMap<VarRef, u32>,
+
+	/// Whether we're currently in an initializer. In that case, return statements
+	/// should always return 'this' -- i.e. args[args.len() - 1] essentially
+	in_initializer: bool,
+
+	// The current value of 'this' (i.e. the last index in the args array)
+	this: u32,
 }
 
 impl<'a> Compiler<'a> {
@@ -52,7 +59,19 @@ impl<'a> Compiler<'a> {
 			has_locals_frame: false,
 			has_captures_frame: false,
 
-			captured_depths: HashMap::new()
+			captured_depths: HashMap::new(),
+
+			// Not in an initializer to begin with
+			in_initializer: false,
+
+			// In theory, it shouldn't matter what we set this to unless we're
+			// in_initializer
+			//
+			// TODO: One other option to consider for the whole "returns in init"
+			// shebang is to simply transform any return statement in the parser
+			// into a "return this;" statement -- this would also let us easily
+			// error out...
+			this: 0,
 		}
 	}
 
@@ -292,6 +311,18 @@ impl<'a> Compiler<'a> {
 		let enclosing_captures = self.has_captures_frame;
 		self.has_captures_frame = fun.captured.len() > 0;
 
+		// Track the initializer state down the stack for returns
+		let enclosing_initializer = self.in_initializer;
+		self.in_initializer = fun.is_initializer;
+
+		let enclosing_this = self.this;
+		// NOTE: This means the function is a method. It's not super clear like
+		// this, we could add a flag. If we're not in a method, than the 'this'
+		// becomes essentially a variable that can be captured.
+		if fun.identity.is_none() {
+			self.this = fun.param_count - 1;
+		}
+
 		// Reset indent for top-level functions
 		let enclosing_indent = self.current_indent;
 		self.current_indent = 0;
@@ -373,6 +404,9 @@ impl<'a> Compiler<'a> {
 		if self.has_locals_frame {
 			writeln!(def, "\tjay_pop_frame();")?;
 		}
+		if self.in_initializer {
+			writeln!(def, "\treturn args[{}];", self.this)?;
+		}
 		writeln!(def, "\treturn jay_null();")?;
 
 		// End the function.
@@ -383,9 +417,11 @@ impl<'a> Compiler<'a> {
 
 		self.current_indent = enclosing_indent;
 
-		// Restore locals and captures
+		// Restore locals and captures and initializer
 		self.has_locals_frame = enclosing_locals;
 		self.has_captures_frame = enclosing_captures;
+		self.in_initializer = enclosing_initializer;
+		self.this = enclosing_this;
 		
 		Ok(())
 	}
@@ -584,13 +620,23 @@ impl<'a> Compiler<'a> {
 				into.push_str("jay_op_print();\n");
 			},
 			Stmt::Return { keyword, value } => {
-				match value {
+				if self.in_initializer {
+					self.indent(into);
+					// TODO: This would probably be better to just do with like,
+					// a "compile_this" function that looked it up like a variable...
+					// or better yet just compile_var...
+					//
+					// But, I guess we don't necessarily have the identity of this
+					// easily available, so this works.
+					writeln!(into, "jay_push(args[{}]);", self.this)?;
+				}
+				else { match value {
 					Some(value) => { self.compile_expr(value, into)?; },
 					None => {
 						self.indent(into); 
 						into.push_str("jay_op_null();\n"); 
 					}
-				};
+				}; }
 
 				// Pop the locals frame if we have it.
 				if self.has_locals_frame {
@@ -599,6 +645,10 @@ impl<'a> Compiler<'a> {
 				}
 
 				self.indent(into);
+				// OPT: Return seems especially possible to optimize to always
+				// just return an expression, if that expression is a single-fun-call.
+				// I don't think there would be any way to lose a root reference
+				// in that process.
 				into.push_str("return jay_pop();\n");
 			},
 			Stmt::Var { name, initializer, identity } => {

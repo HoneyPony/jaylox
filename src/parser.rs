@@ -663,6 +663,11 @@ impl<'a> Parser<'a> {
 			}
 		}
 
+		// Compute whether we're an initializer for later use.
+		// TODO: Possibly greately simplify this stuff by changing the parser
+		// accordingly.
+		let is_initializer = name.lexeme == "init" && is_method;
+
 		return Ok(Function {
 			name,
 			identity,
@@ -671,7 +676,7 @@ impl<'a> Parser<'a> {
 			local_count: locals_idx,
 			body,
 			captured,
-			is_initializer: false
+			is_initializer
 		});
 	}
 
