@@ -87,16 +87,6 @@ impl<'a> Parser<'a> {
 		self.fun_scopes.pop().unwrap()
 	}
 
-	fn find_variable(&mut self, name: &str) -> Option<VarRef> {
-		for scope in self.scopes.iter().rev() {
-			if let Some(var) = scope.variables.get(name) {
-				return Some(*var);
-			}
-		}
-
-		return None;
-	}
-
 	fn check_closure(&mut self, ptr: VarRef) {
 		// If it's in the current function scope, it's definitely not a closure.
 		if self.fun_scopes.last().unwrap().variables.contains(&ptr) {
@@ -123,10 +113,21 @@ impl<'a> Parser<'a> {
 		self.lox.get_var_mut(ptr).typ = new_type;
 	}
 
+	fn find_variable(&mut self, name: &str) -> Option<VarRef> {
+		for scope in self.scopes.iter().rev() {
+			if let Some(&var) = scope.variables.get(name) {
+				self.check_closure(var);
+				return Some(var);
+			}
+		}
+
+		return None;
+	}
+
 	fn find_variable_previous(&mut self)-> Option<VarRef> {
 		for scope in self.scopes.iter().rev() {
-			// Must deref var so that we can call check_closure. TODO: Why doesn't as_deref() do that..?
-			if let Some(var) = scope.variables.get(&self.previous().lexeme).map(|var| *var) {
+			// Must deref var/ref &var so that we can call check_closure. TODO: Why doesn't as_deref() do that..?
+			if let Some(&var) = scope.variables.get(&self.previous().lexeme) {
 				self.check_closure(var);
 				return Some(var);
 			}
