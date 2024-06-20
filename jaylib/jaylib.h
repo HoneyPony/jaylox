@@ -574,8 +574,20 @@ jay_print(jay_value value) {
 		case JAY_NUMBER:
 			printf("%f\n", value.as_double);
 			break;
+		case JAY_INSTANCE:
+			puts("<instance>");
+			break;
+		case JAY_CLASS:
+			puts("<class>");
+			break;
+		case JAY_BOUND_METHOD:
+			puts("<bound method>");
+			break;
+		case JAY_FUNCTION:
+			puts("<function>");
+			break;
 		default:
-			puts("<ref value>");
+			puts("<unknown>");
 	}
 }
 OP_ONE(print)
