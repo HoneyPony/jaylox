@@ -101,15 +101,7 @@ impl Lox {
 		// Don't resolve if we had an error
 		if self.had_error { return; }
 
-		//{
-		//	let mut resolver = Resolver::new(self);
-		//	resolver.resolve_stmts(&mut program);
-		//}
-
-		// Don't compile if we had an error
-		//if self.had_error { return; }
-
-		let mut compiler = Compiler::new(self);
+		let mut compiler = Compiler::new(self, std::io::stdout());
 		match compiler.compile(&program, globals_count) {
 			Ok(_) => {},
 			Err(err) => {

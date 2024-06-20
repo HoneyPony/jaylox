@@ -9,7 +9,7 @@ use crate::scanner::{LoxValue, TokenType};
 use crate::scanner::TokenType::*;
 
 
-pub struct Compiler<'a> {
+pub struct Compiler<'a, Writer: std::io::Write> {
 	pub lox: &'a mut Lox,
 
 	/// Contains the #include and all function forward-declarations.
@@ -40,10 +40,12 @@ pub struct Compiler<'a> {
 
 	/// The set of strings that we've already used as function names.
 	mangled_set: HashSet<String>,
+
+	writer: Writer,
 }
 
-impl<'a> Compiler<'a> {
-	pub fn new(lox: &'a mut Lox) -> Self {
+impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
+	pub fn new(lox: &'a mut Lox, writer: Writer) -> Self {
 		return Compiler {
 			lox,
 			prelude: String::new(),
@@ -58,6 +60,8 @@ impl<'a> Compiler<'a> {
 			captured_depths: HashMap::new(),
 
 			mangled_set: HashSet::new(),
+
+			writer,
 		}
 	}
 
@@ -722,7 +726,7 @@ impl<'a> Compiler<'a> {
 		Ok(())
 	}
 
-	pub fn compile(&mut self, stmts: &Vec<Stmt>, globals_count: u32) -> fmt::Result {
+	fn compile_to_buffers(&mut self, stmts: &Vec<Stmt>, globals_count: u32) -> Result<String, fmt::Error> {
 		// Setup 'this' and 'super' names so that they always work
 		self.add_name_str("this");
 		self.add_name_str("super");
@@ -755,35 +759,54 @@ impl<'a> Compiler<'a> {
 		self.indent(&mut main_fn);
 		// Create the scope for the main fn
 		writeln!(main_fn, "jay_closure *scope = NULL;")?;
-		
+
 		// Compile the actual top-level code (any normal statements will go
 		// into main; other things will go into their own functions)
 		self.compile_stmts(stmts, &mut main_fn)?;
 		self.pop_indent();
 
-		// First: prelude, containing all function declarations
-		print!("{}", self.prelude);
+		Ok(main_fn)
+	}
 
-		println!("\n/* --- NAME Definitions --- */\n");
+	pub fn compile(&mut self, stmts: &Vec<Stmt>, globals_count: u32) -> std::io::Result<()> {
+		// We use write! a lot and so get fmt::Result, but most of the compilation
+		// process should not fail (unless we OOM or something). By contrast, it
+		// is very possible that, while writing out to the self.writer, there is
+		// an error (e.g. read-only file target).
+		//
+		// So, wrap all of the compiling-to-buffers in its own function, and assume
+		// that it almost certainly won't error. Then, the error from writing to
+		// self.writer can be returned to the caller.
+		let main_fn = match self.compile_to_buffers(stmts, globals_count) {
+			Ok(main_fn) => main_fn,
+			Err(err) => {
+				panic!("Compiler error while writing to buffers: {}", err);
+			}
+		};
+
+		// First: prelude, containing all function declarations
+		write!(self.writer, "{}", self.prelude)?;
+
+		writeln!(self.writer, "\n/* --- NAME Definitions --- */\n")?;
 
 		// Second, NAME_ definitions
 		// Note that 0 is the TOMBSTONE so we cannot use it for a NAME
 		let mut name_value: usize = 1;
 		for name in &self.name_set {
-			println!("#define NAME_{name} ((size_t){name_value})");
+			writeln!(self.writer, "#define NAME_{name} ((size_t){name_value})")?;
 			name_value += 1;
 		}
-		println!("\n/* --- Function Definitions --- */\n");
+		writeln!(self.writer, "\n/* --- Function Definitions --- */\n")?;
 
 		// Third, function definitions
 		for fun in &self.function_defs {
-			print!("{}", fun);
+			write!(self.writer, "{}", fun)?;
 		}
 
-		println!("\n/* --- main() --- */\n");
+		writeln!(self.writer, "\n/* --- main() --- */\n")?;
 
 		// Last, main function definition (could go earlier too)
-		print!("int\nmain(void) {{\n{}}}\n", main_fn);
+		write!(self.writer, "int\nmain(void) {{\n{}}}\n", main_fn)?;
 
 		Ok(())
 	}
