@@ -104,10 +104,8 @@ typedef struct jay_bound_method {
 	//
 	// Of course, ideally, we just call the method directly without first allocating
 	// a new jay_bound_method, which is just more allocation pressure (and GC pressure).
-	// I think that will be an important optimization, which could win a lot over
-	// clox, and is also very relevant for implementing e.g. PonieScript... where
-	// there is very little reason to heap allocate a struct just to call a C
-	// function...
+	// Note that this same optimization is in Crafting Interpreters, it is definitely
+	// an important one.
 	jay_function_impl implementation;
 	size_t arity;
 
