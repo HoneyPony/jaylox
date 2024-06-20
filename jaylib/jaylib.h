@@ -740,6 +740,41 @@ jay_op_call(size_t arity) {
 	}
 }
 
+static inline
+void
+jay_op_invoke_super(jay_value object, size_t name, jay_value superclass, size_t arity) {
+	jay_instance *instance = jay_as_instance(object, "can only look up super properties on an instance");
+
+	// Superclass is "statically bound" so to speak -- see abc_super.lox. 
+	// Essentially, the superclass does not change to match the superclass
+	// of the class of the current instance (i.e. it is not instance->class->superclass),
+	// but rather, it is always the same superclass.
+	//
+	// As such, we have to somehow explicitly track the superclass. I guess
+	// this is why it is mandated to be a variable in lox -- so that that variable
+	// can always be directly looked up.
+	jay_class *superclass_real = jay_as_class(superclass, "superclass must be a class");
+
+	jay_method *method = superclass_real->dispatcher(superclass_real, name);
+	if(method) {
+		// Push 'this' on to the stack, then call the method.
+		jay_push(object);
+		
+		jay_value result = jay_call_any(
+			method->implementation,
+			instance->class->closure,
+			method->arity,
+			arity + 1
+		);
+
+		jay_push(result);
+
+		return;
+	}
+
+	oops("superclass has no such method");
+}
+
 #ifdef JAY_FULL_COMPAT
 
 static inline

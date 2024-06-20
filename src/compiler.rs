@@ -139,7 +139,9 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 			},
 			Expr::Call { callee, arguments, .. } => {
 				// Push all args, push the callee, then do jay_op_call.
-
+				// Note: It is very significant that we always push all the
+				// arguments, no matter what kind of call/invoke we do. They
+				// all need the arguments pushed onto the stack as such.
 				for arg in arguments {
 					self.compile_expr(arg, into)?;
 				}
@@ -155,6 +157,16 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 						write!(into, "jay_op_invoke(NAME_{}, {});\n",
 							name.lexeme, arguments.len())?;
 					}
+					// For superclass calls, use invoke_super
+					Expr::Super { method, identity, this_identity, .. } => {
+						self.add_name(method);
+						self.indent(into);
+						write!(into, "jay_op_invoke_super(")?;
+						self.compile_var(*this_identity, into)?;
+						write!(into, ", NAME_{}, ", method.lexeme)?;
+						self.compile_var(*identity, into)?;
+						writeln!(into, ", {});", arguments.len())?;
+					},
 					// For regular calls, just compile the inner expression,
 					// and then do a normal call.
 					_ => {
