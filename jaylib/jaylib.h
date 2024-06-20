@@ -923,7 +923,7 @@ jay_method_from(jay_class *class, jay_function_impl impl, size_t arity) {
 #define OP_ONE(name) \
 static inline void \
 jay_op_ ## name (void) { \
-	jay_ ## name(jay_pop()); \
+	jay_push(jay_ ## name(jay_pop())); \
 }
 
 #define OP_TWO(name) \
@@ -934,7 +934,11 @@ jay_op_ ## name (void) { \
 	jay_push(jay_ ## name(a, b)); \
 }
 
-OP_ONE(print)
+static inline
+void
+jay_op_print(void) {
+	jay_print(jay_pop());
+}
 
 static inline
 void
@@ -957,7 +961,23 @@ jay_add(jay_value a, jay_value b) {
 		double bn = jay_as_number(b, message);
 		return jay_number(an + bn);
 	}
-	oops("string addition is TODO");
+	if(a.tag == JAY_STRING) {
+		if(b.tag == JAY_STRING) {
+			// TODO: Make this faster..?
+			size_t alen = strlen(a.as_string);
+			size_t blen = strlen(b.as_string);
+
+			jay_value cat;
+			cat.tag = JAY_STRING;
+			cat.as_string = jay_malloc(alen + blen + 1);
+			memcpy(cat.as_string,        a.as_string, alen);
+			// copy nul terminator
+			memcpy(cat.as_string + alen, b.as_string, blen + 1);
+
+			return cat;
+		}	
+	}
+	oops(message);
 }
 OP_TWO(add)
 
