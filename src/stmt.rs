@@ -20,7 +20,6 @@ pub struct Function {
 	pub captured: Vec<VarRef>,
 
 	pub body: Vec<Stmt>,
-	pub is_initializer: bool,
 }
 
 impl Function {
@@ -36,10 +35,18 @@ impl Function {
 			captured: vec![],
 
 			body: vec![],
-
-			// TODO: Do we want/need this flag?
-			is_initializer: true
 		};
+	}
+
+	pub fn is_method(&self) -> bool {
+		// Hack: For now, whether or not we have an identity corresponds to whether
+		// we are a method. Methods don't have identity.
+		return self.identity.is_none()
+	}
+
+	pub fn is_initializer(&self) -> bool {
+		// Methods named 'init' are initializers.
+		return self.is_method() && self.name.lexeme == "init";
 	}
 }
 

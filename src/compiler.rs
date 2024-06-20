@@ -313,13 +313,12 @@ impl<'a> Compiler<'a> {
 
 		// Track the initializer state down the stack for returns
 		let enclosing_initializer = self.in_initializer;
-		self.in_initializer = fun.is_initializer;
+		self.in_initializer = fun.is_initializer();
 
 		let enclosing_this = self.this;
-		// NOTE: This means the function is a method. It's not super clear like
-		// this, we could add a flag. If we're not in a method, than the 'this'
-		// becomes essentially a variable that can be captured.
-		if fun.identity.is_none() {
+		// If we're not in a method, than the 'this' becomes
+		// essentially a variable that can be captured.
+		if fun.is_method() {
 			self.this = fun.param_count - 1;
 		}
 
