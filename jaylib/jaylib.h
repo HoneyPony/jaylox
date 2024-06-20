@@ -78,6 +78,9 @@ typedef struct jay_class {
 
 	struct jay_class *superclass;
 
+	// The dispatcher is how a class actually looks up functions.
+	jay_dispatcher_impl dispatcher;
+
 	// The same closure is used for all methods inside a class
 	jay_closure *closure;
 

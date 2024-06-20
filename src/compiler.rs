@@ -386,7 +386,56 @@ impl<'a> Compiler<'a> {
 		Ok(())
 	}
 
+	fn compile_class_dispatcher(&mut self, class: &Class, mangled_name: &String) -> fmt::Result {
+		let mut def = String::new();
+
+		// Add the dispatcher forward-declaration
+		// TODO: Consider having multiple blocks of forward-declares for organization / clarity
+		writeln!(self.prelude, "jay_method* {mangled_name}(jay_class *class, size_t name);")?;
+		
+		writeln!(def, "jay_method*\n{mangled_name}(jay_class *class, size_t name) {{")?;
+
+		// First, generate a switch-case for each name, looking up the associated function. But,
+		// we actually do this in reverse, iterating through 0..n, then adding the associated
+		// name to the switch-case.
+		//
+		// TODO: As an optimization, simply leave out any names that aren't referenced elsewhere.
+		// There's no actual reason to do add_name here except for convenience.
+
+		writeln!(def, "\tswitch(name) {{")?;
+
+		for (idx, method) in class.methods.iter().enumerate() {
+			self.add_name(&method.name);
+			writeln!(def, "\t\tcase NAME_{}: return &class->methods[{}];", method.name.lexeme, idx)?;
+		}
+
+		writeln!(def, "\t}}\n")?;
+
+		// If the switch-case didn't look it up, then look it up in the superclass.
+		writeln!(def, "\tif(class->superclass) {{")?;
+		writeln!(def, "\t\treturn class->superclass->dispatcher(class->superclass, name);")?;
+		writeln!(def, "\t}}\n")?;
+
+		// If we still didn't find it, return NULL.
+		// In this case, we are probably inside a get expression, and then we will
+		// look for a field. That will then return an error--and so we don't want
+		// to return an error here.
+
+		writeln!(def, "\treturn NULL;")?;
+
+		writeln!(def, "}}")?;
+
+		self.function_defs.push(def);
+
+		Ok(())
+	}
+
 	fn compile_class(&mut self, class: &Class, mangled_name: &String) -> fmt::Result {
+		// To create the class-defining function, we need the dispatcher.
+		// TODO NAME MANGLING
+		let dispatcher_mangled = format!("{}_dispatcher", class.name.lexeme);
+		self.compile_class_dispatcher(class, &dispatcher_mangled)?;
+
 		let mut def = String::new();
 
 		// Add the mangled name to the function definition list
@@ -420,11 +469,21 @@ impl<'a> Compiler<'a> {
 				method.param_count)?;
 		}
 
+		// The dispatcher is simply initialized to be the dispatcher function we
+		// created. This function is dynamic in terms of superclass, and so
+		// it is fine (if slower than it could be).
+		//
+		// TODO: Note that one possible optimization would be to figure out cases
+		// where a class cannot have a superclass, and implement a faster dispatcher
+		// for it. But, the extra checks for doing that might make it slower than
+		// just always checking for the superclass...
+		writeln!(def, "\tclass->dispatcher = &{dispatcher_mangled};")?;
+
 		// Fill in the superclass
 		// If it is nil, then the superclass is NULL, otherwise, it must be
 		// a jay_class
 		writeln!(def, "\tif(jay_is_null(superclass)) {{")?;
-		writeln!(def, "\t\tclass->superclass = NULL;\n")?;
+		writeln!(def, "\t\tclass->superclass = NULL;")?;
 		writeln!(def, "\t}}\n\telse if(jay_is_class(superclass)) {{")?;
 		writeln!(def, "\t\tclass->superclass = jay_as_class(superclass, \"internal error\");")?;
 		writeln!(def, "\t}}")?;
