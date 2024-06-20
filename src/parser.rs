@@ -5,7 +5,9 @@ use std::hash::Hash;
 use std::rc::Rc;
 
 use crate::expr::*;
-use crate::stmt::*;
+use crate::stmt::Function;
+use crate::stmt::Stmt;
+use crate::stmt::StmtRes;
 use crate::scanner::*;
 
 use crate::scanner::TokenType::*;
@@ -583,21 +585,33 @@ impl<'a> Parser<'a> {
 		return Ok(Stmt::var(name, initializer, identity));
 	}
 
-	fn function(&mut self, kind: &str) -> Result<Function, ExprErr> {
+	fn function(&mut self, kind: &str, is_method: bool) -> Result<Function, ExprErr> {
 		let name = self.consume(Identifier, &format!("Expect {kind} name."))?;
 
 		self.consume(LeftParen, &format!("Expect '(' after {kind} name."))?;
 
-		// The function itself must exist as a variable inside the enclosing scope.
-		let identity = self.declare_variable(name.lexeme.clone())?;
+		let identity = if is_method { None }
+		else {
+			// The function itself must exist as a variable inside the enclosing scope.
+			Some(self.declare_variable(name.lexeme.clone())?)
+		};
 
-		let mut parameters_tokens = vec![];
+		let mut parameters_names = vec![];
 		
 		if !self.check(RightParen) {
-			parameters_tokens.push(self.consume(Identifier, "Expect parameter name.")?);
+			parameters_names.push(
+				self.consume(Identifier, "Expect parameter name.")?.lexeme);
 			while self.match_one(Comma) {
-				parameters_tokens.push(self.consume(Identifier, "Expect parameter name.")?);
+				parameters_names.push(
+					self.consume(Identifier, "Expect parameter name.")?.lexeme);
 			}
+		}
+
+		if is_method {
+			// If we're a method, than we need to have a 'this' parameter as our
+			// last parameter. Note that, because "this" is lexed into a keyword,
+			// we cannot have accidentally already declared it.
+			parameters_names.push("this".into());
 		}
 
 		self.push_fun_scope();
@@ -605,8 +619,8 @@ impl<'a> Parser<'a> {
 
 		let mut param_idx = 0;
 		// Create parameter variables.
-		for param in parameters_tokens {
-			let var = self.declare_variable(param.lexeme.clone())?;
+		for param in parameters_names {
+			let var = self.declare_variable(param)?;
 			self.lox.get_var_mut(var).typ = VarType::Parameter;
 			// Assign parameter indices here.
 			self.lox.get_var_mut(var).index = param_idx;
@@ -663,25 +677,41 @@ impl<'a> Parser<'a> {
 
 	fn class_declaration(&mut self) -> StmtRes {
 		let name = self.consume(Identifier, "Expect class name.")?;
+
+		// The class exists as a variable in the surrounding scope.
+		// TODO: Possible optimization: hoist classes that are not "dynamic"
+		// (e.g. no closure, no dynamic superclass) to global scope
+		let identity = self.declare_variable(name.lexeme.clone())?;
 		
-		let superclass = if self.match_one(Less) {
-			let identifier = self.consume(Identifier, "Expect superclass name.")?;
-			Some(identifier)
-		} else { None };
+		// let superclass = if self.match_one(Less) {
+		// 	let identifier = self.consume(Identifier, "Expect superclass name.")?;
+		// 	Some(identifier)
+		// } else { None };
 
 		self.consume(LeftBrace, "Expect '{' before class body.")?;
 
 		let mut methods = vec![];
+		let mut init = None;
 		while !self.check(RightBrace) && !self.is_at_end() {
-			methods.push(self.function("method")?);
+			let method = self.function("method", true)?;
+			if method.name.lexeme == "init" {
+				init = Some(method);
+			}
+			else {
+				methods.push(method);
+			}
 		}
 
 		self.consume(RightBrace, "Expect '}' after class body.")?;
 
-		self.lox.error_token(&self.previous().clone(), "Classes unimplemented at the momemt");
-		return Err(ExprErr);
-
-		//Ok(Stmt::class(name, methods, (superclass, None)))
+		// TODO: Implement superclass
+		Ok(Stmt::class(crate::stmt::Class {
+			name,
+			methods,
+			init,
+			superclass: None,
+			identity,
+		}))
 	}
 
 	fn declaration(&mut self) -> Option<Stmt> {
@@ -689,7 +719,7 @@ impl<'a> Parser<'a> {
 			self.var_declaration()
 		}
 		else if self.match_one(Fun) {
-			self.function("function").map(|fun| Stmt::Function(fun))
+			self.function("function", false).map(|fun| Stmt::Function(fun))
 		}
 		else if self.match_one(Class) {
 			self.class_declaration()

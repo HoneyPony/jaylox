@@ -2,7 +2,7 @@ use core::fmt;
 use std::collections::HashMap;
 use std::{collections::HashSet, fmt::Write, rc::Rc};
 
-use crate::stmt::Function;
+use crate::stmt::{Class, Function};
 use crate::VarRef;
 use crate::{expr::Expr, scanner::Token, stmt::Stmt, Lox};
 use crate::scanner::{LoxValue, TokenType};
@@ -386,6 +386,58 @@ impl<'a> Compiler<'a> {
 		Ok(())
 	}
 
+	fn compile_class(&mut self, class: &Class, mangled_name: &String) -> fmt::Result {
+		let mut def = String::new();
+
+		// Add the mangled name to the function definition list
+		writeln!(self.prelude, "jay_value {mangled_name}(jay_value superclass, jay_closure *closure);")?;
+
+		// Reset indent for top-level functions
+		let enclosing_indent = self.current_indent;
+		self.current_indent = 0;
+
+		// Start writing the function definition
+		writeln!(def, "jay_value\n{}(jay_value superclass, jay_closure *closure) {{", mangled_name)?;
+
+		// First step: Allocate the actual class object
+		writeln!(def, "\tjay_class *class = jay_malloc(sizeof(*class) + (sizeof(jay_method) * {}));",
+			class.methods.len())?;
+
+		// Fill out the method table
+		// TODO: If we want to be able to have init in a jay_bound_method, I geuss
+		// it will also need to be part of the method table..?
+		for (idx, method) in class.methods.iter().enumerate() {
+			// TODO: NAME MANGLING (real)
+			let method_mangled_name = format!("{}_{}", class.name.lexeme, method.name.lexeme);
+			
+			// The C function should be the same, due to the 'this' variable being
+			// automatically added at the end.
+			self.compile_function(method, &method_mangled_name)?;
+
+			writeln!(def, "\tclass->methods[{idx}] = jay_method_from(class, {method_mangled_name}, {}, closure);",
+				method.param_count)?;
+		}
+
+		// Fill in the superclass
+		// If it is nil, then the superclass is NULL, otherwise, it must be
+		// a jay_class
+		writeln!(def, "\tif(jay_is_null(superclass)) {{")?;
+		writeln!(def, "\t\tclass->superclass = NULL;\n")?;
+		writeln!(def, "\t}}\n\telse if(jay_is_class(superclass)) {{")?;
+		writeln!(def, "\t\tclass->superclass = jay_as_class(superclass, \"internal error\");")?;
+		writeln!(def, "\t}}")?;
+
+		writeln!(def, "\treturn jay_class_to_value(class);\n")?;
+
+		writeln!(def, "}}")?;
+
+		self.current_indent = enclosing_indent;
+
+		self.function_defs.push(def);
+
+		Ok(())
+	}
+
 	fn compile_stmt(&mut self, stmt: &Stmt, into: &mut String) -> fmt::Result {
 		match stmt {
 			Stmt::Block(stmts) => {
@@ -397,8 +449,19 @@ impl<'a> Compiler<'a> {
 				self.indent(into);
 				into.push_str("}\n");
 			},
-			Stmt::Class { name, methods, superclass } => {
-				todo!()
+			Stmt::Class(class) => {
+				// TODO: NAME MANGLING
+				let mangled_name = class.name.lexeme.clone();
+
+				self.compile_class(class, &mangled_name)?;
+
+				self.indent(into);
+				self.compile_var(class.identity, into)?;
+				// The class is a function that takes a superclass and a scope,
+				// and creates a class accordingly.
+				// As such, the associated local variable is initialized by
+				// calling this function.
+				writeln!(into, " = {mangled_name}(/* superclass = */ jay_null(), scope);")?;
 			},
 			Stmt::Expression(expr) => {
 				self.compile_expr(expr, into)?;
@@ -407,6 +470,7 @@ impl<'a> Compiler<'a> {
 				into.push_str("jay_pop();\n");
 			},
 			Stmt::Function(fun) => {
+				// TODO: NAME MANGLING
 				let mangled_name = fun.name.lexeme.clone();
 				self.compile_function(fun, &mangled_name)?;
 
@@ -420,7 +484,7 @@ impl<'a> Compiler<'a> {
 			
 				self.indent(into);
 				// Essentially, generate an assignment with the var.
-				self.compile_var(fun.identity, into)?;
+				self.compile_var(fun.identity.expect("non-methods must have an identity"), into)?;
 				writeln!(into, " = jay_fun_from({}, {}, scope);",
 					mangled_name, fun.param_count)?;
 			},

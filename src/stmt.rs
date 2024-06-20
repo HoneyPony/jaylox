@@ -10,7 +10,9 @@ pub type StmtRes = Result<Stmt, ExprErr>;
 // Function info: lots of stuff, so carry it around Rc'd.
 pub struct Function {
 	pub name: Token,
-	pub identity: VarRef,
+
+	// Functions have an identity; methods do not.
+	pub identity: Option<VarRef>,
 	pub vars: HashSet<VarRef>,
 	pub param_count: u32,
 	pub local_count: u32,
@@ -19,4 +21,12 @@ pub struct Function {
 
 	pub body: Vec<Stmt>,
 	pub is_initializer: bool,
+}
+
+pub struct Class {
+	pub name: Token,
+	pub methods: Vec<Function>,
+	pub init: Option<Function>,
+	pub superclass: Option<VarRef>,
+	pub identity: VarRef,
 }
