@@ -156,6 +156,43 @@ static jay_value *jay_stack_ptr;
 static jay_stackframe *jay_frames[4096];
 static size_t jay_frames_ptr;
 
+// Define print early. op_print is defined much later...
+static inline
+void
+jay_print(jay_value value) {
+	switch(value.tag) {
+		case JAY_NIL:
+			puts("nil");
+			break;
+		case JAY_STRING:
+			puts(value.as_string);
+			break;
+		case JAY_TRUE:
+			puts("true");
+			break;
+		case JAY_FALSE:
+			puts("false");
+			break;
+		case JAY_NUMBER:
+			printf("%f\n", value.as_double);
+			break;
+		case JAY_INSTANCE:
+			puts("<instance>");
+			break;
+		case JAY_CLASS:
+			puts("<class>");
+			break;
+		case JAY_BOUND_METHOD:
+			puts("<bound method>");
+			break;
+		case JAY_FUNCTION:
+			puts("<function>");
+			break;
+		default:
+			puts("<unknown>");
+	}
+}
+
 #ifdef JAY_ASSUME_CORRECT
 
 #define oops(message) __builtin_unreachable()
@@ -897,41 +934,6 @@ jay_op_ ## name (void) { \
 	jay_push(jay_ ## name(a, b)); \
 }
 
-static inline
-void
-jay_print(jay_value value) {
-	switch(value.tag) {
-		case JAY_NIL:
-			puts("nil");
-			break;
-		case JAY_STRING:
-			puts(value.as_string);
-			break;
-		case JAY_TRUE:
-			puts("true");
-			break;
-		case JAY_FALSE:
-			puts("false");
-			break;
-		case JAY_NUMBER:
-			printf("%f\n", value.as_double);
-			break;
-		case JAY_INSTANCE:
-			puts("<instance>");
-			break;
-		case JAY_CLASS:
-			puts("<class>");
-			break;
-		case JAY_BOUND_METHOD:
-			puts("<bound method>");
-			break;
-		case JAY_FUNCTION:
-			puts("<function>");
-			break;
-		default:
-			puts("<unknown>");
-	}
-}
 OP_ONE(print)
 
 static inline
@@ -1043,6 +1045,17 @@ jay_eq_impl(jay_value a, jay_value b) {
 		return false;
 	}
 	// All other types can be compared by identity... I think
+	// WRONG for NIL, TRUE, FALSE!!!
+
+	//if(a.tag == JAY_NIL) return b.tag == JAY_NIL;
+	//if(a.tag == JAY_TRUE) return b.tag == JAY_TRUE;
+	//if(a.tag == JAY_FALSE) return b.tag == JAY_FALSE;
+	// Can actually just return true in these cases because we already verified
+	// the tags.
+	if(a.tag == JAY_NIL) return true;
+	if(a.tag == JAY_TRUE) return true;
+	if(a.tag == JAY_FALSE) return true;
+
 	return a.as_instance == b.as_instance;
 }
 
