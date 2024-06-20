@@ -44,6 +44,10 @@ pub struct Parser<'a> {
 
 	undeclared_globals: HashSet<VarRef>,
 
+	// Track if we're in an initializer so we can semantically check the return
+	// statements (make sure they're 'return;' and transform them into 'return this;')
+	in_initializer: bool,
+
 	lox: &'a mut Lox
 }
 
@@ -58,6 +62,8 @@ impl<'a> Parser<'a> {
 			fun_scopes: vec![],
 
 			undeclared_globals: HashSet::new(),
+
+			in_initializer: false,
 		}
 	}
 
@@ -183,9 +189,17 @@ impl<'a> Parser<'a> {
 		return Err(ExprErr);
 	}
 
+	// TODO: Change this to &Token and fix all call sites
 	fn error_expr(&mut self, token: Token, message: &str) -> ExprRes {
 		self.lox.error_token(&token, message);
 		return Err(ExprErr);
+	}
+
+	/// Reports an error, but does not unwind the stack at all. Useful for
+	/// reporting semantic errors rather than parse errors (as semantic errors
+	/// generally still mean the parse tree is correct).
+	fn error_report(&mut self, token: &Token, message: &str) {
+		self.lox.error_token(token, message);
 	}
 
 	fn consume(&mut self, typ: TokenType, message: &str) -> Result<Token, ExprErr> {
@@ -554,6 +568,20 @@ impl<'a> Parser<'a> {
 		}
 
 		self.consume(Semicolon, "Expect ';' after return value.")?;
+
+		// If we're in an initializer, we have to make sure that the 'value'
+		// is None, then transform value to be a This.
+		if self.in_initializer {
+			if value.is_some() {
+				// Note: not a parse error.
+				self.error_report(&keyword, "'return' in initializer can't return a value");
+			}
+
+			let this_token = Token::new(TokenType::This, "this".into(), LoxValue::Nil,
+				keyword.line);
+			value = Some(Expr::this(this_token, None));
+		}
+
 		return Ok(Stmt::return_(keyword, value));
 	}
 
@@ -614,6 +642,10 @@ impl<'a> Parser<'a> {
 			parameters_names.push("this".into());
 		}
 
+		// Keep track of when we're in an initializer
+		let enclosing_initializer = self.in_initializer;
+		self.in_initializer = is_method && name.lexeme == "init";
+
 		self.push_fun_scope();
 		self.push_scope();
 
@@ -637,6 +669,10 @@ impl<'a> Parser<'a> {
 		// Get the fun scope so that variable indices can be assigned.
 		let funscope = self.pop_fun_scope();
 
+		// Reset tracked state
+		self.in_initializer = enclosing_initializer;
+
+		// Compute var indices
 		let mut locals_idx = 0;
 		let mut captures_idx = 0;
 		let mut captured = vec![];
@@ -662,7 +698,7 @@ impl<'a> Parser<'a> {
 				}
 			}
 		}
-		
+
 		return Ok(Function {
 			name,
 			identity,
