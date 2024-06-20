@@ -5,8 +5,8 @@ mod parser;
 //mod resolver;
 mod compiler;
 
-use std::env;
-use std::process::exit;
+use std::{env, fs::File};
+use std::process::{exit, Command, Stdio};
 use std::io;
 
 use compiler::Compiler;
@@ -37,6 +37,18 @@ pub struct Lox {
 	had_error: bool,
 
 	variables: Vec<Variable>
+}
+
+enum CompileOutput {
+	Executable { path: String },
+	CFile { path: String },
+	StandardOut
+}
+
+struct CompileOptions {
+	input_path: String,
+	output: CompileOutput,
+	optimization: String,
 }
 
 impl Lox {
@@ -87,7 +99,9 @@ impl Lox {
 		}
 	}
 
-	fn run(&mut self, code: String) {
+	fn compile(&mut self, options: CompileOptions) -> std::io::Result<()> {
+		let code = std::fs::read_to_string(options.input_path)?;
+
 		let tokens = {
 			let mut scanner = Scanner::new(code, self);
 			scanner.scan_tokens()
@@ -99,36 +113,119 @@ impl Lox {
 		};
 
 		// Don't resolve if we had an error
-		if self.had_error { return; }
+		if self.had_error { return Ok(()); }
 
-		let mut compiler = Compiler::new(self, std::io::stdout());
-		match compiler.compile(&program, globals_count) {
-			Ok(_) => {},
-			Err(err) => {
-				println!("Compile codegen error: {}", err);
+		// TODO: Consider using Box<dyn Write> to make this code simpler, and
+		// possibly speed up the compilation of the project a lot.. it's not clear
+		// exactly how much Rust is going to be monomorphizing in Compiler, given
+		// that only one function actually needs the Writer...
+
+		match options.output {
+			CompileOutput::Executable { path } => {
+				let mut child = Command::new("gcc")
+					.stdin(Stdio::piped())
+					.arg("-x")
+					.arg("c")
+					.arg("-o")
+					.arg(path)
+					.arg(options.optimization)
+					.arg("-")
+					.spawn()?;
+
+				let stdin = child.stdin.take()
+					.expect("Could not spawn 'gcc'.");
+
+				Compiler::new(self, stdin)
+					.compile(&program, globals_count)?;
+
+				let ecode = child.wait()?;
+				if !ecode.success() {
+					eprintln!("jaylox: C compiler did not succeed.");
+				}
+
+				Ok(())
 			},
+			CompileOutput::CFile { path } => {
+				let out_file = File::create(path)?;
+				Compiler::new(self, out_file)
+				.compile(&program, globals_count)
+			},
+			CompileOutput::StandardOut => {
+				Compiler::new(self, std::io::stdout())
+					.compile(&program, globals_count)
+			}
 		}
 	}
-
-	fn compile(&mut self, path: String) -> std::io::Result<()> {
-		let contents = std::fs::read_to_string(path)?;
-
-		self.run(contents);
-		Ok(())
-	}
-
 }
 
 fn main() -> io::Result<()> {
 	let mut args: Vec<String> = env::args().collect();
 	let mut lox = Lox::new();
 
-	if args.len() != 2 {
-		println!("Usage: jaylox [script]");
+	if args.len() < 2 {
+		println!("Usage: jaylox [flags] script");
 		exit(64);
 	}
 
-	lox.compile(args.remove(1))?;
+	// Possible flags:
+	//    -o  : writes to a specific executable file
+	//    -oc : writes to a specific C file
+	//    -os : writes to standard output
+	//    -O1 : compile with -O1
+	//    -O2 : compile with -O2
+	//    -O3 : compile with -O3
+
+	// Input is always the last option (for now)
+	let input_path = args.pop().unwrap();
+	
+	let mut default_output_path = input_path.clone();
+	if default_output_path.ends_with(".lox") {
+		for _ in 0..4 { default_output_path.pop(); }
+	}
+
+	let mut output_path_noslash = &default_output_path[..];
+
+	// For the default output path, output in the working directory -- so
+	// try to remove any leading slashes
+	while let Some(slash) = output_path_noslash.find('/') {
+		output_path_noslash = &output_path_noslash[slash + 1..];
+	}
+
+	let mut options = CompileOptions {
+		input_path,
+		output: CompileOutput::Executable { path: output_path_noslash.to_string() },
+		optimization: "-O1".into(),
+	};
+
+	// Process remaining arguments
+	let mut eat_cfile = false;
+	let mut eat_exefile = false;
+	for arg in &args[1..] {
+		if eat_cfile {
+			options.output = CompileOutput::CFile { path: arg.clone() };
+			eat_cfile = false;
+		}
+		else if eat_exefile {
+			options.output = CompileOutput::Executable { path: arg.clone() };
+			eat_exefile = false;
+		}
+		else {
+			match arg.as_str() {
+				"-o" => { eat_exefile = true; },
+				"-oc" => { eat_cfile = true; },
+				"-os" => { options.output = CompileOutput::StandardOut; },
+				"-O1" | "-O2" | "-O3" => {
+					options.optimization = arg.clone();
+				},
+				_ => {
+					println!("Error: Unrecognized flag {}", arg);
+					exit(64);
+				}
+			};
+		}
+	}
+
+	lox.compile(options)?;
 	if lox.had_error {
 		exit(65);
 	}
