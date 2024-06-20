@@ -413,6 +413,202 @@ jay_new_instance(jay_class *class) {
 	return instance;
 }
 
+/* --- Instance Related "Hash" Map Stuff */
+
+// NOTE: This function is UNSAFE to call if you haven't guaranteed that there
+// is an empty bucket
+jay_hash_entry*
+jay_find_empty_bucket_in(jay_hash_entry *array, size_t array_size, size_t name) {
+	// TODO: Optimize to use &
+	size_t i = name % array_size;
+	for(;;) {
+		i = (i + 1) % array_size;
+
+		// We MUST find a tombstone to exit the loop.
+		if(array[i].name == JAY_NAME_TOMBSTONE) {
+			return &array[i];
+		}
+	}
+}
+
+// NOTE: This function is UNSAFE to call if you haven't guaranteed that there
+// is an empty bucket
+jay_hash_entry*
+jay_find_empty_bucket(jay_instance *instance, size_t name) {
+	return jay_find_empty_bucket_in(instance->members, instance->array_size, name);
+}
+
+jay_hash_entry*
+jay_find_bucket_in(jay_hash_entry *array, size_t array_size, size_t name) {
+	// TODO: Optimize to use &
+	size_t i = name % array_size;
+	size_t check = i;
+	while(array[i].name != name) {
+		// Linear probing
+		i = (i + 1) % array_size;
+
+		// Item doesn't exist
+		if(i == check || array[i].name == JAY_NAME_TOMBSTONE) {
+			return NULL;
+		}
+	}
+
+	return &array[i];
+}
+
+jay_hash_entry*
+jay_find_bucket(jay_instance *instance, size_t name) {
+	return jay_find_bucket_in(instance->members, instance->array_size, name);
+}
+
+void
+jay_rehash(jay_instance *instance) {
+	size_t new_size = instance->array_size * 2;
+	// TODO: calloc()
+	jay_hash_entry *new_array = jay_malloc(sizeof(*new_array) * new_size);
+
+	for(size_t i = 0; i < instance->array_size; ++i) {
+		if(instance->members[i].name != JAY_NAME_TOMBSTONE) {
+			// Note: here this should always return a tombstone, as all buckets
+			// should be empty...
+			jay_hash_entry *ptr = jay_find_empty_bucket_in(new_array, new_size, instance->members[i].name);
+			ptr->name = instance->members[i].name;
+			ptr->value = instance->members[i].value;
+		}
+	}
+
+	free(instance->members);
+
+	instance->members = new_array;
+	instance->array_size = new_size;
+}
+
+jay_value
+jay_put_new(jay_instance *scope, size_t name, jay_value value) {
+	if((scope->used_entries + 1) > scope->array_size / 2) {
+		jay_rehash(scope);
+	}
+	// We are guaranteed an empty bucket somewhere.
+	// TODO: Consider Hopgood-Davenport probing
+	jay_hash_entry *place = jay_find_empty_bucket(scope, name);
+	place->name = name;
+	place->value = value;
+
+	scope->used_entries += 1;
+
+	return value;
+}
+
+
+/* --- Instance Related Methods --- */
+
+static inline
+jay_value
+jay_bind(jay_method *method, jay_instance *this) {
+	jay_bound_method *result = jay_malloc(sizeof(*result));
+	result->implementation = method->implementation;
+	result->arity = method->arity;
+	result->closure = method->parent->closure;
+
+	// TODO: Do we want to be able to have a non-jay_instance "this"?
+	// probably not, as it might impede certain optimizations.. but for now,
+	// it is a bit silly that we support it in all but name
+	result->this = this;
+	return jay_bound_method_to_value(result);
+}
+
+static inline
+jay_value
+jay_get(jay_value v, size_t name) {
+	jay_instance *instance = jay_as_instance(v, "can only look up properties on an instance");
+
+	jay_method *method = instance->class->dispatcher(instance->class, name);
+	if(method) {
+		return jay_bind(method, instance);
+	}
+
+	// Look up the field on the object.
+	jay_hash_entry *place = jay_find_bucket(instance, name);
+	if(!place) {
+		oops("tried to look up non-existent property");
+	}
+
+	return place->value;
+}
+
+static inline
+jay_value
+jay_get_super(jay_value object, size_t name, jay_value superclass) {
+	jay_instance *instance = jay_as_instance(object, "can only look up super properties on an instance");
+
+	// Superclass is "statically bound" so to speak -- see abc_super.lox. 
+	// Essentially, the superclass does not change to match the superclass
+	// of the class of the current instance (i.e. it is not instance->class->superclass),
+	// but rather, it is always the same superclass.
+	//
+	// As such, we have to somehow explicitly track the superclass. I guess
+	// this is why it is mandated to be a variable in lox -- so that that variable
+	// can always be directly looked up.
+	jay_class *superclass_real = jay_as_class(superclass, "superclass must be a class");
+
+	jay_method *method = superclass_real->dispatcher(superclass_real, name);
+	if(method) {
+		return jay_bind(method, instance);
+	}
+
+	oops("superclass has no such method");
+}
+
+static inline
+jay_value
+jay_set(jay_value object, size_t name, jay_value value) {
+	jay_instance *instance = jay_as_instance(object, "can only set fields on an instance");
+
+	jay_hash_entry *place = jay_find_bucket(instance, name);
+	if(!place) {
+		// Slow path is creating a new value on the object. This shouldn't happen
+		// too often.
+		// TODO: One optimization is that jay_find_bucket() could return
+		// the tombstone when it fails, and then, if we don't need to rehash,
+		// we could just put the item in that bucket right here...
+		//
+		// I guess that could be a variant of jay_find_bucket()?
+		jay_put_new(instance, name, value);
+	}
+	else {
+		place->value = value;
+	}
+
+	return value;
+}
+
+static inline
+void
+jay_op_get(size_t name) {
+	// TODO: Figure out whether we should be jay_pop'ing before or after evaluating
+	// inner expressions...
+	jay_push(jay_get(jay_pop(), name));
+}
+
+// Because the superclass must be a variable, we have no need to do any stack
+// machine shenanigans (even for GC purposes) -- so always pass it here.
+// Same with 'this'. But, the super _op does push a value on to the stack.
+static inline
+void
+jay_op_get_super(jay_value this, size_t name, jay_value superclass) {
+	jay_push(jay_get_super(this, name, superclass));
+}
+
+static inline
+void
+jay_op_set(size_t name) {
+	// This is an expression, so it must leave a value on the stack. For efficiency,
+	// just don't pop the value. I.e. the stack top = object, then value; just pop
+	// object.
+	jay_value object = jay_pop();
+	jay_set(object, name, jay_top());
+}
+
 /* --- Call Operators */
 
 static inline
@@ -514,6 +710,38 @@ jay_op_call(size_t arity) {
 	else {
 		oops("can only call callable objects");
 	}
+}
+
+static inline
+void
+jay_op_invoke(size_t name, size_t arity) {
+	// Leave "this" on top in case we have to do a jay_op_get() and jay_op_call()
+	jay_value target = jay_top();
+
+	jay_instance *instance = jay_as_instance(target, "can only get properties on an instance");
+
+	jay_method *method = instance->class->dispatcher(instance->class, name);
+	if(!method) {
+		// If the method doesn't exist, it still might be a field, in which case
+		// we look it up that way.
+		//
+		// I believe this differs from clox... so we could try looking up the
+		// field first, but that seems a little annoying.
+		jay_op_get(name);
+		jay_op_call(arity);
+		return;
+	}
+
+	// Okay, we have a valid method, we can actually still leave "this" on top
+	// as it's the last argument for the method...
+	jay_value result = jay_call_any(
+		method->implementation,
+		instance->class->closure,
+		method->arity,
+		arity + 1
+	);
+
+	jay_push(result);
 }
 
 static inline
@@ -736,201 +964,6 @@ jay_negate(jay_value v) {
 	return jay_number(-vd);
 }
 OP_ONE(negate)
-
-/* --- Instance Related "Hash" Map Stuff */
-
-// NOTE: This function is UNSAFE to call if you haven't guaranteed that there
-// is an empty bucket
-jay_hash_entry*
-jay_find_empty_bucket_in(jay_hash_entry *array, size_t array_size, size_t name) {
-	// TODO: Optimize to use &
-	size_t i = name % array_size;
-	for(;;) {
-		i = (i + 1) % array_size;
-
-		// We MUST find a tombstone to exit the loop.
-		if(array[i].name == JAY_NAME_TOMBSTONE) {
-			return &array[i];
-		}
-	}
-}
-
-// NOTE: This function is UNSAFE to call if you haven't guaranteed that there
-// is an empty bucket
-jay_hash_entry*
-jay_find_empty_bucket(jay_instance *instance, size_t name) {
-	return jay_find_empty_bucket_in(instance->members, instance->array_size, name);
-}
-
-jay_hash_entry*
-jay_find_bucket_in(jay_hash_entry *array, size_t array_size, size_t name) {
-	// TODO: Optimize to use &
-	size_t i = name % array_size;
-	size_t check = i;
-	while(array[i].name != name) {
-		// Linear probing
-		i = (i + 1) % array_size;
-
-		// Item doesn't exist
-		if(i == check || array[i].name == JAY_NAME_TOMBSTONE) {
-			return NULL;
-		}
-	}
-
-	return &array[i];
-}
-
-jay_hash_entry*
-jay_find_bucket(jay_instance *instance, size_t name) {
-	return jay_find_bucket_in(instance->members, instance->array_size, name);
-}
-
-void
-jay_rehash(jay_instance *instance) {
-	size_t new_size = instance->array_size * 2;
-	// TODO: calloc()
-	jay_hash_entry *new_array = jay_malloc(sizeof(*new_array) * new_size);
-
-	for(size_t i = 0; i < instance->array_size; ++i) {
-		if(instance->members[i].name != JAY_NAME_TOMBSTONE) {
-			// Note: here this should always return a tombstone, as all buckets
-			// should be empty...
-			jay_hash_entry *ptr = jay_find_empty_bucket_in(new_array, new_size, instance->members[i].name);
-			ptr->name = instance->members[i].name;
-			ptr->value = instance->members[i].value;
-		}
-	}
-
-	free(instance->members);
-
-	instance->members = new_array;
-	instance->array_size = new_size;
-}
-
-jay_value
-jay_put_new(jay_instance *scope, size_t name, jay_value value) {
-	if((scope->used_entries + 1) > scope->array_size / 2) {
-		jay_rehash(scope);
-	}
-	// We are guaranteed an empty bucket somewhere.
-	// TODO: Consider Hopgood-Davenport probing
-	jay_hash_entry *place = jay_find_empty_bucket(scope, name);
-	place->name = name;
-	place->value = value;
-
-	scope->used_entries += 1;
-
-	return value;
-}
-
-/* --- Instance Related Methods --- */
-
-static inline
-jay_value
-jay_bind(jay_method *method, jay_instance *this) {
-	jay_bound_method *result = jay_malloc(sizeof(*result));
-	result->implementation = method->implementation;
-	result->arity = method->arity;
-	result->closure = method->parent->closure;
-
-	// TODO: Do we want to be able to have a non-jay_instance "this"?
-	// probably not, as it might impede certain optimizations.. but for now,
-	// it is a bit silly that we support it in all but name
-	result->this = this;
-	return jay_bound_method_to_value(result);
-}
-
-static inline
-jay_value
-jay_get(jay_value v, size_t name) {
-	jay_instance *instance = jay_as_instance(v, "can only look up properties on an instance");
-
-	jay_method *method = instance->class->dispatcher(instance->class, name);
-	if(method) {
-		return jay_bind(method, instance);
-	}
-
-	// Look up the field on the object.
-	jay_hash_entry *place = jay_find_bucket(instance, name);
-	if(!place) {
-		oops("tried to look up non-existent property");
-	}
-
-	return place->value;
-}
-
-static inline
-jay_value
-jay_get_super(jay_value object, size_t name, jay_value superclass) {
-	jay_instance *instance = jay_as_instance(object, "can only look up super properties on an instance");
-
-	// Superclass is "statically bound" so to speak -- see abc_super.lox. 
-	// Essentially, the superclass does not change to match the superclass
-	// of the class of the current instance (i.e. it is not instance->class->superclass),
-	// but rather, it is always the same superclass.
-	//
-	// As such, we have to somehow explicitly track the superclass. I guess
-	// this is why it is mandated to be a variable in lox -- so that that variable
-	// can always be directly looked up.
-	jay_class *superclass_real = jay_as_class(superclass, "superclass must be a class");
-
-	jay_method *method = superclass_real->dispatcher(superclass_real, name);
-	if(method) {
-		return jay_bind(method, instance);
-	}
-
-	oops("superclass has no such method");
-}
-
-static inline
-jay_value
-jay_set(jay_value object, size_t name, jay_value value) {
-	jay_instance *instance = jay_as_instance(object, "can only set fields on an instance");
-
-	jay_hash_entry *place = jay_find_bucket(instance, name);
-	if(!place) {
-		// Slow path is creating a new value on the object. This shouldn't happen
-		// too often.
-		// TODO: One optimization is that jay_find_bucket() could return
-		// the tombstone when it fails, and then, if we don't need to rehash,
-		// we could just put the item in that bucket right here...
-		//
-		// I guess that could be a variant of jay_find_bucket()?
-		jay_put_new(instance, name, value);
-	}
-	else {
-		place->value = value;
-	}
-
-	return value;
-}
-
-static inline
-void
-jay_op_get(size_t name) {
-	// TODO: Figure out whether we should be jay_pop'ing before or after evaluating
-	// inner expressions...
-	jay_push(jay_get(jay_pop(), name));
-}
-
-// Because the superclass must be a variable, we have no need to do any stack
-// machine shenanigans (even for GC purposes) -- so always pass it here.
-// Same with 'this'. But, the super _op does push a value on to the stack.
-static inline
-void
-jay_op_get_super(jay_value this, size_t name, jay_value superclass) {
-	jay_push(jay_get_super(this, name, superclass));
-}
-
-static inline
-void
-jay_op_set(size_t name) {
-	// This is an expression, so it must leave a value on the stack. For efficiency,
-	// just don't pop the value. I.e. the stack top = object, then value; just pop
-	// object.
-	jay_value object = jay_pop();
-	jay_set(object, name, jay_top());
-}
 
 /* --- Builtin Functions (e.g. clock) --- */
 

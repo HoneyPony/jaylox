@@ -144,10 +144,29 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 					self.compile_expr(arg, into)?;
 				}
 
-				self.compile_expr(callee, into)?;
+				match callee.as_ref() {
+					// If the callee is a Get, then instead of making a new bound
+					// method, do an invoke
+					Expr::Get { object, name } => {
+						self.compile_expr(object, into)?;
 
-				self.indent(into);
-				write!(into, "jay_op_call({});\n", arguments.len())?;
+						self.add_name(name);
+						self.indent(into);
+						write!(into, "jay_op_invoke(NAME_{}, {});\n",
+							name.lexeme, arguments.len())?;
+					}
+					// For regular calls, just compile the inner expression,
+					// and then do a normal call.
+					_ => {
+						self.compile_expr(callee, into)?;
+
+						self.indent(into);
+						write!(into, "jay_op_call({});\n", arguments.len())?;
+					}
+				}
+				
+
+				
 			},
 			Expr::Get { object, name } => {
 				self.compile_expr(object, into)?;
