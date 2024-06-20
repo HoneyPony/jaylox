@@ -1,6 +1,6 @@
 use core::fmt;
 use std::collections::HashMap;
-use std::{collections::HashSet, fmt::Write, rc::Rc};
+use std::{collections::HashSet, fmt::Write};
 
 use crate::stmt::{Class, Function};
 use crate::VarRef;
@@ -65,7 +65,7 @@ impl<'a> Compiler<'a> {
 	}
 
 	fn indent(&self, into: &mut String) {
-		for i in 0..self.current_indent {
+		for _ in 0..self.current_indent {
 			into.push('\t');
 		}
 	}
@@ -108,7 +108,7 @@ impl<'a> Compiler<'a> {
 			Expr::Binary { left, operator, right } => {
 				self.binary_op(into, left, operator, right)?;
 			},
-			Expr::Call { callee, paren, arguments } => {
+			Expr::Call { callee, arguments, .. } => {
 				// Push all args, push the callee, then do jay_op_call.
 
 				for arg in arguments {
@@ -190,7 +190,7 @@ impl<'a> Compiler<'a> {
 				self.indent(into);
 				writeln!(into, "jay_op_set(NAME_{});", name.lexeme)?
 			},
-			Expr::Super { keyword, method, identity, this_identity } => {
+			Expr::Super { method, identity, this_identity, .. } => {
 				// Super is a little unique in that it is one of the only
 				// operators that explicitly takes a non-stack argument (because
 				// the superclass is always a variable, which is necessarily
@@ -230,7 +230,7 @@ impl<'a> Compiler<'a> {
 				self.compile_var(*identity, into)?;
 				write!(into, ");\n")?;
 			},
-			Expr::Assign { name, value, identity } => {
+			Expr::Assign { value, identity, .. } => {
 				self.compile_expr(value, into)?;
 				self.indent(into);
 				write!(into, "jay_push(")?;
@@ -309,7 +309,7 @@ impl<'a> Compiler<'a> {
 
 		// Track 'has_locals_frame' down the call stack
 		let enclosing_locals = self.has_locals_frame;
-		self.has_locals_frame = (fun.local_count > 0);
+		self.has_locals_frame = fun.local_count > 0;
 
 		let enclosing_captures = self.has_captures_frame;
 		self.has_captures_frame = fun.captured.len() > 0;
@@ -629,7 +629,7 @@ impl<'a> Compiler<'a> {
 				self.indent(into);
 				into.push_str("jay_op_print();\n");
 			},
-			Stmt::Return { keyword, value } => {
+			Stmt::Return { value, .. } => {
 				match value {
 					Some(value) => { self.compile_expr(value, into)?; },
 					None => {
@@ -651,7 +651,7 @@ impl<'a> Compiler<'a> {
 				// in that process.
 				into.push_str("return jay_pop();\n");
 			},
-			Stmt::Var { name, initializer, identity } => {
+			Stmt::Var { initializer, identity, .. } => {
 				// The only real role this statement plays, given that the variables are
 				// all generally "initialized" already, is explicitly initializing them
 				// to jay_null().

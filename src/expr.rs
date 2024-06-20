@@ -42,7 +42,7 @@ impl Expr {
 		Ok(folded)
 	}
 
-	fn bi_fold_logical(left: LoxValue, operator: Token, right: LoxValue, lox: &mut Lox) -> Result<LoxValue, ExprErr> {
+	fn bi_fold_logical(left: LoxValue, operator: Token, right: LoxValue) -> Result<LoxValue, ExprErr> {
 		// The short-circuiting semantic is that, if the right operand does not need
 		// to be evaluated, the left one is returned. So, we have to implement that here.
 		//
@@ -63,7 +63,7 @@ impl Expr {
 			TokenType::Less | TokenType::LessEqual |
 			TokenType::Greater | TokenType::GreaterEqual => Self::bi_fold_numerical(left, operator, right, lox),
 
-			TokenType::And | TokenType::Or => Self::bi_fold_logical(left, operator, right, lox),
+			TokenType::And | TokenType::Or => Self::bi_fold_logical(left, operator, right),
 
 			TokenType::Plus => {
 				match (left, right) {

@@ -1,8 +1,5 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::env::var;
-use std::hash::Hash;
-use std::rc::Rc;
 
 use crate::expr::*;
 use crate::stmt::Function;

@@ -93,7 +93,7 @@ impl Lox {
 			scanner.scan_tokens()
 		};
 
-		let (mut program, globals_count) = {
+		let (program, globals_count) = {
 			let mut parser = Parser::new(tokens, self);
 			parser.parse()
 		};
