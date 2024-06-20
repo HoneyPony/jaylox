@@ -98,6 +98,8 @@ impl<'a> Parser<'a> {
 		// Otherwise, this variable should be in a closure. If it's already in a closure,
 		// great, otherwise, set it to be in one.
 		//
+		// IMPORTANT! If it's a CapturedParameter, it should stay the same.
+		//
 		// In terms of resolving them... I think the main thing to do is, in the compiler,
 		// walk down the tree, and keep track of current closure variables. Then, increment
 		// their pointer-chase value each time we step into a new function THAT HAS A CLOSURE,
@@ -105,6 +107,7 @@ impl<'a> Parser<'a> {
 		let new_type = match self.lox.get_var_type(ptr) {
 			// For parameters, store the original parameter index for later.
 			VarType::Parameter => VarType::CapturedParameter(self.lox.get_var_mut(ptr).index),
+			VarType::CapturedParameter(idx) => VarType::CapturedParameter(idx),
 			_ => VarType::Captured,
 		};
 		self.lox.get_var_mut(ptr).typ = new_type;
