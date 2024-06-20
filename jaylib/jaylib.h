@@ -466,12 +466,14 @@ jay_value
 jay_neq(jay_value a, jay_value b) {
 	return jay_boolean(!jay_eq_impl(a, b));
 }
+OP_TWO(neq)
 
 static inline
 jay_value
 jay_eq(jay_value a, jay_value b) {
 	return jay_boolean(jay_eq_impl(a, b));
 }
+OP_TWO(eq)
 
 static inline
 jay_value
