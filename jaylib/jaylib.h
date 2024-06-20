@@ -916,7 +916,7 @@ jay_op_set(size_t name) {
 
 static
 jay_value
-jay_std_clock(jay_value *args, jay_instance *closure) {
+jay_std_clock(jay_value *args, jay_closure *closure) {
 	clock_t time = clock();
 	double ms = (time * 1000.0 / CLOCKS_PER_SEC);
 	return jay_number(ms);

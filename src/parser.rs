@@ -842,6 +842,9 @@ impl<'a> Parser<'a> {
 		self.push_scope();
 		self.push_fun_scope();
 
+		// Create default global variables
+		self.add_default_globals(&mut result);
+
 		while !self.is_at_end() {
 			if let Some(next) = self.declaration() { result.push(next); }
 		}
@@ -870,5 +873,27 @@ impl<'a> Parser<'a> {
 
 		// Return the globals count
 		(result, global_index)
+	}
+
+	// Helper function for creating library functions
+	fn std_extern_fun(&mut self, var_name: &str, c_name: &str, arity: u32) -> Stmt {
+		// You should not call std_extern_fun in a way where it would fail.
+		let identity = match self.declare_variable(var_name.to_string()) {
+			Ok(identity) => identity,
+			Err(_) => panic!("std_extern_fun failed to declare variable")
+		};
+
+		return Stmt::externfunction(
+			var_name.to_string(), 
+			c_name.to_string(), 
+			arity, 
+			identity);
+	}
+
+	// Any library functions, etc, must be added here. Of course, this does
+	// mean that there is extra overhead for adding globals that are completely
+	// unused, which we could try to fix, but for now it's fine...
+	fn add_default_globals(&mut self, stmts: &mut Vec<Stmt>) {
+		stmts.push(self.std_extern_fun("clock", "jay_std_clock", 0));
 	}
 }

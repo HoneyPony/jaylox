@@ -157,6 +157,7 @@ fn generate_ast_files(expr: &mut File, stmt: &mut File) -> io::Result<()> {
 		ty("Block", vec![arg_stmt("statements", "Vec<Stmt>")]),
 		ty("Class", vec![arg_stmt("class", "Class")]),
 		ty("Expression", vec![arg_stmt("expression", "Expr")]),
+		ty("ExternFunction", vec![arg_stmt("var_name", "String"), arg_stmt("c_name", "String"), arg_stmt("arity", "u32"), arg_stmt("identity", "VarRef")]),
 		ty("Function", vec![arg_stmt("function", "Function")]),
 		ty("If", vec![arg_stmt("condition", "Expr"), arg_stmt("then_branch", "Stmt"), arg_stmt("else_branch", "Option<Stmt>")]),
 		ty("Print", vec![arg_stmt("expression", "Expr")]),

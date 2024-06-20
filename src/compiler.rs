@@ -626,6 +626,13 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 				writeln!(into, " = jay_fun_from({}, {}, scope);",
 					mangled_name, fun.param_count)?;
 			},
+			// TODO: Do we even need to have a var_name field on ExternFunction..?
+			Stmt::ExternFunction { c_name, arity, identity, .. } => {
+				// Like a function, except we don't need to compile anything -- just
+				// insert the known name into the current scope.
+				self.compile_var(*identity, into)?;
+				writeln!(into, " = jay_fun_from({c_name}, {arity}, scope);")?;
+			},
 			Stmt::If { condition, then_branch, else_branch } => {
 				self.compile_expr(condition, into)?;
 				self.indent(into);
