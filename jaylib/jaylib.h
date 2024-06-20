@@ -727,6 +727,7 @@ jay_value
 jay_not(jay_value v) {
 	return jay_boolean(!jay_truthy(v));
 }
+OP_ONE(not)
 
 static inline
 jay_value
@@ -734,6 +735,7 @@ jay_negate(jay_value v) {
 	double vd = jay_as_number(v, "negation expects a number");
 	return jay_number(-vd);
 }
+OP_ONE(negate)
 
 /* --- Instance Related "Hash" Map Stuff */
 
