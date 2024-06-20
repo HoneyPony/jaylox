@@ -1,0 +1,22 @@
+class Super {
+	call() {
+		print "in super";
+	}
+}
+
+class Other < Super {
+	call() {
+		print "in other";
+	}
+}
+
+class Box {
+	init(obj) {
+		this.obj = obj;
+	}
+}
+
+var box = Box(Other());
+
+// Doesn't parse, because 'super' isn't a name.
+box.super.call();

@@ -829,6 +829,29 @@ jay_get(jay_value v, size_t name) {
 
 static inline
 jay_value
+jay_get_super(jay_value object, size_t name, jay_value superclass) {
+	jay_instance *instance = jay_as_instance(object, "can only look up super properties on an instance");
+
+	// Superclass is "statically bound" so to speak -- see abc_super.lox. 
+	// Essentially, the superclass does not change to match the superclass
+	// of the class of the current instance (i.e. it is not instance->class->superclass),
+	// but rather, it is always the same superclass.
+	//
+	// As such, we have to somehow explicitly track the superclass. I guess
+	// this is why it is mandated to be a variable in lox -- so that that variable
+	// can always be directly looked up.
+	jay_class *superclass_real = jay_as_class(superclass, "superclass must be a class");
+
+	jay_method *method = superclass_real->dispatcher(superclass_real, name);
+	if(method) {
+		return jay_bind(method, instance);
+	}
+
+	oops("superclass has no such method");
+}
+
+static inline
+jay_value
 jay_set(jay_value object, size_t name, jay_value value) {
 	jay_instance *instance = jay_as_instance(object, "can only set fields on an instance");
 
@@ -851,7 +874,18 @@ jay_set(jay_value object, size_t name, jay_value value) {
 static inline
 void
 jay_op_get(size_t name) {
+	// TODO: Figure out whether we should be jay_pop'ing before or after evaluating
+	// inner expressions...
 	jay_push(jay_get(jay_pop(), name));
+}
+
+// Because the superclass must be a variable, we have no need to do any stack
+// machine shenanigans (even for GC purposes) -- so always pass it here.
+// Same with 'this'. But, the super _op does push a value on to the stack.
+static inline
+void
+jay_op_get_super(jay_value this, size_t name, jay_value superclass) {
+	jay_push(jay_get_super(this, name, superclass));
 }
 
 static inline

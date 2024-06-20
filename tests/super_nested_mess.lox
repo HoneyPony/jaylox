@@ -1,0 +1,28 @@
+// This file shows what happens if we have a inner class inside a method, that
+// tries to use 'super' to access the superclass of the outer class.
+
+class Super {
+	override() {
+		print "inside super";
+	}
+}
+
+class Outer < Super {
+	override() {
+		print "inside outer";
+	}
+
+	method() {
+		class Inner {
+			inner() {
+				super.override();
+			}
+		}
+
+		return Inner;
+	}
+}
+
+var outer = Outer();
+var inner = outer.method();
+inner().inner();

@@ -190,8 +190,26 @@ impl<'a> Compiler<'a> {
 				self.indent(into);
 				writeln!(into, "jay_op_set(NAME_{});", name.lexeme)?
 			},
-			Expr::Super { keyword, method, resolved } => {
-				todo!();
+			Expr::Super { keyword, method, identity, this_identity } => {
+				// Super is a little unique in that it is one of the only
+				// operators that explicitly takes a non-stack argument (because
+				// the superclass is always a variable, which is necessarily
+				// already reachable by GC)
+				// Similarly, 'this' is always a variable. So super actually
+				// takes two non-stack arguments.
+
+				// TODO: Is "already reachable" enough when talking about
+				// a compacting collector? We need to reach every reference
+				// to something... will have to think about it while designing
+				// the garbage collector...
+
+				self.add_name(method);
+				self.indent(into);
+				write!(into, "jay_op_get_super(")?;
+				self.compile_var(*this_identity, into)?;
+				write!(into, ", NAME_{}, ", method.lexeme)?;
+				self.compile_var(*identity, into)?;
+				writeln!(into, ");")?;
 			},
 			Expr::Unary { operator, right } => {
 				let op = match operator.typ {

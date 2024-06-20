@@ -48,6 +48,9 @@ pub struct Parser<'a> {
 	// statements (make sure they're 'return;' and transform them into 'return this;')
 	in_initializer: bool,
 
+	// Stores which VarRef is currently the superclass.
+	current_superclass: Option<VarRef>,
+
 	lox: &'a mut Lox
 }
 
@@ -64,6 +67,7 @@ impl<'a> Parser<'a> {
 			undeclared_globals: HashSet::new(),
 
 			in_initializer: false,
+			current_superclass: None,
 		}
 	}
 
@@ -388,6 +392,45 @@ impl<'a> Parser<'a> {
 		Ok(expr)
 	}
 
+	fn get_previous_variable_identity(&mut self) -> Result<VarRef, ExprErr> {
+		let identity = self.find_variable_previous();
+
+		let Some(identity) = identity else {
+			// If we didn't find the variable, it is undeclared. So, the only
+			// possibility that lets the program compile is that it is a global
+			// variable that will be declared later.
+			//
+			// If we're at the top-level, i.e. fun_scopes.len() == 1, then
+			// it's not allowed to access a variable before it's defined, so
+			// we should error out.
+			//
+			// Otherwise, we should add the variable to the globals array,
+			// but also remember that we want to see a declaration for it at
+			// some point. If we never see a declaration, than something is wrong.
+
+			if self.fun_scopes.len() <= 1 {
+				// TODO: Get rid of 'clone()' somehow..
+				self.error_report(&self.previous().clone(), "At top level: Unknown identifier.\nExtra info: Outside a function, you cannot use a global variable before it's declared.");
+
+				return Err(ExprErr);
+			}
+
+			// Okay, the variable should be valid. Create it and add it to the global scopes,
+			// plus the undeclared set.
+			let variable = self.lox.new_var();
+			let varname = self.previous().lexeme.clone();
+
+			self.scopes.first_mut().unwrap().variables.insert(varname, variable);
+			self.fun_scopes.first_mut().unwrap().variables.insert(variable);
+
+			self.undeclared_globals.insert(variable);
+
+			return Ok(variable);
+		};
+
+		return Ok(identity);
+	}
+
 	fn primary(&mut self) -> ExprRes {
 		if self.match_one(False) { return Ok(LoxValue::Bool(false).into()) }
 		if self.match_one(True) { return Ok(LoxValue::Bool(true).into()) }
@@ -417,46 +460,27 @@ impl<'a> Parser<'a> {
 			let method = self.consume(Identifier,
 				"Expect superclass method name.")?;
 
+
+			// Like with 'this', we kind of have to check whether the superclass
+			// is valid at parse time..
+			let Some(identity) = self.current_superclass else {
+				self.error_report(&keyword, "Can't use 'super' in a class with no superclass.");
+				return Err(ExprErr);
+			};
+
+			let this_identity = self.find_variable("this")
+				.expect("If the super lookup worked, this definitely should have.");
+
 			// Note to self while writing this:
 			// It seems quite possible that, instead of cloning Token's willy-nilly,
 			// we could have simply returned either a reference to the token, or
 			// perhaps an index into the Token Vec...
 
-			return Ok(Expr::super_(keyword, method, None));
+			return Ok(Expr::super_(keyword, method, identity, this_identity));
 		}
 
 		if self.match_one(Identifier) {
-			let identity = self.find_variable_previous();
-
-			let Some(identity) = identity else {
-				// If we didn't find the variable, it is undeclared. So, the only
-				// possibility that lets the program compile is that it is a global
-				// variable that will be declared later.
-				//
-				// If we're at the top-level, i.e. fun_scopes.len() == 1, then
-				// it's not allowed to access a variable before it's defined, so
-				// we should error out.
-				//
-				// Otherwise, we should add the variable to the globals array,
-				// but also remember that we want to see a declaration for it at
-				// some point. If we never see a declaration, than something is wrong.
-
-				if self.fun_scopes.len() <= 1 {
-					return self.error_expr(self.previous().clone(), "At top level: Unknown identifier.\nExtra info: Outside a function, you cannot use a global variable before it's declared.");
-				}
-
-				// Okay, the variable should be valid. Create it and add it to the global scopes,
-				// plus the undeclared set.
-				let variable = self.lox.new_var();
-				let varname = self.previous().lexeme.clone();
-
-				self.scopes.first_mut().unwrap().variables.insert(varname, variable);
-				self.fun_scopes.first_mut().unwrap().variables.insert(variable);
-
-				self.undeclared_globals.insert(variable);
-
-				return Ok(Expr::variable(self.previous().clone(), variable));
-			};
+			let identity = self.get_previous_variable_identity()?;
 			return Ok(Expr::variable(self.previous().clone(), identity));
 		}
 
@@ -730,11 +754,15 @@ impl<'a> Parser<'a> {
 		// TODO: Possible optimization: hoist classes that are not "dynamic"
 		// (e.g. no closure, no dynamic superclass) to global scope
 		let identity = self.declare_variable(name.lexeme.clone())?;
-		
-		// let superclass = if self.match_one(Less) {
-		// 	let identifier = self.consume(Identifier, "Expect superclass name.")?;
-		// 	Some(identifier)
-		// } else { None };
+
+		let superclass = if self.match_one(Less) {
+		 	self.consume(Identifier, "Expect superclass name.")?;
+			Some(self.get_previous_variable_identity()?)
+		} else { None };
+
+		// Track superclass for 'super' expressions.
+		let enclosing_superclass = self.current_superclass;
+		self.current_superclass = superclass;
 
 		self.consume(LeftBrace, "Expect '{' before class body.")?;
 
@@ -755,11 +783,13 @@ impl<'a> Parser<'a> {
 
 		self.consume(RightBrace, "Expect '}' after class body.")?;
 
-		// TODO: Implement superclass
+		// Pop superclass info.
+		self.current_superclass = enclosing_superclass;
+
 		Ok(Stmt::class(crate::stmt::Class {
 			name,
 			methods,
-			superclass: None,
+			superclass,
 			identity,
 		}))
 	}
