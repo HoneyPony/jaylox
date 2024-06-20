@@ -138,6 +138,7 @@ typedef struct jay_instance {
 #define JAY_CLASS 7
 // TODO: Move this tag to the jay_object, and then do NaN boxing, etc..
 #define JAY_BOUND_METHOD 8
+#define JAY_METHOD 9
 
 // Use 0 for the tombstone so that we can memset() the array to 0 / use calloc.
 #define JAY_NAME_TOMBSTONE 0
@@ -329,6 +330,15 @@ jay_instance_to_value(jay_instance *instance) {
 
 static inline
 jay_value
+jay_class_to_value(jay_class *class) {
+	jay_value res;
+	res.tag = JAY_CLASS;
+	res.as_class = class;
+	return res;
+}
+
+static inline
+jay_value
 jay_string_into(char *ptr) {
 	jay_value res;
 	res.tag = JAY_STRING;
@@ -453,6 +463,18 @@ jay_fun_from(jay_function_impl impl, size_t arity, jay_closure *closure) {
 	// TODO: Move these tags to the jay_object; should only have a few for jay_value
 	v.tag = JAY_FUNCTION;
 	return v;
+}
+
+// Note that methods are weird in that they are not jay_objects nor can they
+// be stored in jay_values.
+static inline
+jay_method
+jay_method_from(jay_class *class, jay_function_impl impl, size_t arity) {
+	return (jay_method) {
+		.parent = class,
+		.implementation = impl,
+		.arity = arity
+	};
 }
 
 jay_closure*

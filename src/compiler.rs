@@ -414,7 +414,9 @@ impl<'a> Compiler<'a> {
 			// automatically added at the end.
 			self.compile_function(method, &method_mangled_name)?;
 
-			writeln!(def, "\tclass->methods[{idx}] = jay_method_from(class, {method_mangled_name}, {}, closure);",
+			// Methods do not store the closure, because the have a pointer back
+			// to the class.
+			writeln!(def, "\tclass->methods[{idx}] = jay_method_from(class, {method_mangled_name}, {});",
 				method.param_count)?;
 		}
 

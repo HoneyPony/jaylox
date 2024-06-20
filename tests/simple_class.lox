@@ -1,0 +1,7 @@
+class Test {
+	method() {
+		print "hello";
+	}
+}
+
+var test = Test();
