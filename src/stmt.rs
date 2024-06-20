@@ -29,7 +29,7 @@ impl Function {
 
 			identity: None, // This is a method which doesn't have identity
 			vars: HashSet::new(),
-			param_count: 0,
+			param_count: 1, // Any method needs at least 1 param, for 'this'
 			local_count: 0,
 
 			captured: vec![],
