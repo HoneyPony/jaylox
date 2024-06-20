@@ -420,6 +420,8 @@ jay_call_any(jay_function_impl fun, jay_closure *closure, size_t actual_arity, s
 
 	jay_value result = fun(jay_stack_ptr - actual_arity, closure);
 
+	jay_stack_ptr -= actual_arity;
+
 	return result;
 }
 
@@ -577,6 +579,18 @@ jay_print(jay_value value) {
 	}
 }
 OP_ONE(print)
+
+static inline
+void
+jay_dbg_stack(const char *message) {
+	if(jay_stack_ptr == jay_stack) {
+		printf("%s\t[empty]\n", message);
+		return;
+	}
+
+	printf("%s\t%llu : ", message, (jay_stack_ptr - jay_stack));
+	jay_print(jay_top());
+}
 
 static inline
 jay_value

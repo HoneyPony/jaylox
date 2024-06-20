@@ -469,6 +469,13 @@ impl<'a> Parser<'a> {
 				return Err(ExprErr);
 			};
 
+			// When we access the superclass through super, we have to add it
+			// to the closure so that we can find it later (that is, if the
+			// superclass it not a global variable, for example).
+			// Usually find_variable() would do this, but because we just look
+			// it up in self.current_superclass, we have to do it manually.
+			self.check_closure(identity /* identity == superclass */);
+
 			let this_identity = self.find_variable("this")
 				.expect("If the super lookup worked, this definitely should have.");
 

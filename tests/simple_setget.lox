@@ -1,0 +1,12 @@
+class Bag {
+
+}
+
+var bag = Bag();
+print bag;
+
+bag.x = 2;
+print bag.x;
+
+bag.y = 5;
+print bag.y;
