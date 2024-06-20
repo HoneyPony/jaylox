@@ -498,7 +498,7 @@ jay_op_call(size_t arity) {
 			class->methods[0].implementation,
 			class->closure,
 			class->methods[0].arity,
-			arity
+			arity + 1 // Same as above
 		);
 		
 		// For initializers, we can simply ignore the return value...

@@ -1,0 +1,16 @@
+class Test {
+	init(flag) {
+		print("raise the flag");
+
+		if(flag) {
+			return;
+		}
+
+		print("lower the flag");
+	}
+}
+
+var test = Test(true);
+print test;
+
+print test.init(false);
