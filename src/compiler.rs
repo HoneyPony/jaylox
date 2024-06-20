@@ -37,6 +37,9 @@ pub struct Compiler<'a> {
 	/// (We could implement it in a way with even less pointer chasing, but this is a good
 	/// starting point)
 	captured_depths: HashMap<VarRef, u32>,
+
+	/// The set of strings that we've already used as function names.
+	mangled_set: HashSet<String>,
 }
 
 impl<'a> Compiler<'a> {
@@ -53,6 +56,28 @@ impl<'a> Compiler<'a> {
 			has_captures_frame: false,
 
 			captured_depths: HashMap::new(),
+
+			mangled_set: HashSet::new(),
+		}
+	}
+
+	fn mangle(&mut self, starting_point: String) -> String {
+		// "Fast" path: If the name is unused, just use it (and track so)
+		if !self.mangled_set.contains(&starting_point) {
+			self.mangled_set.insert(starting_point.clone());
+			return starting_point;
+		}
+
+		let mut suffix: u64 = 0;
+		loop {
+			let candidate: String = format!("{}_{}", starting_point, suffix);
+			if !self.mangled_set.contains(&candidate) {
+				self.mangled_set.insert(candidate.clone());
+				return candidate;
+			}
+
+			// There is no way we get through all values of u64 without colliding...
+			suffix += 1;
 		}
 	}
 
@@ -469,8 +494,8 @@ impl<'a> Compiler<'a> {
 
 	fn compile_class(&mut self, class: &Class, mangled_name: &String) -> fmt::Result {
 		// To create the class-defining function, we need the dispatcher.
-		// TODO NAME MANGLING
-		let dispatcher_mangled = format!("{}_dispatcher", class.name.lexeme);
+		let dispatcher_mangled = self.mangle(
+			format!("jdisp_{}", class.name.lexeme));
 		self.compile_class_dispatcher(class, &dispatcher_mangled)?;
 
 		let mut def = String::new();
@@ -493,8 +518,8 @@ impl<'a> Compiler<'a> {
 		// TODO: If we want to be able to have init in a jay_bound_method, I geuss
 		// it will also need to be part of the method table..?
 		for (idx, method) in class.methods.iter().enumerate() {
-			// TODO: NAME MANGLING (real)
-			let method_mangled_name = format!("{}_{}", class.name.lexeme, method.name.lexeme);
+			let method_mangled_name = self.mangle(
+				format!("jm_{}_{}", class.name.lexeme, method.name.lexeme));
 			
 			// The C function should be the same, due to the 'this' variable being
 			// automatically added at the end.
@@ -551,8 +576,7 @@ impl<'a> Compiler<'a> {
 				into.push_str("}\n");
 			},
 			Stmt::Class(class) => {
-				// TODO: NAME MANGLING
-				let mangled_name = class.name.lexeme.clone();
+				let mangled_name = self.mangle(format!("jclass_{}", class.name.lexeme));
 
 				self.compile_class(class, &mangled_name)?;
 
@@ -581,8 +605,7 @@ impl<'a> Compiler<'a> {
 				into.push_str("jay_pop();\n");
 			},
 			Stmt::Function(fun) => {
-				// TODO: NAME MANGLING
-				let mangled_name = fun.name.lexeme.clone();
+				let mangled_name = self.mangle(format!("jf_{}", fun.name.lexeme));
 				self.compile_function(fun, &mangled_name)?;
 
 				// In the outer scope, we need to have a reference to this function

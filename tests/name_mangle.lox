@@ -1,0 +1,49 @@
+// This file is important to show that we don't end up with name collisions
+// that result in the C compiler being unable to compile our code.
+
+class SomeClass {
+	init() {
+		print "SomeClass::init";
+	}
+
+	method() {
+		print "SomeClass::method";
+	}
+}
+
+fun method() {
+	print "method";
+
+	class SomeClass {
+		init() {
+			print "method::SomeClass::init";
+		}
+
+		method() {
+			print "method::SomeClass::method";
+
+			class SomeClass {
+				init() {
+					print "method::SomeClass::method::SomeClass::init";
+				}
+
+				method() {
+					print "method::SomeClass::method::SomeClass::method";
+				}
+			}
+
+			return SomeClass;
+		}
+	}
+
+	return SomeClass;
+}
+
+var sc0 = method();
+var sc1 = sc0();
+var sc2 = sc1.method();
+var sc3 = sc2();
+var sc4 = sc3.method();
+
+var tsc0 = SomeClass();
+var tsc1 = tsc0.method();
