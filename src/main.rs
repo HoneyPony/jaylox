@@ -19,6 +19,9 @@ pub enum VarType {
 	Local,
 	Parameter,
 	Captured,
+	// A function parameter that becomes captured by a closure. Requires somewhat
+	// special treatment. Tracks its original idx in u32.
+	CapturedParameter(u32),
 	Global,
 }
 

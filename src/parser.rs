@@ -98,7 +98,12 @@ impl<'a> Parser<'a> {
 		// walk down the tree, and keep track of current closure variables. Then, increment
 		// their pointer-chase value each time we step into a new function THAT HAS A CLOSURE,
 		// and simiarly decrement it afterwards.
-		self.lox.get_var_mut(ptr).typ = VarType::Captured;
+		let new_type = match self.lox.get_var_type(ptr) {
+			// For parameters, store the original parameter index for later.
+			VarType::Parameter => VarType::CapturedParameter(self.lox.get_var_mut(ptr).index),
+			_ => VarType::Captured,
+		};
+		self.lox.get_var_mut(ptr).typ = new_type;
 	}
 
 	fn find_variable_previous(&mut self)-> Option<VarRef> {
@@ -583,7 +588,10 @@ impl<'a> Parser<'a> {
 					locals_idx += 1;
 				},
 				VarType::Parameter => { /* already assigned */ },
-				VarType::Captured => {
+
+				// Both these are treated the same most places, but require
+				// a little bit of extra finagling in the compiler
+				VarType::Captured | VarType::CapturedParameter(_)=> {
 					self.lox.get_var_mut(*var).index = captures_idx;
 					captures_idx += 1;
 
