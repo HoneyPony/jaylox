@@ -5,6 +5,7 @@ mod parser;
 //mod resolver;
 mod compiler;
 
+use std::collections::HashMap;
 use std::{env, fs::File};
 use std::process::{exit, Command, Stdio};
 use std::io;
@@ -33,10 +34,22 @@ pub struct Variable {
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct VarRef(usize);
 
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub struct StrConstRef(usize);
+
+impl StrConstRef {
+	pub fn to_number(self) -> usize {
+		return self.0;
+	}
+}
+
 pub struct Lox {
 	had_error: bool,
 
-	variables: Vec<Variable>
+	variables: Vec<Variable>,
+
+	pub string_constants: Vec<String>,
+	string_constant_map: HashMap<String, StrConstRef>,
 }
 
 enum CompileOutput {
@@ -57,8 +70,28 @@ impl Lox {
 		Lox {
 			had_error: false,
 
-			variables: vec![]
+			variables: vec![],
+
+			string_constants: vec![],
+			string_constant_map: HashMap::new(),
 		}
+	}
+
+	fn put_string_constant(&mut self, value: String) -> StrConstRef {
+		if let Some(ptr) = self.string_constant_map.get(&value) {
+			return *ptr;
+		}
+
+		self.string_constants.push(value.clone());
+		let ptr = StrConstRef(self.string_constants.len() - 1);
+		self.string_constant_map.insert(value, ptr);
+
+		return ptr;
+	}
+
+	fn get_string_constant(&self, ptr: StrConstRef) -> &str {
+		// Safety: we only ever hand out valid StrConstRefs. 
+		unsafe { self.string_constants.get_unchecked(ptr.0) }
 	}
 
 	fn new_var(&mut self) -> VarRef {

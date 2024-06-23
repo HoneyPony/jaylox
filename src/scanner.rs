@@ -1,6 +1,6 @@
-use std::{collections::HashMap, rc::Rc};
+use std::collections::HashMap;
 
-use crate::{expr::Expr, Lox};
+use crate::{expr::Expr, Lox, StrConstRef};
 
 #[derive(PartialEq, Eq, Debug, Clone, Copy)]
 pub enum TokenType {
@@ -23,20 +23,9 @@ pub enum TokenType {
 #[derive(Clone, PartialEq)]
 pub enum LoxValue {
 	Nil,
-	String(Rc<str>),
+	String(StrConstRef),
 	Number(f64),
 	Bool(bool),
-}
-
-impl ToString for LoxValue {
-	fn to_string(&self) -> String {
-		match self {
-			LoxValue::Nil => "nil".to_string(),
-			LoxValue::String(what) => format!("'{what}'"),
-			LoxValue::Number(num) => num.to_string(),
-			LoxValue::Bool(bool) => bool.to_string(),
-		}
-	}
 }
 
 impl LoxValue {
@@ -70,12 +59,6 @@ impl Token {
 	}
 }
 
-impl ToString for Token {
-	fn to_string(&self) -> String {
-		return format!("{0:?} {1} {2}", self.typ, self.lexeme, self.literal.to_string());
-	}
-}
-
 pub struct Scanner<'a> {
 	source: String,
 	chars: Vec<char>,
@@ -86,14 +69,6 @@ pub struct Scanner<'a> {
 	lox: &'a mut Lox,
 
 	keyword_hash: HashMap<&'static str, TokenType>,
-
-	/// When building the initial tokens, use a cache of Rc<String> so that we
-	/// can re-use the String values.
-	/// 
-	/// It would be nice to be able to re-use String values created by the application,
-	/// but that's not very easy as somehow the Rc in the HashMap needs to not be
-	/// counted.
-	string_rc_cache: HashMap<String, Rc<str>>,
 }
 
 fn is_digit(c: char) -> bool {
@@ -133,8 +108,6 @@ impl<'a> Scanner<'a> {
 			("while",  TokenType::While),
 		]);
 
-		let string_rc_cache = HashMap::new();
-
 		Scanner {
 			source,
 			chars,
@@ -145,8 +118,6 @@ impl<'a> Scanner<'a> {
 			lox,
 
 			keyword_hash,
-
-			string_rc_cache,
 		}
 	}
 
@@ -197,19 +168,6 @@ impl<'a> Scanner<'a> {
 		tokens.push(Token::new(typ, String::from_iter(text), lit, self.line));
 	}
 
-	fn get_cached_string(&mut self, value: String) -> Rc<str> {
-		if let Some(ptr) = self.string_rc_cache.get(&value) {
-			return ptr.clone();
-		}
-
-		// Insert the value into the cache.
-		let key = value.clone();
-		let rc: Rc<str> = value.into_boxed_str().into();
-		self.string_rc_cache.insert(key, rc.clone());
-
-		rc
-	}
-
 	fn string(&mut self, tokens: &mut Vec<Token>) {
 		while self.peek() != '"' && !self.is_at_end() {
 			if self.peek() == '\n' { self.line += 1; }
@@ -228,7 +186,7 @@ impl<'a> Scanner<'a> {
 		let trimmed = &self.chars[(self.start + 1) as usize..(self.current - 1) as usize];
 		let trimmed = String::from_iter(trimmed);
 
-		let string = self.get_cached_string(trimmed);
+		let string = self.lox.put_string_constant(trimmed);
 
 		self.add_token_lit(tokens, TokenType::StringTok, LoxValue::String(string));
 	}

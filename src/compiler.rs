@@ -194,7 +194,11 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 				self.indent(into);
 				match value {
 					LoxValue::Nil => into.push_str("jay_op_null()"),
-					LoxValue::String(chars) => write!(into, "jay_op_string_from_literal(\"{}\")", chars)?,
+					LoxValue::String(ptr) => {
+						// String constants are looked up inside a global array, so
+						// that we only have to initialize them once.
+						write!(into, "jay_push(global_string_constants[{}])", ptr.to_number())?;
+					},
 					LoxValue::Number(value) => write!(into, "jay_op_number({value})")?,
 					LoxValue::Bool(value) => write!(into, "jay_op_boolean({value})")?,
 				}
@@ -775,8 +779,9 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 		writeln!(self.prelude, "/*** This C file created by jaylox https://github.com/HoneyPony/jaylox ***/")?;
 		writeln!(self.prelude, "#include \"jaylib/jaylib.h\"\n")?;
 
-		// Write the globals array to the prelude
+		// Write the globals array to the prelude (and the string constants array)
 		writeln!(self.prelude, "static jay_value globals[{globals_count}];")?;
+		writeln!(self.prelude, "static jay_value global_string_constants[{}];", self.lox.string_constants.len())?;
 
 		let mut main_fn = String::new();
 
@@ -788,8 +793,14 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 		writeln!(main_fn, "\tJAY_THIS = NAME_this;\n")?;
 
 		// The most important responsibility of main() is initializing the stack
-		writeln!(main_fn, "\tjay_stack_ptr = jay_stack;\n")?;
+		writeln!(main_fn, "\tjay_stack_ptr = jay_stack;")?;
 		writeln!(main_fn, "\tjay_frames_ptr = 0;\n")?;
+
+		// We have to set up all the string constants in main for the rest of the
+		// code to use.
+		for (idx, constant) in self.lox.string_constants.iter().enumerate() {
+			writeln!(main_fn, "\tglobal_string_constants[{idx}] = jay_string_from_literal(\"{constant}\");")?;
+		}
 
 		// Note: Built-in functions will also be set up in main, but this requires
 		// parser support..?

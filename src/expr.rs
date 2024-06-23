@@ -71,11 +71,8 @@ impl Expr {
 						return Ok(LoxValue::Number(a + b));
 					},
 					(LoxValue::String(a), LoxValue::String(b)) => {
-						// TODO: Potentially move the string cache from Scanner to Lox... 
-						// Although, because we're not interpreting any more, it isn't too
-						// bad if there are some duplicates.
-						let concatenated = format!("{}{}", a, b);
-						let rc = concatenated.into_boxed_str().into();
+						let concatenated = format!("{}{}", lox.get_string_constant(a), lox.get_string_constant(b));
+						let rc = lox.put_string_constant(concatenated);
 						return Ok(LoxValue::String(rc));
 					},
 					_ => {
