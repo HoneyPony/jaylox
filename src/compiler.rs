@@ -104,11 +104,6 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 		self.name_set.insert(name.lexeme.clone());
 	}
 
-	fn add_name_str(&mut self, name: &str) {
-		if self.name_set.contains(name) { return; }
-		self.name_set.insert(name.to_string());
-	}
-
 	fn binary_op(&mut self, into: &mut String, left: &Expr, op: &Token, right: &Expr) -> fmt::Result {
 		let fun = match op.typ {
 			Minus => "jay_op_sub",
