@@ -17,6 +17,7 @@ struct jay_instance;
 struct jay_closure;
 struct jay_function;
 struct jay_method;
+struct jay_string;
 
 // TODO: Figure out if we still need this
 static size_t JAY_THIS;
@@ -29,7 +30,7 @@ typedef struct jay_value {
 		struct jay_function     *as_function;
 		struct jay_bound_method *as_bound_method;
 		struct jay_class        *as_class;
-		char                    *as_string;
+		struct jay_string       *as_string;        
 	};
 } jay_value;
 
@@ -133,6 +134,16 @@ typedef struct jay_instance {
 	jay_class *class;
 } jay_instance;
 
+typedef struct jay_string {
+	jay_object object;
+
+	// Note: contents contains length + 1 bytes, for the NUL terminator.
+	size_t length;
+	uint32_t hash;
+
+	char contents[];
+} jay_string;
+
 #define JAY_NIL 0
 #define JAY_TRUE 1
 #define JAY_FALSE 2
@@ -165,7 +176,7 @@ jay_print(jay_value value) {
 			puts("nil");
 			break;
 		case JAY_STRING:
-			puts(value.as_string);
+			puts(value.as_string->contents);
 			break;
 		case JAY_TRUE:
 			puts("true");
@@ -399,27 +410,46 @@ jay_class_to_value(jay_class *class) {
 }
 
 static inline
-jay_value
-jay_string_into(char *ptr) {
-	jay_value res;
-	res.tag = JAY_STRING;
-	res.as_string = ptr;
-	return res;
+jay_string*
+jay_new_string(size_t length) {
+	// Add 1 for the NUL terminator
+	jay_string *string = jay_malloc(sizeof(jay_string) + length + 1);
+	string->length = length;
+	// Set the NUL terminator
+	string->contents[length] = '\0';
+	
+	return string;
+}
+
+// Note: this hash function is taken directly from clox.
+// It is an implementation of FNV-1a.
+static uint32_t jay_compute_string_hash(const char* key, size_t length) {
+	uint32_t hash = 2166136261u;
+	for (size_t i = 0; i < length; ++i) {
+		hash ^= (uint8_t)key[i];
+		hash *= 16777619;
+	}
+	return hash;
 }
 
 static inline
 jay_value
-jay_string(const char *literal) {
+jay_string_from_literal(const char *literal) {
+	size_t length = strlen(literal);
+	jay_string *string = jay_new_string(length);
+
+	memcpy(string->contents, literal, length);
+	string->hash = jay_compute_string_hash(string->contents, length);
+
 	jay_value res;
 	res.tag = JAY_STRING;
-
-	size_t bytes = strlen(literal) + 1;
-	res.as_string = malloc(bytes);
-	memcpy(res.as_string, literal, bytes);
+	res.as_string = string;
 
 	return res;
 }
-OP_LIT(string, const char*, literal)
+OP_LIT(string_from_literal, const char*, literal)
+
+
 
 /* --- Allocators --- */
 
@@ -964,15 +994,17 @@ jay_add(jay_value a, jay_value b) {
 	if(a.tag == JAY_STRING) {
 		if(b.tag == JAY_STRING) {
 			// TODO: Make this faster..?
-			size_t alen = strlen(a.as_string);
-			size_t blen = strlen(b.as_string);
+			size_t alen = a.as_string->length;
+			size_t blen = b.as_string->length;
 
 			jay_value cat;
 			cat.tag = JAY_STRING;
-			cat.as_string = jay_malloc(alen + blen + 1);
-			memcpy(cat.as_string,        a.as_string, alen);
-			// copy nul terminator
-			memcpy(cat.as_string + alen, b.as_string, blen + 1);
+			cat.as_string = jay_new_string(alen + blen);
+			memcpy(cat.as_string->contents,        a.as_string->contents, alen);
+			memcpy(cat.as_string->contents + alen, b.as_string->contents, blen);
+
+			// Recompute hash
+			cat.as_string->hash = jay_compute_string_hash(cat.as_string->contents, alen + blen);
 
 			return cat;
 		}	
@@ -1061,8 +1093,18 @@ jay_eq_impl(jay_value a, jay_value b) {
 		return a.as_double == b.as_double;
 	}
 	if(a.tag == JAY_STRING) {
-		// TODO: Decide if we want string interning, etc
-		return false;
+		// Right now, it is possible for two equal strings to have unequal
+		// identities. If we wanted to, we could add a string table, where all
+		// strings are hashed, and then all strings could be equal by identity.
+		//
+		// But for now, we will compare identity, then hash, and then exact
+		// contents.
+		if(a.as_string == b.as_string) return true;
+		if(a.as_string->hash != b.as_string->hash) return false;
+
+		if(a.as_string->length != b.as_string->length) return false;
+
+		return !memcmp(a.as_string, b.as_string, a.as_string->length);
 	}
 	// All other types can be compared by identity... I think
 	// WRONG for NIL, TRUE, FALSE!!!

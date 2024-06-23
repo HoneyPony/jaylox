@@ -1,0 +1,10 @@
+var a = "hello";
+var b = " world";
+print a; // Expect 'hello'
+print b; // Expect ' world'
+print a + b; // Expect 'hello world'
+print a == b; // Expect false
+print a == "hello"; // Expect true
+print a == " world"; // Expect false
+print b == "hello"; // Expect false
+print b == " world"; // Expect true

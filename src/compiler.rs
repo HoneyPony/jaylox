@@ -194,7 +194,7 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 				self.indent(into);
 				match value {
 					LoxValue::Nil => into.push_str("jay_op_null()"),
-					LoxValue::String(chars) => write!(into, "jay_op_string(\"{}\")", chars)?,
+					LoxValue::String(chars) => write!(into, "jay_op_string_from_literal(\"{}\")", chars)?,
 					LoxValue::Number(value) => write!(into, "jay_op_number({value})")?,
 					LoxValue::Bool(value) => write!(into, "jay_op_boolean({value})")?,
 				}
