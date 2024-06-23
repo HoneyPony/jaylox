@@ -769,12 +769,6 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 	}
 
 	fn compile_to_buffers(&mut self, stmts: &Vec<Stmt>, globals_count: u32) -> Result<String, fmt::Error> {
-		// Setup 'this' and 'super' names so that they always work
-		self.add_name_str("this");
-		self.add_name_str("super");
-		// Also 'init' for convenience.
-		self.add_name_str("init");
-
 		// Write the first part of the prelude
 		writeln!(self.prelude, "/*** This C file created by jaylox https://github.com/HoneyPony/jaylox ***/")?;
 		writeln!(self.prelude, "#include \"jaylib/jaylib.h\"\n")?;
@@ -788,9 +782,6 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 		// TODO: Consider creating an efficient string writing system
 		// In particular, each function being compiled will need its own string...
 		self.push_indent();
-
-		// Setup the JAY_THIS for use in jaylib.h
-		writeln!(main_fn, "\tJAY_THIS = NAME_this;\n")?;
 
 		// The most important responsibility of main() is initializing the stack
 		writeln!(main_fn, "\tjay_stack_ptr = jay_stack;")?;

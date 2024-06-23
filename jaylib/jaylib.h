@@ -19,9 +19,6 @@ struct jay_function;
 struct jay_method;
 struct jay_string;
 
-// TODO: Figure out if we still need this
-static size_t JAY_THIS;
-
 typedef struct jay_value {
 	uint64_t tag;
 	union {
