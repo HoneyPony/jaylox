@@ -1127,14 +1127,21 @@ jay_put_new(jay_instance *scope, size_t name, jay_value value) {
 
 static inline
 jay_value
-jay_bind(jay_method *method, jay_instance *this) {
+jay_bind(jay_method method, jay_instance *this) {
+	// IMPORTANT: We take method by value, because we can't really store it
+	// for the GC, and we're going to copy everything out anyways.
+	// But, we do need to push its class.
+
+	jay_harbor(method.parent->closure);
 	// Juggle with GC
 	jay_push(jay_box_instance(this));
 	jay_bound_method *result = jay_gc_alloc(sizeof(*result), JAY_GC_BOUND_METHOD);
 	this = JAY_AS_INSTANCE(jay_pop());
-	result->implementation = method->implementation;
-	result->arity = method->arity;
-	result->closure = method->parent->closure;
+	result->implementation = method.implementation;
+	result->arity = method.arity;
+
+	// We harborded the closure.
+	result->closure = jay_unharbor();
 
 	// TODO: Do we want to be able to have a non-jay_instance "this"?
 	// probably not, as it might impede certain optimizations.. but for now,
