@@ -1,0 +1,58 @@
+class Inner {
+	init() {
+		this.a = 1;
+		this.b = 2;
+		this.c = 3;
+		this.d = 4;
+		this.e = 5;
+		this.f = 6;
+		this.g = 7;
+		this.h = 8;
+		this.i = 9;
+		this.j = 10;
+		this.k = 11;
+		this.l = 12;
+		this.m = 13;
+		this.n = 14;
+		this.o = 15;
+		this.p = 16;
+	}
+}
+
+class Outer {
+	init() {
+		this.a = Inner();
+		this.b = Inner();
+		this.c = Inner();
+		this.d = Inner();
+		this.e = Inner();
+		this.f = Inner();
+		this.g = Inner();
+		this.h = Inner();
+		this.i = Inner();
+		this.j = Inner();
+		this.k = Inner();
+		this.l = Inner();
+		this.m = Inner();
+		this.n = Inner();
+		this.o = Inner();
+		this.p = Inner();
+	}
+}
+
+var outer = Outer();
+var top = outer;
+
+for(var i = 0; i < 128; i = i + 1) {
+	outer.a = Outer();
+	outer.p = i;
+	outer = outer.a;
+}
+
+outer.a = nil;
+
+while(top != nil) {
+	print top.p;
+	print top.b.p;
+	top = top.a;
+}

@@ -794,10 +794,15 @@ jay_gc_alloc_impl(size_t size) {
 	void *result = (void*)jay_gc.high_ptr;
 	uintptr_t next = jay_gc_align(jay_gc.high_ptr + size);
 
+// When stress testing, skip the first option, always collect.
+#ifndef JAY_GC_STRESS_TEST
+
 	if(next < jay_gc.limit) {
 		jay_gc.high_ptr = next;
 		return result;
 	}
+
+#endif
 
 	// If the allocation failed, then collect.
 	jay_gc_collect(size);
