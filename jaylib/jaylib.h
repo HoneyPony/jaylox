@@ -993,7 +993,10 @@ jay_rehash(jay_instance *instance) {
 jay_value
 jay_put_new(jay_instance *scope, size_t name, jay_value value) {
 	if((scope->table->used_entries + 1) > scope->table->table_size / 2) {
+		// Push and pop in case GC is invoked.
+		jay_push(jay_box_instance(scope));
 		jay_rehash(scope);
+		scope = JAY_AS_INSTANCE(jay_pop());
 	}
 	// We are guaranteed an empty bucket somewhere.
 	// TODO: Consider Hopgood-Davenport probing
