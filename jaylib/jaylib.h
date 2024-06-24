@@ -1002,7 +1002,10 @@ void
 jay_rehash(jay_instance *instance) {
 	size_t new_size = instance->table->table_size * 2;
 	
+	// TODO: Clean this up so we don't need redundant pushes
+	jay_push(jay_box_instance(instance));
 	jay_table *new_table = jay_new_table(new_size);
+	instance = JAY_AS_INSTANCE(jay_pop());
 
 	for(size_t i = 0; i < instance->table->table_size; ++i) {
 		if(instance->table->table[i].name != JAY_NAME_TOMBSTONE) {
