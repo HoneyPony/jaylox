@@ -578,6 +578,8 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 		// The class tracks the closure for all methods.
 		writeln!(def, "\tclass->closure = closure;")?;
 
+		writeln!(def, "\tclass->methods_count = {};\n", class.methods.len())?;
+
 		// Fill in the superclass
 		// If it is nil, then the superclass is NULL, otherwise, it must be
 		// a jay_class

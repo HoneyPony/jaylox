@@ -380,7 +380,10 @@ jay_gc_copy(jay_object *previous) {
 
 	// Bump-allocate
 	jay_gc.high_ptr = jay_gc_align(jay_gc.high_ptr + size);
+
+#ifdef JAY_TRACE_GC
 	printf("gc: copy %p -> %p (%zu bytes)\n", previous, result, size);
+#endif
 
 	// Copy the old object over
 	memcpy(result, previous, size);
@@ -478,17 +481,23 @@ size_t
 jay_gc_trace(jay_object *object) {
 	uint32_t gc_tag = (object->gc >> 32ULL);
 
+#ifdef JAY_TRACE_GC
 	printf("gc: trace %p = %s\n", object, jay_gc_tag_name(gc_tag));
+#endif
 
 	switch(gc_tag) {
 		case JAY_GC_STRING:
 			/* no-op */
+#ifdef JAY_TRACE_GC
 			printf("-- string\n");
+#endif
 			break;
 
 		case JAY_GC_BOUND_METHOD:
 			jay_bound_method *bound_method = (jay_bound_method*)object;
+#ifdef JAY_TRACE_GC
 			printf("-- bound_method: closure = %p this = %p\n", bound_method->closure, bound_method->this);
+#endif
 			JAY_GC_VISIT_DIRECT(bound_method->closure);
 			JAY_GC_VISIT_DIRECT(bound_method->this);
 			break;
@@ -515,10 +524,13 @@ jay_gc_trace(jay_object *object) {
 			jay_table *table = (jay_table*)object;
 			for(size_t i = 0; i < table->table_size; ++i) {
 				if(table->table[i].name != JAY_NAME_TOMBSTONE) {
+#ifdef JAY_TRACE_GC
 					printf("gc: visit table entry %zu\n", i);
+#endif
 					jay_gc_visit(&table->table[i].value);
 				}
 			}
+			break;
 		}
 
 		case JAY_GC_CLOSURE: {
@@ -540,7 +552,7 @@ jay_gc_trace(jay_object *object) {
 static
 void
 jay_gc_collect() {
-	printf("jay: gc collect!\n");
+	printf("gc: begin collect!\n");
 
 	// Reset the high pointer and to_space to point to the from_space
 	jay_gc.high_ptr = jay_gc.from_space;
@@ -576,6 +588,8 @@ jay_gc_collect() {
 		jay_object *to_scan = (void*)scan;
 		scan = jay_gc_align(scan + jay_gc_trace(to_scan));
 	}
+
+	printf("gc: collect done! copied %zu bytes\n", (size_t)(jay_gc.high_ptr - jay_gc.to_space));
 }
 
 static inline
