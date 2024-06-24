@@ -790,6 +790,9 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 		if self.opt.gc_stress_test {
 			writeln!(self.prelude, "#define JAY_GC_STRESS_TEST")?;
 		}
+		if self.opt.nan_boxing {
+			writeln!(self.prelude, "#define JAY_NAN_BOXING")?;
+		}
 		writeln!(self.prelude, "#include \"jaylib/jaylib.h\"\n")?;
 
 		// Write the globals array to the prelude (and the string constants array)

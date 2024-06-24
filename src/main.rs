@@ -61,6 +61,7 @@ enum CompileOutput {
 #[derive(Clone)]
 pub struct CodegenOptions {
 	gc_stress_test: bool,
+	nan_boxing: bool,
 }
 
 struct CompileOptions {
@@ -238,6 +239,7 @@ fn main() -> io::Result<()> {
 
 		codegen: CodegenOptions {
 			gc_stress_test: false,
+			nan_boxing: false,
 		},
 	};
 
@@ -261,6 +263,9 @@ fn main() -> io::Result<()> {
 				"-gcstress" => {
 					options.codegen.gc_stress_test = true;
 				}
+				"-nanbox" => {
+					options.codegen.nan_boxing = true;
+				},
 				"-O1" | "-O2" | "-O3" => {
 					options.optimization = arg.clone();
 				},

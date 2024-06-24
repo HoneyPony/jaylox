@@ -19,6 +19,7 @@ struct jay_closure;
 struct jay_function;
 struct jay_method;
 struct jay_string;
+struct jay_class;
 
 #ifndef JAY_NAN_BOXING
 
@@ -126,7 +127,7 @@ typedef struct jay_bound_method {
 
 typedef struct {
 	size_t name;
-	struct jay_value value;
+	jay_value value;
 } jay_hash_entry;
 
 typedef struct jay_table {
@@ -194,6 +195,18 @@ jay_unharbor() {
 	return jay_harbor_stack[jay_harbor_ptr];
 }
 
+// The GC tags are distinct from the normal tags, due to the fact that they
+// kind of have to be for the NaN boxing version. We need to be careful to
+// always use the correct GC_ or not tag.
+#define JAY_GC_FUNCTION     1
+#define JAY_GC_INSTANCE     2
+#define JAY_GC_STRING       3
+#define JAY_GC_CLASS        4
+#define JAY_GC_BOUND_METHOD 5
+// Tables are used internally by the jay_instance.
+#define JAY_GC_TABLE        6
+#define JAY_GC_CLOSURE      7
+
 #ifndef JAY_NAN_BOXING
 
 // NOTE: For no NAN_BOXING, we use 0 as the number tag.
@@ -208,18 +221,6 @@ jay_unharbor() {
 #define JAY_STRING       6
 #define JAY_CLASS        7
 #define JAY_BOUND_METHOD 8
-
-// The GC tags are distinct from the normal tags, due to the fact that they
-// kind of have to be for the NaN boxing version. We need to be careful to
-// always use the correct GC_ or not tag.
-#define JAY_GC_FUNCTION     1
-#define JAY_GC_INSTANCE     2
-#define JAY_GC_STRING       3
-#define JAY_GC_CLASS        4
-#define JAY_GC_BOUND_METHOD 5
-// Tables are used internally by the jay_instance.
-#define JAY_GC_TABLE        6
-#define JAY_GC_CLOSURE      7
 
 #define JAY_IS_NUMBER(v) ((v).tag == 0)
 #define JAY_AS_NUMBER(v) ((v).as_number)
@@ -244,8 +245,6 @@ jay_unharbor() {
 
 #define JAY_IS_BOUND_METHOD(v) ((v).tag == JAY_BOUND_METHOD)
 #define JAY_AS_BOUND_METHOD(v) ((v).as_bound_method)
-
-#define JAY_AS_OBJECT(v) ((v).as_object)
 
 #define JAY_TAG(v) ((v).tag)
 
@@ -284,6 +283,103 @@ JAY_MK_BOXER(jay_bound_method*, JAY_BOUND_METHOD, bound_method)
 JAY_MK_BOXER(jay_string*, JAY_STRING, string)
 
 #undef JAY_MK_BOXER
+
+#else
+
+
+#define JAY_NAN_TAG_MASK ((uint64_t)0xfffc000000000007)
+#define JAY_QNAN         ((uint64_t)0x7ffc000000000000)
+
+#define JAY_NIL          ((uint64_t)0xfffc000000000000)  
+
+#define JAY_TRUE         ((uint64_t)0xfffc000000000002)
+#define JAY_FALSE        ((uint64_t)0xfffc000000000003)
+
+// All reference types have high bit 0 so that we can mask more efficiently..?
+#define JAY_FUNCTION     ((uint64_t)0x7ffc000000000000)
+#define JAY_INSTANCE     ((uint64_t)0x7ffc000000000001)
+#define JAY_STRING       ((uint64_t)0x7ffc000000000002)
+#define JAY_CLASS        ((uint64_t)0x7ffc000000000003)
+#define JAY_BOUND_METHOD ((uint64_t)0x7ffc000000000004)
+
+static inline
+double
+jay_unbox_double(jay_value v) {
+	double res;
+	memcpy(&res, &v, sizeof(res));
+	return res;
+}
+
+static inline
+void*
+jay_unbox_reference(jay_value v) {
+	v = (v & ~JAY_NAN_TAG_MASK);
+	void *ptr;
+	memcpy(&ptr, &v, sizeof(ptr));
+	return ptr;
+}
+
+#define JAY_IS_NUMBER(v) (((v) & JAY_QNAN) != JAY_QNAN)
+#define JAY_AS_NUMBER(v) jay_unbox_double(v)
+
+// Special bitwise trick to recognize 2/3
+#define JAY_IS_BOOL(v) (((v) | 1) == JAY_FALSE)
+#define JAY_AS_BOOL(v) (!!((v) == JAY_TRUE))
+
+#define JAY_IS_NIL(v) ((v) == JAY_NIL)
+
+#define JAY_TAG(v) ((v) & JAY_NAN_TAG_MASK)
+
+#define JAY_IS_FUNCTION(v) (JAY_TAG(v) == JAY_FUNCTION)
+#define JAY_AS_FUNCTION(v) ((jay_function*)jay_unbox_reference(v))
+
+#define JAY_IS_INSTANCE(v) (JAY_TAG(v) == JAY_INSTANCE)
+#define JAY_AS_INSTANCE(v) ((jay_instance*)jay_unbox_reference(v))
+
+#define JAY_IS_STRING(v) (JAY_TAG(v) == JAY_STRING)
+#define JAY_AS_STRING(v) ((jay_string*)jay_unbox_reference(v))
+
+#define JAY_IS_CLASS(v) (JAY_TAG(v) == JAY_CLASS)
+#define JAY_AS_CLASS(v) ((jay_class*)jay_unbox_reference(v))
+
+#define JAY_IS_BOUND_METHOD(v) (JAY_TAG(v) == JAY_BOUND_METHOD)
+#define JAY_AS_BOUND_METHOD(v) ((jay_bound_method*)jay_unbox_reference(v))
+
+#define JAY_MK_BOXER(ty, tag_bits, as) \
+static inline \
+jay_value \
+jay_box_ ## as(ty input) { \
+	jay_value v; \
+	memcpy(&v, &input, sizeof(v)); \
+	v |= tag_bits; \
+	return v; \
+}
+
+static inline
+jay_value
+jay_box_number(double input) {
+	jay_value v;
+	memcpy(&v, &input, sizeof(v));
+	return v;
+}
+
+static inline
+jay_value
+jay_box_bool(bool input) {
+	return input ? JAY_TRUE : JAY_FALSE;
+}
+
+static inline
+jay_value
+jay_box_nil() {
+	return JAY_NIL;
+}
+
+JAY_MK_BOXER(jay_function*, JAY_FUNCTION, function)
+JAY_MK_BOXER(jay_class*, JAY_CLASS, class)
+JAY_MK_BOXER(jay_instance*, JAY_INSTANCE, instance)
+JAY_MK_BOXER(jay_bound_method*, JAY_BOUND_METHOD, bound_method)
+JAY_MK_BOXER(jay_string*, JAY_STRING, string)
 
 #endif
 
@@ -509,7 +605,28 @@ jay_gc_copy_or_forward(void *prev) {
 static inline
 void
 jay_gc_visit(jay_value *field) {
-	switch(JAY_TAG(*field)) {
+	const uint64_t tag = JAY_TAG(*field);
+
+#define FORWARD jay_gc_copy_or_forward(jay_unbox_reference(*field))
+
+	switch(tag) {
+#ifdef JAY_NAN_BOXING
+		case JAY_INSTANCE:
+			*field = jay_box_instance(FORWARD);
+			break;
+		case JAY_CLASS:
+			*field = jay_box_class(FORWARD);
+			break;
+		case JAY_FUNCTION:
+			*field = jay_box_function(FORWARD);
+			break;
+		case JAY_BOUND_METHOD:
+			*field = jay_box_bound_method(FORWARD);
+			break;
+		case JAY_STRING:
+			*field = jay_box_string(FORWARD);
+			break;
+#else
 		case JAY_INSTANCE:
 			field->as_instance = jay_gc_copy_or_forward(field->as_instance);
 			break;
@@ -525,9 +642,6 @@ jay_gc_visit(jay_value *field) {
 		case JAY_STRING:
 			field->as_string = jay_gc_copy_or_forward(field->as_string);
 			break;
-
-#ifdef JAY_NAN_BOXING
-#else
 #endif
 		default:
 			// No action.
