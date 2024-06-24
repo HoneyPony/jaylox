@@ -409,6 +409,8 @@ jay_gc_copy(jay_object *previous) {
 
 	size_t size = jay_gc_find_size(previous);
 
+	printf("gc: copy %s %zu: %p -> %p\n", jay_gc_tag_name((uint64_t)previous->gc >> 32), size, previous, result);
+
 	// Bump-allocate
 	jay_gc.high_ptr = jay_gc_align(jay_gc.high_ptr + size);
 	assert(jay_gc.high_ptr < jay_gc.limit);
@@ -449,7 +451,9 @@ jay_gc_copy_or_forward(void *prev) {
 	if(!prev) return NULL;
 	jay_object *previous = prev;
 
+#ifdef JAY_TRACE_GC
 	printf("     v forward %p -> %p\n", previous, previous->gc);
+#endif
 
 	if((previous->gc & 1) == 0) {
 		jay_object* result;
@@ -737,6 +741,7 @@ static inline
 void*
 jay_gc_alloc(size_t size, uint32_t tag) {
 	jay_object *obj = jay_gc_alloc_impl(size);
+	printf("gc: alloc %s %zu -> %p\n", jay_gc_tag_name(tag), size, obj);
 #ifdef JAY_TRACE_GC
 	printf("gc: alloc %zu bytes => %p (high ptr -> %p)\n", size, obj, jay_gc.high_ptr);
 	printf("gc: tag = %lu %s\n", tag, jay_gc_tag_name(tag));
