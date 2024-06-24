@@ -412,8 +412,7 @@ jay_gc_copy(jay_object *previous) {
 	jay_gc.high_ptr = jay_gc_align(jay_gc.high_ptr + size);
 
 #ifdef JAY_TRACE_GC
-	printf("    gc: copy %p -> %p (%zu bytes)\n", previous, result, size);
-	printf("    gc: copy %s\n", jay_gc_tag_name((uint64_t)previous->gc >> 32));
+	printf("     v copy %s %p -> %p (%zu bytes)\n", jay_gc_tag_name((uint64_t)previous->gc >> 32), previous, result, size);
 #endif
 
 	// Copy the old object over
@@ -424,6 +423,11 @@ jay_gc_copy(jay_object *previous) {
 	// Update forwarding pointer. Note that the LSB will always be 0 due to
 	// our alignment of 8
 	memcpy(&previous->gc, &result, sizeof(result));
+	assert((previous->gc & 1) == 0);
+
+#ifdef JAY_TRACE_GC
+	printf("     v (...which redirects %p -> %p)\n", previous, previous->gc);
+#endif
 
 	return result;
 }
@@ -442,6 +446,8 @@ jay_gc_copy_or_forward(void *prev) {
 	if(!prev) return NULL;
 	jay_object *previous = prev;
 
+	printf("     v forward %p -> %p\n", previous, previous->gc);
+
 	if((previous->gc & 1) == 0) {
 		jay_object* result;
 		// Return the existing forwarding pointer.
@@ -457,7 +463,7 @@ jay_gc_copy_or_forward(void *prev) {
 #ifdef JAY_TRACE_GC
 	#define JAY_GC_VISIT_DIRECT(ptr) do { \
 		void *tmp = jay_gc_copy_or_forward(ptr); \
-		printf("-- %s: %p -> %p\n", #ptr, ptr, tmp); \
+		printf("\\-- %s: %p -> %p\n", #ptr, ptr, tmp); \
 		ptr = tmp; \
 	} while(0)
 #else
@@ -500,16 +506,10 @@ jay_gc_trace(jay_object *object) {
 	switch(gc_tag) {
 		case JAY_GC_STRING:
 			/* no-op */
-#ifdef JAY_TRACE_GC
-			printf("-- string\n");
-#endif
 			break;
 
 		case JAY_GC_BOUND_METHOD:
 			jay_bound_method *bound_method = (jay_bound_method*)object;
-#ifdef JAY_TRACE_GC
-			printf("-- bound_method: closure = %p this = %p\n", bound_method->closure, bound_method->this);
-#endif
 			JAY_GC_VISIT_DIRECT(bound_method->closure);
 			JAY_GC_VISIT_DIRECT(bound_method->this);
 			break;
@@ -536,10 +536,11 @@ jay_gc_trace(jay_object *object) {
 			jay_table *table = (jay_table*)object;
 			for(size_t i = 0; i < table->table_size; ++i) {
 				if(table->table[i].name != JAY_NAME_TOMBSTONE) {
-#ifdef JAY_TRACE_GC
-					printf("gc: visit table entry %zu\n", i);
-#endif
 					jay_gc_visit(&table->table[i].value);
+#ifdef JAY_TRACE_GC
+					printf("\\-- table entry %zu ", i);
+					jay_print(table->table[i].value);
+#endif
 				}
 			}
 			break;
@@ -550,6 +551,10 @@ jay_gc_trace(jay_object *object) {
 			JAY_GC_VISIT_DIRECT(closure->parent);
 			for(size_t i = 0; i < closure->count; ++i) {
 				jay_gc_visit(&closure->values[i]);
+#ifdef JAY_TRACE_GC
+					printf("\\-- closure entry %zu ", i);
+					jay_print(closure->values[i]);
+#endif
 			}
 			break;
 		}
@@ -579,25 +584,27 @@ jay_gc_go() {
 
 	// We visit all roots.
 	for(jay_value *sp = jay_stack; sp != jay_stack_ptr; ++sp) {
+#ifdef JAY_TRACE_GC
 		printf("gc: visit stack ptr %p -> ", sp);
 		jay_print(*sp);
-		jay_gc_visit(sp);
-		
-#ifdef JAY_TRACE_GC
-		printf("gc: visit stack ptr %p\n", sp);
 #endif
+		jay_gc_visit(sp);
 	}
 
 	for(size_t sf = 0; sf < jay_frames_ptr; ++sf) {
-		jay_stackframe *frame = jay_frames[sf];
-		JAY_GC_VISIT_DIRECT(frame->gc_scope);
-		for(size_t i = 0; i < frame->count; ++i) {
-			jay_gc_visit(&frame->values[i]);
-		}
-
 #ifdef JAY_TRACE_GC
 		printf("gc: visit frame %zu\n", sf);
 #endif
+		jay_stackframe *frame = jay_frames[sf];
+		JAY_GC_VISIT_DIRECT(frame->gc_scope);
+		for(size_t i = 0; i < frame->count; ++i) {
+#ifdef JAY_TRACE_GC
+			printf("\\-- frame value %zu ", i);
+			jay_print(frame->values[i]);
+#endif
+			jay_gc_visit(&frame->values[i]);
+		}
+
 	}
 
 	jay_gc_visit_globals();
@@ -608,24 +615,6 @@ jay_gc_go() {
 	}
 
 	printf("GC: COLLECT DONE! copied %zu bytes (out of %zu)\n", (size_t)(jay_gc.high_ptr - jay_gc.to_space), (jay_gc.current_size / 2));
-}
-
-static inline
-void
-jay_gc_collect() {
-	// Reset the high pointer and to_space to point to the from_space
-	jay_gc.high_ptr = jay_gc.from_space;
-
-	// And the from space points to the to-space
-	jay_gc.from_space = jay_gc.to_space;
-
-	// (to space points to old from space)
-	jay_gc.to_space = jay_gc.high_ptr;
-
-	// update limit
-	jay_gc.limit = jay_gc.to_space + (jay_gc.current_size / 2);
-
-	jay_gc_go();
 }
 
 static inline
@@ -674,6 +663,27 @@ jay_gc_recollect(size_t needed_size) {
 
 	// The actual from_space should be the top half of the heap like usual.
 	jay_gc.from_space = jay_gc.limit;
+}
+
+static inline
+void
+jay_gc_collect() {
+	jay_gc_recollect(0);
+	return;
+
+	// Reset the high pointer and to_space to point to the from_space
+	jay_gc.high_ptr = jay_gc.from_space;
+
+	// And the from space points to the to-space
+	jay_gc.from_space = jay_gc.to_space;
+
+	// (to space points to old from space)
+	jay_gc.to_space = jay_gc.high_ptr;
+
+	// update limit
+	jay_gc.limit = jay_gc.to_space + (jay_gc.current_size / 2);
+
+	jay_gc_go();
 }
 
 static inline
