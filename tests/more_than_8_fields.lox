@@ -1,0 +1,39 @@
+class Test {
+	init() {
+		this.a = 1;
+		this.b = 2;
+		this.c = 3;
+		this.d = 4;
+		this.e = 5;
+		this.f = 6;
+		this.g = 7;
+		this.h = 8;
+	}
+}
+
+var t = Test();
+t.aa = 10;
+t.bb = 11;
+t.cc = 12;
+t.dd = 13;
+t.ee = 14;
+t.ff = 15;
+t.gg = 16;
+t.hh = 17;
+
+print t.a;
+print t.aa;
+print t.b;
+print t.bb;
+print t.c;
+print t.cc;
+print t.d;
+print t.dd;
+print t.e;
+print t.ee;
+print t.f;
+print t.ff;
+print t.g;
+print t.gg;
+print t.h;
+print t.hh;
