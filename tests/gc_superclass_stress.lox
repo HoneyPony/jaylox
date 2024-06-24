@@ -1,0 +1,54 @@
+fun make_super(x, y, message) {
+	class Super {
+		init() {
+			this.sup_x = x;
+			this.sup_y = y;
+		}
+
+		printself() {
+			print message;
+		}
+	}
+
+	return Super;
+}
+
+fun make_inner(z, w, Super, message) {
+	class Inner < Super {
+		init() {
+			this.x = z;
+			this.y = w;
+
+			super.init();
+		}
+
+		printself() {
+			print this.x;
+			print this.y;
+			print this.sup_x;
+			print this.sup_y;
+			print message;
+			super.printself();
+		}
+	}
+
+	return Inner;
+}
+
+for(var i = 0; i < 256; i = i + 1) {
+	var SuperA = make_super(i, 0, "SUPER A");
+	var SuperB = make_super(i, 1, "SUPER B");
+	var SuperC = make_super(i, 2, "SUPER C");
+
+	SuperA().printself();
+	SuperB().printself();
+	SuperC().printself();
+
+	var Inner1 = make_inner(5, i, SuperA, "Inner1");
+	var Inner2 = make_inner(6, i, SuperB, "Inner2");
+	var Inner3 = make_inner(7, i, SuperC, "Inner3");
+
+	Inner1().printself();
+	Inner2().printself();
+	Inner3().printself();
+}

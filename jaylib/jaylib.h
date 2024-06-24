@@ -1435,7 +1435,7 @@ jay_op_invoke_super(jay_value object, size_t name, jay_value superclass, size_t 
 
 		jay_value result = jay_call_any(
 			method->implementation,
-			instance->class->closure,
+			superclass_real->closure,
 			method->arity,
 			arity + 1
 		);
