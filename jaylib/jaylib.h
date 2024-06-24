@@ -390,7 +390,7 @@ jay_gc_copy(jay_object *previous) {
 
 	// Update forwarding pointer. Note that the LSB will always be 0 due to
 	// our alignment of 8
-	memcpy(&previous->gc, result, sizeof(result));
+	memcpy(&previous->gc, &result, sizeof(result));
 
 	return result;
 }
@@ -589,7 +589,7 @@ jay_gc_collect() {
 		scan = jay_gc_align(scan + jay_gc_trace(to_scan));
 	}
 
-	printf("gc: collect done! copied %zu bytes\n", (size_t)(jay_gc.high_ptr - jay_gc.to_space));
+	printf("gc: collect done! copied %zu bytes (out of %zu)\n", (size_t)(jay_gc.high_ptr - jay_gc.to_space), (jay_gc.current_size / 2));
 }
 
 static inline
