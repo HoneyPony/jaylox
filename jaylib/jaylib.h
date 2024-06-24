@@ -1108,6 +1108,22 @@ jay_new_scope(jay_closure *parent, size_t count) {
 	return closure;
 }
 
+static inline
+size_t
+jay_table_max_usage(jay_table *table) {
+	// For small tables, the cost of linear scan is small, so we can freely
+	// use all 8 entries.
+	if(table->table_size == 8) {
+		return 8;
+	}
+	else if(table->table_size == 16) {
+		return 12;
+	}
+	else {
+		return table->table_size / 2;
+	}
+}
+
 jay_table*
 jay_new_table(size_t entries) {
 	size_t entry_bytes = (entries * sizeof(jay_hash_entry));
@@ -1115,6 +1131,8 @@ jay_new_table(size_t entries) {
 	jay_table *result = jay_gc_alloc(bytes, JAY_GC_TABLE);
 
 	result->table_size = entries;
+	// Set the max allowed used entries to smaller numbers for smaller tables.
+	
 	result->used_entries = 0;
 
 	memset(result->table, 0, entry_bytes);
@@ -1224,7 +1242,7 @@ jay_rehash(jay_instance *instance) {
 
 jay_value
 jay_put_new(jay_instance *scope, size_t name, jay_value value) {
-	if((scope->table->used_entries + 1) > scope->table->table_size / 2) {
+	if((scope->table->used_entries + 1) > jay_table_max_usage(scope->table)) {
 		// Push and pop in case GC is invoked.
 		jay_push(jay_box_instance(scope));
 		// We also have to push the value, because it might also change.
