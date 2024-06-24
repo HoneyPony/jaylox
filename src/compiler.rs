@@ -188,7 +188,7 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 			Expr::Literal(value) => {
 				self.indent(into);
 				match value {
-					LoxValue::Nil => into.push_str("jay_op_null()"),
+					LoxValue::Nil => into.push_str("jay_push(jay_op_nil())"),
 					LoxValue::String(ptr) => {
 						// String constants are looked up inside a global array, so
 						// that we only have to initialize them once.
@@ -464,7 +464,7 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 			writeln!(def, "\treturn args[{}];", fun.param_count - 1)?;
 		}
 		else {
-			writeln!(def, "\treturn jay_null();")?;
+			writeln!(def, "\treturn jay_box_nil();")?;
 		}
 
 		// End the function.
@@ -627,7 +627,7 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 					self.compile_var(superclass, into)?;
 				}
 				else {
-					write!(into, "jay_null()")?;
+					write!(into, "jay_box_nil()")?;
 				}
 
 				writeln!(into, ", scope);")?;
@@ -698,7 +698,7 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 					Some(value) => { self.compile_expr(value, into)?; },
 					None => {
 						self.indent(into); 
-						into.push_str("jay_op_null();\n"); 
+						into.push_str("jay_push(jay_op_nil());\n"); 
 					}
 				};
 
@@ -718,7 +718,7 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 			Stmt::Var { initializer, identity, .. } => {
 				// The only real role this statement plays, given that the variables are
 				// all generally "initialized" already, is explicitly initializing them
-				// to jay_null().
+				// to jay_box_nil().
 				//
 				// Note that this could be perhaps 'optimized' by simply getting rid of it...
 				// But there's likely little/no value to that.
@@ -727,7 +727,7 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 					Some(initializer) => { self.compile_expr(initializer, into)?; },
 					None => {
 						self.indent(into);
-						into.push_str("jay_op_null();\n");
+						into.push_str("jay_push(jay_op_nil());\n");
 					}
 				}
 
