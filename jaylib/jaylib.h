@@ -19,10 +19,12 @@ struct jay_function;
 struct jay_method;
 struct jay_string;
 
+#ifndef JAY_NAN_BOXING
+
 typedef struct jay_value {
 	uint64_t tag;
 	union {
-		double                   as_double;
+		double                   as_number;
 		struct jay_instance     *as_instance;
 		struct jay_function     *as_function;
 		struct jay_bound_method *as_bound_method;
@@ -30,6 +32,12 @@ typedef struct jay_value {
 		struct jay_string       *as_string;        
 	};
 } jay_value;
+
+#else
+
+typedef uint64_t jay_value;
+
+#endif
 
 typedef jay_value (*jay_function_impl)(jay_value *args, struct jay_closure *closure);
 
@@ -141,18 +149,6 @@ typedef struct jay_string {
 	char contents[];
 } jay_string;
 
-#define JAY_NIL 0
-#define JAY_TRUE 1
-#define JAY_FALSE 2
-#define JAY_NUMBER 3
-#define JAY_FUNCTION 4
-#define JAY_INSTANCE 5
-#define JAY_STRING 6
-#define JAY_CLASS 7
-// TODO: Move this tag to the jay_object, and then do NaN boxing, etc..
-#define JAY_BOUND_METHOD 8
-#define JAY_METHOD 9
-
 // Use 0 for the tombstone so that we can memset() the array to 0 / use calloc.
 #define JAY_NAME_TOMBSTONE 0
 
@@ -164,11 +160,90 @@ static jay_value *jay_stack_ptr;
 static jay_stackframe *jay_frames[4096];
 static size_t jay_frames_ptr;
 
+#ifndef JAY_NAN_BOXING
+
+// NOTE: For no NAN_BOXING, we use 0 as the number tag.
+// We don't define a constant for it, because it isn't always available.
+// It's expected that, in a switch(), 'default' means number.
+
+#define JAY_NIL          1
+#define JAY_TRUE         2 // For true/false, note that they have convenient bit patterns of 0b01x
+#define JAY_FALSE        3
+#define JAY_FUNCTION     4
+#define JAY_INSTANCE     5
+#define JAY_STRING       6
+#define JAY_CLASS        7
+#define JAY_BOUND_METHOD 8
+
+#define JAY_IS_NUMBER(v) ((v).tag == 0)
+#define JAY_AS_NUMBER(v) ((v).as_number)
+
+// Special bitwise trick to recognize 2/3
+#define JAY_IS_BOOL(v) (((v).tag & ~1) == ~1)
+#define JAY_AS_BOOL(v) (!!(v.tag == JAY_TRUE))
+
+#define JAY_IS_NIL(v) ((v).tag == JAY_NIL)
+
+#define JAY_IS_FUNCTION(v) ((v).tag == JAY_FUNCTION)
+#define JAY_AS_FUNCTION(v) ((v).as_function)
+
+#define JAY_IS_INSTANCE(v) ((v).tag == JAY_INSTANCE)
+#define JAY_AS_INSTANCE(v) ((v).as_instance)
+
+#define JAY_IS_STRING(v) ((v).tag == JAY_STRING)
+#define JAY_AS_STRING(v) ((v).as_string)
+
+#define JAY_IS_CLASS(v) ((v).tag == JAY_CLASS)
+#define JAY_AS_CLASS(v) ((v).as_class)
+
+#define JAY_IS_BOUND_METHOD(v) ((v).tag == JAY_BOUND_METHOD)
+#define JAY_AS_BOUND_METHOD(v) ((v).as_bound_method)
+
+#define JAY_TAG(v) ((v).tag)
+
+#define JAY_MK_BOXER(ty, tag_val, as) \
+static inline \
+jay_value \
+jay_box_ ## as(ty input) { \
+	jay_value v; \
+	v.tag = tag_val; \
+	v.as_ ## as = input; \
+	return v; \
+}
+
+JAY_MK_BOXER(double, 0, number)
+
+static inline
+jay_value
+jay_box_bool(bool input) {
+	jay_value v;
+	v.tag = input ? JAY_TRUE : JAY_FALSE;
+	return v;
+}
+
+static inline
+jay_value
+jay_box_nil() {
+	jay_value v;
+	v.tag = JAY_NIL;
+	return v;
+}
+
+JAY_MK_BOXER(jay_function*, JAY_FUNCTION, function)
+JAY_MK_BOXER(jay_class*, JAY_CLASS, class)
+JAY_MK_BOXER(jay_instance*, JAY_INSTANCE, instance)
+JAY_MK_BOXER(jay_bound_method*, JAY_BOUND_METHOD, bound_method)
+JAY_MK_BOXER(jay_string*, JAY_STRING, string)
+
+#undef JAY_MK_BOXER
+
+#endif
+
 // Define print early. op_print is defined much later...
 static inline
 void
 jay_print(jay_value value) {
-	switch(value.tag) {
+	switch(JAY_TAG(value)) {
 		case JAY_NIL:
 			puts("nil");
 			break;
@@ -180,9 +255,6 @@ jay_print(jay_value value) {
 			break;
 		case JAY_FALSE:
 			puts("false");
-			break;
-		case JAY_NUMBER:
-			printf("%f\n", value.as_double);
 			break;
 		case JAY_INSTANCE:
 			puts("<instance>");
@@ -197,7 +269,8 @@ jay_print(jay_value value) {
 			puts("<function>");
 			break;
 		default:
-			puts("<unknown>");
+			printf("%f\n", JAY_AS_NUMBER(value));
+			break;
 	}
 }
 
@@ -224,80 +297,6 @@ jay_malloc(size_t size) {
 		oops("out of memory");
 	}
 	return res;
-}
-
-static inline
-jay_function*
-jay_as_function(jay_value value, const char *message) {
-	if(value.tag != JAY_FUNCTION) {
-		oops(message);
-	}
-
-	return value.as_function;
-}
-
-static inline
-jay_class*
-jay_as_class(jay_value value, const char *message) {
-	if(value.tag != JAY_CLASS) {
-		oops(message);
-	}
-
-	return value.as_class;
-}
-
-static inline
-jay_bound_method*
-jay_as_bound_method(jay_value value, const char *message) {
-	if(value.tag != JAY_BOUND_METHOD) {
-		oops(message);
-	}
-
-	return value.as_bound_method;
-}
-
-static inline
-double
-jay_as_number(jay_value value, const char *message) {
-	if(value.tag != JAY_NUMBER) {
-		oops(message);
-	}
-
-	return value.as_double;
-}
-
-static inline
-jay_instance*
-jay_as_instance(jay_value value, const char *message) {
-	if(value.tag != JAY_INSTANCE) {
-		oops(message);
-	}
-
-	return value.as_instance;
-}
-
-static inline
-bool
-jay_is_null(jay_value value) {
-	return value.tag == JAY_NIL;
-}
-
-static inline
-bool
-jay_is_function(jay_value value) {
-	return value.tag == JAY_FUNCTION;
-}
-
-static inline
-bool
-jay_is_class(jay_value value) {
-	return value.tag == JAY_CLASS;
-}
-
-static inline
-bool
-jay_is_bound_method(jay_value value) {
-	return value.tag == JAY_BOUND_METHOD;
 }
 
 static inline
@@ -334,7 +333,7 @@ jay_top() {
 
 static inline bool
 jay_truthy(jay_value value) {
-	if(value.tag == JAY_FALSE || value.tag == JAY_NIL) return false;
+	if(JAY_TAG(value) == JAY_FALSE || JAY_TAG(value) == JAY_NIL) return false;
 	return true;
 }
 
@@ -349,61 +348,6 @@ jay_pop_condition() {
 static inline void \
 jay_op_ ## name (param arg) { \
 	jay_push(jay_ ## name (arg)); \
-}
-
-static inline
-jay_value
-jay_null() {
-	jay_value res;
-	res.tag = JAY_NIL;
-	return res;
-}
-OP_LIT(null,,)
-
-static inline
-jay_value
-jay_number(double input) {
-	jay_value res;
-	res.tag = JAY_NUMBER;
-	res.as_double = input;
-	return res;
-}
-OP_LIT(number, double, input)
-
-static inline
-jay_value
-jay_boolean(bool input) {
-	jay_value res;
-	res.tag = input ? JAY_TRUE : JAY_FALSE;
-	return res;
-}
-OP_LIT(boolean, bool, input)
-
-static inline
-jay_value
-jay_instance_to_value(jay_instance *instance) {
-	jay_value res;
-	res.tag = JAY_INSTANCE;
-	res.as_instance = instance;
-	return res;
-}
-
-static inline
-jay_value
-jay_bound_method_to_value(jay_bound_method *bound_method) {
-	jay_value res;
-	res.tag = JAY_BOUND_METHOD;
-	res.as_bound_method = bound_method;
-	return res;
-}
-
-static inline
-jay_value
-jay_class_to_value(jay_class *class) {
-	jay_value res;
-	res.tag = JAY_CLASS;
-	res.as_class = class;
-	return res;
 }
 
 static inline
@@ -430,7 +374,7 @@ static uint32_t jay_compute_string_hash(const char* key, size_t length) {
 }
 
 static inline
-jay_value
+jay_string*
 jay_string_from_literal(const char *literal) {
 	size_t length = strlen(literal);
 	jay_string *string = jay_new_string(length);
@@ -438,15 +382,8 @@ jay_string_from_literal(const char *literal) {
 	memcpy(string->contents, literal, length);
 	string->hash = jay_compute_string_hash(string->contents, length);
 
-	jay_value res;
-	res.tag = JAY_STRING;
-	res.as_string = string;
-
-	return res;
+	return string;
 }
-OP_LIT(string_from_literal, const char*, literal)
-
-
 
 /* --- Allocators --- */
 
@@ -588,7 +525,7 @@ jay_bind(jay_method *method, jay_instance *this) {
 	// probably not, as it might impede certain optimizations.. but for now,
 	// it is a bit silly that we support it in all but name
 	result->this = this;
-	return jay_bound_method_to_value(result);
+	return jay_box_bound_method(result);
 }
 
 #ifdef JAY_FULL_COMPAT
@@ -766,7 +703,7 @@ jay_op_call(size_t arity) {
 		//
 		// Maybe the compiler can literally just add a 'this' variable to
 		// the array when parsing a function?
-		jay_push(jay_instance_to_value(method->this));
+		jay_push(jay_box_instance(method->this));
 
 		// Note that we add 1 to the passed-in arity. That is, we're expecting
 		// the compiler to NOT add the 'this' value at any point, and also,
@@ -790,7 +727,7 @@ jay_op_call(size_t arity) {
 		// special-cased, as then it can easily be called again or bound, like
 		// any other class method.
 
-		jay_value new_this = jay_instance_to_value(jay_new_instance(class));
+		jay_value new_this = jay_box_instance(jay_new_instance(class));
 		jay_push(new_this);
 
 		jay_value result = jay_call_any(
@@ -983,27 +920,30 @@ static inline
 jay_value
 jay_add(jay_value a, jay_value b) {
 	const char *message = "addition expects two numbers or two strings";
-	if(a.tag == JAY_NUMBER) {
-		double an = jay_as_number(a, message);
-		double bn = jay_as_number(b, message);
-		return jay_number(an + bn);
+	if(JAY_IS_NUMBER(a)) {
+		if(JAY_IS_NUMBER(b)) {
+			return jay_box_number(JAY_AS_NUMBER(a) + JAY_AS_NUMBER(b));
+		}
 	}
 	if(a.tag == JAY_STRING) {
 		if(b.tag == JAY_STRING) {
-			// TODO: Make this faster..?
-			size_t alen = a.as_string->length;
-			size_t blen = b.as_string->length;
+			jay_string *as = JAY_AS_STRING(a);
+			jay_string *bs = JAY_AS_STRING(b);
 
-			jay_value cat;
-			cat.tag = JAY_STRING;
-			cat.as_string = jay_new_string(alen + blen);
-			memcpy(cat.as_string->contents,        a.as_string->contents, alen);
-			memcpy(cat.as_string->contents + alen, b.as_string->contents, blen);
+			// TODO: Make this faster..?
+			size_t alen = as->length;
+			size_t blen = bs->length;
+
+			size_t length = as->length + bs->length;
+			jay_string *cat = jay_new_string(length);
+
+			memcpy(cat->contents,              as->contents, as->length);
+			memcpy(cat->contents + as->length, bs->contents, bs->length);
 
 			// Recompute hash
-			cat.as_string->hash = jay_compute_string_hash(cat.as_string->contents, alen + blen);
+			cat->hash = jay_compute_string_hash(cat->contents, length);
 
-			return cat;
+			return jay_box_string(cat);
 		}	
 	}
 	oops(message);
@@ -1013,129 +953,139 @@ OP_TWO(add)
 static inline
 jay_value
 jay_sub(jay_value a, jay_value b) {
-	const char *message = "subtraction expects two numbers";
-	double an = jay_as_number(a, message);
-	double bn = jay_as_number(b, message);
-	return jay_number(an - bn);
+	if(!JAY_IS_NUMBER(a) || !JAY_IS_NUMBER(b)) {
+		oops("subtraction expects two numbers");
+	}
+	return jay_box_number(JAY_AS_NUMBER(a) - JAY_AS_NUMBER(b));
 }
 OP_TWO(sub)
 
 static inline
 jay_value
 jay_mul(jay_value a, jay_value b) {
-	const char *message = "multiplication expects two numbers";
-	double an = jay_as_number(a, message);
-	double bn = jay_as_number(b, message);
-	return jay_number(an * bn);
+	if(!JAY_IS_NUMBER(a) || !JAY_IS_NUMBER(b)) {
+		oops("multiplication expects two numbers");
+	}
+	return jay_box_number(JAY_AS_NUMBER(a) * JAY_AS_NUMBER(b));
 }
 OP_TWO(mul)
 
 static inline
 jay_value
 jay_div(jay_value a, jay_value b) {
-	const char *message = "division expects two numbers";
-	double an = jay_as_number(a, message);
-	double bn = jay_as_number(b, message);
-	return jay_number(an / bn);
+	if(!JAY_IS_NUMBER(a) || !JAY_IS_NUMBER(b)) {
+		oops("division expects two numbers");
+	}
+	return jay_box_number(JAY_AS_NUMBER(a) / JAY_AS_NUMBER(b));
 }
 OP_TWO(div)
 
 static inline
 jay_value
 jay_gt(jay_value a, jay_value b) {
-	const char *message = "comparison (>) expects two numbers";
-	double an = jay_as_number(a, message);
-	double bn = jay_as_number(b, message);
-	return jay_boolean(an > bn);
+	if(!JAY_IS_NUMBER(a) || !JAY_IS_NUMBER(b)) {
+		oops("comparison (>) expects two numbers");
+	}
+	return jay_box_bool(JAY_AS_NUMBER(a) > JAY_AS_NUMBER(b));
 }
 OP_TWO(gt)
 
 static inline
 jay_value
 jay_ge(jay_value a, jay_value b) {
-	const char *message = "comparison (>=) expects two numbers";
-	double an = jay_as_number(a, message);
-	double bn = jay_as_number(b, message);
-	return jay_boolean(an >= bn);
+	if(!JAY_IS_NUMBER(a) || !JAY_IS_NUMBER(b)) {
+		oops("comparison (>=) expects two numbers");
+	}
+	return jay_box_bool(JAY_AS_NUMBER(a) >= JAY_AS_NUMBER(b));
 }
 OP_TWO(ge)
 
 static inline
 jay_value
 jay_lt(jay_value a, jay_value b) {
-	const char *message = "comparison (<) expects two numbers";
-	double an = jay_as_number(a, message);
-	double bn = jay_as_number(b, message);
-	return jay_boolean(an < bn);
+	if(!JAY_IS_NUMBER(a) || !JAY_IS_NUMBER(b)) {
+		oops("comparison (<) expects two numbers");
+	}
+	return jay_box_bool(JAY_AS_NUMBER(a) < JAY_AS_NUMBER(b));
 }
 OP_TWO(lt)
 
 static inline
 jay_value
 jay_le(jay_value a, jay_value b) {
-	const char *message = "comparison (<=) expects two numbers";
-	double an = jay_as_number(a, message);
-	double bn = jay_as_number(b, message);
-	return jay_boolean(an <= bn);
+	if(!JAY_IS_NUMBER(a) || !JAY_IS_NUMBER(b)) {
+		oops("comparison (<=) expects two numbers");
+	}
+	return jay_box_bool(JAY_AS_NUMBER(a) <= JAY_AS_NUMBER(b));
 }
 OP_TWO(le)
 
 static inline
 bool
 jay_eq_impl(jay_value a, jay_value b) {
-	if(a.tag != b.tag) {
+#ifdef JAY_NAN_BOXING
+
+	if(JAY_IS_NUMBER(a) && JAY_IS_NUMBER(b)) {
+		return JAS_AS_NUMBER(a) == JAY_AS_NUMBER(b);
+	}
+
+	return a == b;
+
+#else
+
+	uint64_t a_tag = JAY_TAG(a);
+	if(a_tag != JAY_TAG(b)) {
 		return false;
 	}
-	if(a.tag == JAY_NUMBER) {
-		return a.as_double == b.as_double;
+
+	switch(a_tag) {
+		case JAY_NIL:
+		case JAY_TRUE:
+		case JAY_FALSE:
+			return true;
+
+		case JAY_STRING:
+			if(a.as_string == b.as_string) return true;
+			if(a.as_string->hash != b.as_string->hash) return false;
+
+			if(a.as_string->length != b.as_string->length) return false;
+
+			return !memcmp(a.as_string, b.as_string, a.as_string->length);
+
+		case JAY_INSTANCE:
+			return JAY_AS_INSTANCE(a) == JAY_AS_INSTANCE(b);
+		case JAY_FUNCTION:
+			return JAY_AS_FUNCTION(a) == JAY_AS_FUNCTION(b);
+		case JAY_BOUND_METHOD:
+			return JAY_AS_BOUND_METHOD(a) == JAY_AS_BOUND_METHOD(b);
+		case JAY_CLASS:
+			return JAY_AS_CLASS(a) == JAY_AS_CLASS(b);
+
+		default:
+			return JAY_AS_NUMBER(a) == JAY_AS_NUMBER(b);
 	}
-	if(a.tag == JAY_STRING) {
-		// Right now, it is possible for two equal strings to have unequal
-		// identities. If we wanted to, we could add a string table, where all
-		// strings are hashed, and then all strings could be equal by identity.
-		//
-		// But for now, we will compare identity, then hash, and then exact
-		// contents.
-		if(a.as_string == b.as_string) return true;
-		if(a.as_string->hash != b.as_string->hash) return false;
 
-		if(a.as_string->length != b.as_string->length) return false;
-
-		return !memcmp(a.as_string, b.as_string, a.as_string->length);
-	}
-	// All other types can be compared by identity... I think
-	// WRONG for NIL, TRUE, FALSE!!!
-
-	//if(a.tag == JAY_NIL) return b.tag == JAY_NIL;
-	//if(a.tag == JAY_TRUE) return b.tag == JAY_TRUE;
-	//if(a.tag == JAY_FALSE) return b.tag == JAY_FALSE;
-	// Can actually just return true in these cases because we already verified
-	// the tags.
-	if(a.tag == JAY_NIL) return true;
-	if(a.tag == JAY_TRUE) return true;
-	if(a.tag == JAY_FALSE) return true;
-
-	return a.as_instance == b.as_instance;
+#endif
 }
 
 static inline
 jay_value
 jay_neq(jay_value a, jay_value b) {
-	return jay_boolean(!jay_eq_impl(a, b));
+	return jay_box_bool(!jay_eq_impl(a, b));
 }
 OP_TWO(neq)
 
 static inline
 jay_value
 jay_eq(jay_value a, jay_value b) {
-	return jay_boolean(jay_eq_impl(a, b));
+	return jay_box_bool(jay_eq_impl(a, b));
 }
 OP_TWO(eq)
 
 static inline
 jay_value
 jay_not(jay_value v) {
-	return jay_boolean(!jay_truthy(v));
+	return jay_box_bool(!jay_truthy(v));
 }
 OP_ONE(not)
 
@@ -1143,7 +1093,7 @@ static inline
 jay_value
 jay_negate(jay_value v) {
 	double vd = jay_as_number(v, "negation expects a number");
-	return jay_number(-vd);
+	return jay_box_number(-vd);
 }
 OP_ONE(negate)
 
@@ -1154,7 +1104,7 @@ jay_value
 jay_std_clock(jay_value *args, jay_closure *closure) {
 	clock_t time = clock();
 	double ms = (time * 1000.0 / CLOCKS_PER_SEC);
-	return jay_number(ms);
+	return jay_box_number(ms);
 }
 
 #endif
