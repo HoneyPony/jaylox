@@ -485,7 +485,7 @@ jay_gc_copy_or_forward(void *prev) {
 		// Return the existing forwarding pointer.
 		memcpy(&result, &previous->gc, sizeof(result));
 #ifdef JAY_TRACE_GC_DIRECT
-		printf("gc:   forward %s %zu -> %p\n", jay_gc_tag_name(jay_gc_tag(result)), previous, result);
+		printf("gc:   forward %s %p -> %p\n", jay_gc_tag_name(jay_gc_tag(result)), previous, result);
 #endif
 		return result;
 	}
@@ -650,7 +650,9 @@ jay_gc_go() {
 
 	}
 
+	printf("gc: jay_harbor_ptr = %zu\n", jay_harbor_ptr);
 	for(size_t hptr = 0; hptr < jay_harbor_ptr; ++hptr) {
+		printf("gc: visit harbor %zu\n", hptr);
 		JAY_GC_VISIT_DIRECT(jay_harbor_stack[hptr]);
 	}
 
