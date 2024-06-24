@@ -579,7 +579,10 @@ jay_gc_go() {
 
 	// We visit all roots.
 	for(jay_value *sp = jay_stack; sp != jay_stack_ptr; ++sp) {
+		printf("gc: visit stack ptr %p -> ", sp);
+		jay_print(*sp);
 		jay_gc_visit(sp);
+		
 #ifdef JAY_TRACE_GC
 		printf("gc: visit stack ptr %p\n", sp);
 #endif
@@ -877,11 +880,16 @@ jay_new_table(size_t entries) {
 jay_instance*
 jay_new_instance(jay_class *class) {
 	jay_instance *instance = jay_gc_alloc(sizeof(*instance), JAY_GC_INSTANCE);
-	
 	instance->class = class;
+	instance->table = NULL;
+	// So that the GC can find the instance while we're allocating the table, push it.
+	jay_push(jay_box_instance(instance));
 
-	// Set up "hash" table
+	// Allocate a table for the fields.
 	instance->table = jay_new_table(8);
+
+	// Clean up GC root.
+	jay_pop();
 
 	return instance;
 }
