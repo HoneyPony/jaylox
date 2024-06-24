@@ -345,11 +345,47 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 				
 			},
 			Expr::Get { object, name } => {
-				self.compile_expr(object, into)?;
+
+				match object.as_ref() {
+					Expr::This { .. } => {
+						// For 'this' objects, we still need to end up with
+						// 1 thing on the stack. Because we aren't pushing
+						// the inner 'this' object, we can just increment
+						// the stack pointer directly.
+						//
+						// TODO: If we ever add bounds checking, we will need
+						// to do it here.
+						self.indent(into);
+						writeln!(into, "jay_stack_ptr += 1;")?;
+					},
+					_ => {
+						// Generate a fence for non-This objects. Also,
+						// don't compile the inner expr for This objects.
+						self.compile_expr(object, into)?;
+
+						self.indent(into);
+						writeln!(into, "jay_fence_get(jay_stack_ptr[-1);")?;
+					}
+				};
 
 				self.add_name(name);
 				self.indent(into);
-				write!(into, "jay_op_get(NAME_{});\n", name.lexeme)?;
+
+				write!(into, "jay_stack_ptr[-1] = ")?;
+
+				match object.as_ref() {
+					Expr::This { identity, .. } => {
+						// We know that 'this' is always an instance.
+						// TODO: Maybe generate a 'const pointer' 'this' that
+						// we can just reference directly..?
+						write!(into, "jay_get_instance(JAY_AS_INSTANCE(")?;
+						self.compile_var(*identity, into)?;
+						write!(into, "), NAME_{});\n", name.lexeme)?;
+					},
+					_ => {
+						write!(into, "jay_get_instance(JAY_AS_INSTANCE(jay_stack_ptr[-1]), NAME_{});\n", name.lexeme)?;
+					}
+				}
 			},
 			Expr::Grouping(inner) => {
 				self.compile_expr(inner, into)?;

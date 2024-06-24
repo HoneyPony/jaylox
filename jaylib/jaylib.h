@@ -1276,12 +1276,7 @@ jay_bind(jay_method method, jay_instance *this) {
 
 static inline
 jay_value
-jay_get(jay_value v, size_t name) {
-	if(!JAY_IS_INSTANCE(v)) {
-		oops("can only look up properties on an instance");
-	}
-	jay_instance *instance = JAY_AS_INSTANCE(v);
-
+jay_get_instance(jay_instance *instance, size_t name) {
 	// In compat mode, we have to look up the field first.
 	jay_hash_entry *place = jay_find_bucket(instance, name);
 	if(place) {
@@ -1294,6 +1289,14 @@ jay_get(jay_value v, size_t name) {
 	}
 
 	oops("tried to get non-exist property");
+}
+
+static inline
+void
+jay_fence_get(jay_value v) {
+	if(!JAY_IS_INSTANCE(v)) {
+		oops("can only look up properties on an instance");
+	}
 }
 
 #else
@@ -1375,14 +1378,6 @@ jay_set(jay_value object, size_t name, jay_value value) {
 	}
 
 	return value;
-}
-
-static inline
-void
-jay_op_get(size_t name) {
-	// TODO: Figure out whether we should be jay_pop'ing before or after evaluating
-	// inner expressions...
-	jay_push(jay_get(jay_pop(), name));
 }
 
 // Because the superclass must be a variable, we have no need to do any stack
