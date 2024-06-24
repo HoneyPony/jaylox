@@ -243,6 +243,59 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 		}
 	}
 
+	fn compile_literal_inline(&mut self, into: &mut String, lit: &LoxValue) -> fmt::Result {
+		match lit {
+			LoxValue::Nil => into.push_str("jay_box_nil()"),
+			LoxValue::String(ptr) => {
+				// String constants are looked up inside a global array, so
+				// that we only have to initialize them once.
+				write!(into, "global_string_constants[{}]", ptr.to_number())?;
+			},
+			LoxValue::Number(value) => write!(into, "jay_box_number({value})")?,
+			LoxValue::Bool(value) => write!(into, "jay_box_bool({value})")?,
+		}
+
+		Ok(())
+	}
+
+	fn compile_assign(&mut self, into: &mut String, value: &Expr, identity: &VarRef, do_push: bool) -> fmt::Result {
+		match value {
+			Expr::Literal(_) | Expr::Variable { .. } => {},
+			_ => {
+				// If it's a literal or variable, we don't need the expr pushed.
+				// TODO: Build a better optimizer that doesn't need all these
+				// separate checks...
+				self.compile_expr(value, into)?;
+			}
+		}
+		self.indent(into);
+		if do_push {
+			write!(into, "jay_push(")?;
+		}
+		self.compile_var(*identity, into)?;
+		match value {
+			Expr::Literal(value) => {
+				write!(into, " = ")?;
+				self.compile_literal_inline(into, value)?;
+			},
+			Expr::Variable { identity, .. } => {
+				write!(into, " = ")?;
+				self.compile_var(*identity, into)?;
+			},
+
+			// For non-special cased assignments, just pop.
+			_ => {
+				write!(into, " = jay_pop()")?;
+			}
+		}
+		if do_push {
+			write!(into, ")")?;
+		}
+		write!(into, ";\n")?;
+
+		Ok(())
+	}
+
 	fn compile_expr(&mut self, expr: &Expr, into: &mut String) -> fmt::Result {
 		match expr {
 			Expr::Binary { left, operator, right } => {
@@ -303,17 +356,9 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 			},
 			Expr::Literal(value) => {
 				self.indent(into);
-				match value {
-					LoxValue::Nil => into.push_str("jay_push(jay_box_nil())"),
-					LoxValue::String(ptr) => {
-						// String constants are looked up inside a global array, so
-						// that we only have to initialize them once.
-						write!(into, "jay_push(global_string_constants[{}])", ptr.to_number())?;
-					},
-					LoxValue::Number(value) => write!(into, "jay_op_number({value})")?,
-					LoxValue::Bool(value) => write!(into, "jay_op_bool({value})")?,
-				}
-				write!(into, ";\n")?;
+				write!(into, "jay_push(")?;
+				self.compile_literal_inline(into, value)?;
+				write!(into, ");\n")?;
 			},
 			Expr::Logical { left, operator, right } => {
 				// We must implement the short-circuiting semantic. This is actually
@@ -406,11 +451,8 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 				write!(into, ");\n")?;
 			},
 			Expr::Assign { value, identity, .. } => {
-				self.compile_expr(value, into)?;
-				self.indent(into);
-				write!(into, "jay_push(")?;
-				self.compile_var(*identity, into)?;
-				write!(into, " = jay_pop());\n")?;
+				// For exprs, we have to push, in case the value is needed.
+				self.compile_assign(into, value, identity, true)?;
 			},
 		}
 
@@ -766,10 +808,21 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 				writeln!(into, ", scope);")?;
 			},
 			Stmt::Expression(expr) => {
-				self.compile_expr(expr, into)?;
-				// After the expression is done, pop the unused value.
-				self.indent(into);
-				into.push_str("jay_pop();\n");
+				match expr {
+					Expr::Assign { value, identity, .. } => {
+						// Elide extra stack shenanigans for assignment statements.
+						self.compile_assign(into, value, identity, false)?;
+					},
+
+					// For any exprs we don't special case, just compile them
+					// and pop.
+					_ => {
+						self.compile_expr(expr, into)?;
+						// After the expression is done, pop the unused value.
+						self.indent(into);
+						into.push_str("jay_pop();\n");
+					}
+				}
 			},
 			Stmt::Function(fun) => {
 				let mangled_name = self.mangle(format!("jf_{}", fun.name.lexeme));
@@ -855,18 +908,23 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 				//
 				// Note that this could be perhaps 'optimized' by simply getting rid of it...
 				// But there's likely little/no value to that.
+				//
+				// TODO: Actually, we should initialize all variables to nil for the GC's
+				// sake...
 
 				match initializer {
-					Some(initializer) => { self.compile_expr(initializer, into)?; },
+					Some(initializer) => {
+						// If we have an initializer, re-use the compile_assign
+						// logic to compile it "inline".
+						self.compile_assign(into, initializer, identity, false)?;
+					},
 					None => {
+						// Otherwise, just compile the variable = jay_box_nil().
 						self.indent(into);
-						into.push_str("jay_push(jay_box_nil());\n");
+						self.compile_var(*identity, into)?;
+						write!(into, " = jay_box_nil();\n")?;
 					}
 				}
-
-				self.indent(into);
-				self.compile_var(*identity, into)?;
-				write!(into, " = jay_pop();\n")?;
 			},
 			Stmt::While { condition, body } => {
 				self.indent(into);

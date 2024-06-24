@@ -1,0 +1,9 @@
+var a = 1;
+var b = 2;
+var c = true;
+
+a = b;
+b = c;
+
+// Harder to optimize. We might need a more sophisticated optimizer.
+a = b = c;
