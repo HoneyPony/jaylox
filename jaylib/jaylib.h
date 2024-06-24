@@ -4,8 +4,6 @@
 // TODO: Make this a compiler option or something
 #define JAY_FULL_COMPAT
 
-#define JAY_TRACE_GC
-
 #include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>

@@ -545,7 +545,7 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 		writeln!(def, "jay_value\n{}(jay_value superclass, jay_closure *closure) {{", mangled_name)?;
 
 		// First step: Allocate the actual class object
-		writeln!(def, "\tjay_class *class = jay_malloc(sizeof(*class) + (sizeof(jay_method) * {}));",
+		writeln!(def, "\tjay_class *class = jay_gc_alloc(sizeof(*class) + (sizeof(jay_method) * {}), JAY_GC_CLASS);",
 			class.methods.len())?;
 
 		// Fill out the method table
@@ -581,13 +581,15 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 		// Fill in the superclass
 		// If it is nil, then the superclass is NULL, otherwise, it must be
 		// a jay_class
-		writeln!(def, "\tif(jay_is_null(superclass)) {{")?;
+		writeln!(def, "\tif(JAY_IS_NIL(superclass)) {{")?;
 		writeln!(def, "\t\tclass->superclass = NULL;")?;
-		writeln!(def, "\t}}\n\telse if(jay_is_class(superclass)) {{")?;
-		writeln!(def, "\t\tclass->superclass = jay_as_class(superclass, \"internal error\");")?;
+		writeln!(def, "\t}}\n\telse if(JAY_IS_CLASS(superclass)) {{")?;
+		writeln!(def, "\t\tclass->superclass = JAY_AS_CLASS(superclass);")?;
+		writeln!(def, "\t}}\n\telse {{")?;
+		writeln!(def, "\t\toops(\"superclass must be class\");")?;
 		writeln!(def, "\t}}")?;
 
-		writeln!(def, "\treturn jay_class_to_value(class);\n")?;
+		writeln!(def, "\treturn jay_box_class(class);\n")?;
 
 		writeln!(def, "}}")?;
 
