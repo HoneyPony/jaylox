@@ -405,11 +405,14 @@ jay_gc_copy(jay_object *previous) {
 
 	// Allocate from high ptr
 	jay_object *result = (void*)jay_gc.high_ptr;
+	assert(jay_gc.high_ptr >= jay_gc.to_space);
 
 	size_t size = jay_gc_find_size(previous);
 
 	// Bump-allocate
 	jay_gc.high_ptr = jay_gc_align(jay_gc.high_ptr + size);
+	assert(jay_gc.high_ptr < jay_gc.limit);
+	assert((jay_gc.high_ptr & 0x7) == 0x0);
 
 #ifdef JAY_TRACE_GC
 	printf("     v copy %s %p -> %p (%zu bytes)\n", jay_gc_tag_name((uint64_t)previous->gc >> 32), previous, result, size);
@@ -636,7 +639,7 @@ jay_gc_recollect(size_t needed_size) {
 	size_t half = jay_gc.current_size / 2;
 	size_t taken = (size_t)(jay_gc.high_ptr - jay_gc.to_space);
 	printf("GC: TAKEN = %zu\n", taken);
-	while((taken + needed_size) > half) {
+	while((taken + needed_size) >= half) {
 		// TODO: Overflow check?
 		half *= 2;
 	}
@@ -678,8 +681,8 @@ jay_gc_recollect(size_t needed_size) {
 static inline
 void
 jay_gc_collect() {
-	jay_gc_recollect(0);
-	return;
+	//jay_gc_recollect(0);
+	//return;
 
 	// Reset the high pointer and to_space to point to the from_space
 	jay_gc.high_ptr = jay_gc.from_space;
