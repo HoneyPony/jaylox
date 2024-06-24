@@ -552,22 +552,12 @@ jay_gc_trace(jay_object *object) {
 	return jay_gc_find_size(object);
 }
 
+// The core garbage-collection method, which performs scanning and copying
+// from from-space to to-space.
 static
 void
-jay_gc_collect() {
+jay_gc_go() {
 	printf("gc: begin collect!\n");
-
-	// Reset the high pointer and to_space to point to the from_space
-	jay_gc.high_ptr = jay_gc.from_space;
-
-	// And the from space points to the to-space
-	jay_gc.from_space = jay_gc.to_space;
-
-	// (to space points to old from space)
-	jay_gc.to_space = jay_gc.high_ptr;
-
-	// update limit
-	jay_gc.limit = jay_gc.to_space + (jay_gc.current_size / 2);
 
 	// We will scan through the new to-space to copy any more referenced objects.
 	uintptr_t scan = jay_gc.high_ptr;
@@ -596,6 +586,68 @@ jay_gc_collect() {
 }
 
 static inline
+void
+jay_gc_collect() {
+	// Reset the high pointer and to_space to point to the from_space
+	jay_gc.high_ptr = jay_gc.from_space;
+
+	// And the from space points to the to-space
+	jay_gc.from_space = jay_gc.to_space;
+
+	// (to space points to old from space)
+	jay_gc.to_space = jay_gc.high_ptr;
+
+	// update limit
+	jay_gc.limit = jay_gc.to_space + (jay_gc.current_size / 2);
+
+	jay_gc_go();
+}
+
+static inline
+void
+jay_gc_recollect(size_t needed_size) {
+	size_t half = jay_gc.current_size / 2;
+	size_t taken = (size_t)(jay_gc.high_ptr - jay_gc.to_space);
+	while((taken + needed_size) < half) {
+		// TODO: Overflow check?
+		half *= 2;
+	}
+
+	size_t new_size = half * 2;
+	void *new_mem = malloc(new_size);
+
+	if(!new_mem) {
+		oops("out of memory: can't expand gc heap");
+	}
+
+	// NOTE: Should be totally unnecessary, as we don't actually use from_space
+	// throughout all of jay_gc_go(), but this does make some sense. Can probably
+	// be deleted if we really care.
+	jay_gc.from_space = jay_gc.to_space;
+
+	jay_gc.current_size = new_size;
+
+	jay_gc.high_ptr = (uintptr_t)new_mem;
+	jay_gc.to_space = (uintptr_t)new_mem;
+	jay_gc.limit = jay_gc.to_space + (jay_gc.current_size / 2);
+
+	// Note: When we recollect() after collect()ing, we do still need to e.g.
+	// visit everything on the stack, in order to update its pointers. So
+	// unfortunately recollect() can be slow, but we can add some tuning
+	// to help the GC expand eagerly when it thinks it needs to.
+	jay_gc_go();
+
+	// Free the old heap.
+	free((void*)jay_gc.current_heap);
+
+	// Update the current heap pointer so we can track it for freeing later.
+	jay_gc.current_heap = (uintptr_t)new_mem;
+
+	// The actual from_space should be the top half of the heap like usual.
+	jay_gc.from_space = jay_gc.limit;
+}
+
+static inline
 void*
 jay_gc_alloc_impl(size_t size) {
 	void *result = (void*)jay_gc.high_ptr;
@@ -618,9 +670,8 @@ jay_gc_alloc_impl(size_t size) {
 		return result;
 	}
 
-	oops("GC heap widening unimplemented");
 	// If it STILL failed, then collect to a new to space.
-	//jay_gc_recollect(size);
+	jay_gc_recollect(size);
 
 	// After recollect(), either our realloc failed, our we definitely have
 	// enough space.
