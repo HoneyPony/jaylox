@@ -1,0 +1,16 @@
+class Linked {
+	init(length) {
+		if(length > 0) {
+			this.next = Linked(length - 1);
+		}
+		else {
+			this.next = nil;
+		}
+	}
+}
+
+var link = Linked();
+while(link != nil) {
+	print link;
+	link = link.next;
+}

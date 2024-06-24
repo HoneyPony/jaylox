@@ -580,8 +580,9 @@ jay_gc_trace(jay_object *object) {
 			for(size_t i = 0; i < table->table_size; ++i) {
 				if(table->table[i].name != JAY_NAME_TOMBSTONE) {
 #ifdef JAY_TRACE_GC_DIRECT
-					printf("gc: visit table entry %zu ", i);
+					printf("gc: visit table entry %zu (name = %zu)", i, table->table[i].name);
 					jay_print(table->table[i].value);
+					fflush(stdout);
 #endif
 					jay_gc_visit(&table->table[i].value);
 				}
