@@ -1036,10 +1036,10 @@ jay_new_instance() {
 // is an empty bucket
 jay_hash_entry*
 jay_find_empty_bucket_in(jay_hash_entry *array, size_t array_size, size_t name) {
-	// TODO: Optimize to use &
-	size_t i = name % array_size;
+	// Modulo optimization: Only works for power-of-two sizes.
+	size_t i = name & (array_size - 1);
 	for(;;) {
-		i = (i + 1) % array_size;
+		i = (i + 1) & (array_size - 1);
 
 		// We MUST find a tombstone to exit the loop.
 		if(array[i].name == JAY_NAME_TOMBSTONE) {
@@ -1057,12 +1057,12 @@ jay_find_empty_bucket(jay_instance *instance, size_t name) {
 
 jay_hash_entry*
 jay_find_bucket_in(jay_hash_entry *array, size_t array_size, size_t name) {
-	// TODO: Optimize to use &
-	size_t i = name % array_size;
+	// Modulo optimization: Only works for power-of-two sizes.
+	size_t i = name & (array_size - 1);
 	size_t check = i;
 	while(array[i].name != name) {
 		// Linear probing
-		i = (i + 1) % array_size;
+		i = (i + 1) & (array_size - 1);
 
 		// Item doesn't exist
 		if(i == check || array[i].name == JAY_NAME_TOMBSTONE) {
