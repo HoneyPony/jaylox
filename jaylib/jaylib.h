@@ -1055,7 +1055,7 @@ jay_eq_impl(jay_value a, jay_value b) {
 #ifdef JAY_NAN_BOXING
 
 	if(JAY_IS_NUMBER(a) && JAY_IS_NUMBER(b)) {
-		return JAS_AS_NUMBER(a) == JAY_AS_NUMBER(b);
+		return JAY_AS_NUMBER(a) == JAY_AS_NUMBER(b);
 	}
 
 	return a == b;
