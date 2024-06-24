@@ -344,49 +344,6 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 
 				
 			},
-			Expr::Get { object, name } => {
-
-				match object.as_ref() {
-					Expr::This { .. } => {
-						// For 'this' objects, we still need to end up with
-						// 1 thing on the stack. Because we aren't pushing
-						// the inner 'this' object, we can just increment
-						// the stack pointer directly.
-						//
-						// TODO: If we ever add bounds checking, we will need
-						// to do it here.
-						self.indent(into);
-						writeln!(into, "jay_stack_ptr += 1;")?;
-					},
-					_ => {
-						// Generate a fence for non-This objects. Also,
-						// don't compile the inner expr for This objects.
-						self.compile_expr(object, into)?;
-
-						self.indent(into);
-						writeln!(into, "jay_fence_get(jay_stack_ptr[-1);")?;
-					}
-				};
-
-				self.add_name(name);
-				self.indent(into);
-
-				write!(into, "jay_stack_ptr[-1] = ")?;
-
-				match object.as_ref() {
-					Expr::This { identity, .. } => {
-						// We know that 'this' is always an instance.
-						// TODO: Maybe generate a 'const pointer' 'this' that
-						// we can just reference directly..?
-						write!(into, "jay_get_instance(JAY_AS_INSTANCE(")?;
-						self.compile_var(*identity, into)?;
-						write!(into, "), NAME_{});\n", name.lexeme)?;
-					},
-					_ => {
-						write!(into, "jay_get_instance(JAY_AS_INSTANCE(jay_stack_ptr[-1]), NAME_{});\n", name.lexeme)?;
-					}
-				}
-			},
 			Expr::Grouping(inner) => {
 				self.compile_expr(inner, into)?;
 			},
@@ -437,14 +394,93 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 				write!(into, "}}\n")?;
 
 				// Done!
-			}
-			Expr::Set { object, name, value } => {
-				self.compile_expr(value, into)?;
-				self.compile_expr(object, into)?;
-				
+			},
+			Expr::Get { object, name } => {
+
+				match object.as_ref() {
+					Expr::This { .. } => {
+						// For 'this' objects, we still need to end up with
+						// 1 thing on the stack. Because we aren't pushing
+						// the inner 'this' object, we can just increment
+						// the stack pointer directly.
+						//
+						// TODO: If we ever add bounds checking, we will need
+						// to do it here.
+						self.indent(into);
+						writeln!(into, "jay_stack_ptr += 1;")?;
+					},
+					_ => {
+						// Generate a fence for non-This objects. Also,
+						// don't compile the inner expr for This objects.
+						self.compile_expr(object, into)?;
+
+						self.indent(into);
+						writeln!(into, "jay_fence_get(jay_stack_ptr[-1]);")?;
+					}
+				};
+
 				self.add_name(name);
 				self.indent(into);
-				writeln!(into, "jay_op_set(NAME_{});", name.lexeme)?
+
+				write!(into, "jay_stack_ptr[-1] = ")?;
+
+				match object.as_ref() {
+					Expr::This { identity, .. } => {
+						// We know that 'this' is always an instance.
+						// TODO: Maybe generate a 'const pointer' 'this' that
+						// we can just reference directly..?
+						write!(into, "jay_get_instance(JAY_AS_INSTANCE(")?;
+						self.compile_var(*identity, into)?;
+						write!(into, "), NAME_{});\n", name.lexeme)?;
+					},
+					_ => {
+						write!(into, "jay_get_instance(JAY_AS_INSTANCE(jay_stack_ptr[-1]), NAME_{});\n", name.lexeme)?;
+					}
+				}
+			},
+			Expr::Set { object, name, value } => {
+				self.compile_expr(value, into)?;
+
+				match object.as_ref() {
+					Expr::This { .. } => {
+						// Make one extra spot on the stack ptr for the following
+						// arithmetic.
+						self.indent(into);
+						writeln!(into, "jay_stack_ptr += 1;")?;
+					},
+					_ => {
+						// Generate a fence for non-This objects. Also,
+						// don't compile the inner expr for This objects.
+						self.compile_expr(object, into)?;
+
+						self.indent(into);
+						writeln!(into, "jay_fence_set(jay_stack_ptr[-1]);")?;
+					}
+				}
+
+				self.add_name(name);
+				self.indent(into);
+
+				// Write to -2 because the set expression takes 2 args.
+				write!(into, "jay_stack_ptr[-2] = ")?;
+
+				match object.as_ref() {
+					Expr::This { identity, .. } => {
+						// We know that 'this' is always an instance.
+						// TODO: Maybe generate a 'const pointer' 'this' that
+						// we can just reference directly..?
+						write!(into, "jay_set_instance(JAY_AS_INSTANCE(")?;
+						self.compile_var(*identity, into)?;
+						write!(into, "), NAME_{}, jay_stack_ptr[-2]);\n", name.lexeme)?;
+					},
+					_ => {
+						write!(into, "jay_set_instance(JAY_AS_INSTANCE(jay_stack_ptr[-1]), NAME_{}, jay_stack_ptr[-2]);\n", name.lexeme)?;
+					}
+				}
+
+				// Decrement stack pointer.
+				self.indent(into);
+				write!(into, "jay_stack_ptr -= 1;")?;
 			},
 			Expr::Super { method, identity, this_identity, .. } => {
 				// Super is a little unique in that it is one of the only

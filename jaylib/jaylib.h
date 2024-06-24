@@ -1356,11 +1356,7 @@ jay_get_super(jay_value object, size_t name, jay_value superclass) {
 
 static inline
 jay_value
-jay_set(jay_value object, size_t name, jay_value value) {
-	if(!JAY_IS_INSTANCE(object)) {
-		oops("can only set fields on an instance");
-	}
-	jay_instance *instance = JAY_AS_INSTANCE(object);
+jay_set_instance(jay_instance *instance, size_t name, jay_value value) {
 
 	jay_hash_entry *place = jay_find_bucket(instance, name);
 	if(!place) {
@@ -1371,6 +1367,7 @@ jay_set(jay_value object, size_t name, jay_value value) {
 		// we could just put the item in that bucket right here...
 		//
 		// I guess that could be a variant of jay_find_bucket()?
+		// NOTE: Not gc-safe
 		jay_put_new(instance, name, value);
 	}
 	else {
@@ -1380,6 +1377,14 @@ jay_set(jay_value object, size_t name, jay_value value) {
 	return value;
 }
 
+static inline
+void
+jay_fence_set(jay_value v) {
+	if(!JAY_IS_INSTANCE(v)) {
+		oops("can only set fields on an instance");
+	}
+}
+
 // Because the superclass must be a variable, we have no need to do any stack
 // machine shenanigans (even for GC purposes) -- so always pass it here.
 // Same with 'this'. But, the super _op does push a value on to the stack.
@@ -1387,16 +1392,6 @@ static inline
 void
 jay_op_get_super(jay_value this, size_t name, jay_value superclass) {
 	jay_push(jay_get_super(this, name, superclass));
-}
-
-static inline
-void
-jay_op_set(size_t name) {
-	// This is an expression, so it must leave a value on the stack. For efficiency,
-	// just don't pop the value. I.e. the stack top = object, then value; just pop
-	// object.
-	jay_value object = jay_pop();
-	jay_set(object, name, jay_top());
 }
 
 /* --- Call Operators */
