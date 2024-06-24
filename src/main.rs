@@ -4,6 +4,7 @@ mod stmt;
 mod parser;
 //mod resolver;
 mod compiler;
+mod ir;
 
 use std::collections::HashMap;
 use std::{env, fs::File};
