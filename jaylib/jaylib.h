@@ -621,7 +621,9 @@ jay_gc_trace(jay_object *object) {
 static
 void
 jay_gc_go() {
+#ifdef JAY_TRACE_GC_DIRECT
 	printf("GC: BEGIN COLLECT!\n");
+#endif
 
 	// We will scan through the new to-space to copy any more referenced objects.
 	uintptr_t scan = jay_gc.high_ptr;
@@ -651,9 +653,13 @@ jay_gc_go() {
 
 	}
 
+#ifdef JAY_TRACE_GC_DIRECT
 	printf("gc: jay_harbor_ptr = %zu\n", jay_harbor_ptr);
+#endif
 	for(size_t hptr = 0; hptr < jay_harbor_ptr; ++hptr) {
+#ifdef JAY_TRACE_GC_DIRECT
 		printf("gc: visit harbor %zu\n", hptr);
+#endif
 		JAY_GC_VISIT_DIRECT(jay_harbor_stack[hptr]);
 	}
 
@@ -664,7 +670,9 @@ jay_gc_go() {
 		scan = jay_gc_align(scan + jay_gc_trace(to_scan));
 	}
 
+#ifdef JAY_TRACE_GC_DIRECT
 	printf("GC: COLLECT DONE! copied %zu bytes (out of %zu)\n", (size_t)(jay_gc.high_ptr - jay_gc.to_space), (jay_gc.current_size / 2));
+#endif
 }
 
 //static char
@@ -680,12 +688,17 @@ jay_gc_recollect(size_t needed_size) {
 	//	oops("already used gc debugger");
 	//}
 	//gc_debugger_flag = true;
+
+#ifdef JAY_TRACE_GC_DIRECT
 	printf("GC: RECOLLECT (NEED %zu)\n", needed_size);
 	printf("GC: REMAINING = %zu\n", (jay_gc.limit - jay_gc.high_ptr));
+#endif
 
 	size_t half = jay_gc.current_size / 2;
 	size_t taken = (size_t)(jay_gc.high_ptr - jay_gc.to_space);
+#ifdef JAY_TRACE_GC_DIRECT
 	printf("GC: TAKEN = %zu\n", taken);
+#endif
 	while((taken + needed_size) >= half) {
 		// TODO: Overflow check?
 		half *= 2;
