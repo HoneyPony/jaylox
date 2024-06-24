@@ -176,6 +176,22 @@ static jay_value *jay_stack_ptr;
 static jay_stackframe *jay_frames[4096];
 static size_t jay_frames_ptr;
 
+static void *jay_harbor_stack[4096];
+static size_t jay_harbor_ptr;
+
+static inline
+void
+jay_harbor(void *ptr) {
+	jay_harbor_stack[jay_harbor_ptr++] = ptr;
+}
+
+static inline
+void*
+jay_unharbor() {
+	jay_harbor_ptr -= 1;
+	return jay_harbor_stack[jay_harbor_ptr];
+}
+
 #ifndef JAY_NAN_BOXING
 
 // NOTE: For no NAN_BOXING, we use 0 as the number tag.
@@ -621,6 +637,10 @@ jay_gc_go() {
 
 	}
 
+	for(size_t hptr = 0; hptr < jay_harbor_ptr; ++hptr) {
+		JAY_GC_VISIT_DIRECT(jay_harbor_stack[hptr]);
+	}
+
 	jay_gc_visit_globals();
 
 	while(scan < jay_gc.high_ptr) {
@@ -888,25 +908,14 @@ jay_string_from_literal(const char *literal) {
 
 jay_closure*
 jay_new_scope(jay_closure *parent, size_t count) {
-	struct {
-		size_t count;
-		jay_closure *gc_scope;
-	} locals;
-
-	// Because we don't have a great way to push a jay_closure with jay_push,
-	// just do this for now...
-	locals.count = 0;
-	locals.gc_scope = parent;
-
-	jay_push_frame(&locals);
+	// Harbor closure value for GC
+	jay_harbor(parent);
 
 	size_t bytes = sizeof(jay_closure) + (count * sizeof(jay_value));
 	jay_closure *closure = jay_gc_alloc(bytes, JAY_GC_CLOSURE);
 	closure->count = count;
-	closure->parent = locals.gc_scope;
+	closure->parent = jay_unharbor();
 	// Do we want to zero out the 'values' array..?
-
-	jay_pop_frame();
 
 	return closure;
 }
@@ -1441,22 +1450,13 @@ jay_op_invoke(size_t name, size_t arity) {
 static inline
 jay_value
 jay_fun_from(jay_function_impl impl, size_t arity, jay_closure *closure) {
-	struct {
-		size_t count;
-		jay_closure *gc_scope;
-	} locals;
-
-	locals.count = 0;
-	locals.gc_scope = closure;
-
-	jay_push_frame(&locals);
+	// Harbor closure value for GC
+	jay_harbor(closure);
 
 	jay_function *f = jay_gc_alloc(sizeof(*f), JAY_GC_FUNCTION);
 	f->arity = arity;
-	f->closure = locals.gc_scope;
+	f->closure = jay_unharbor();
 	f->implementation = impl;
-
-	jay_pop_frame();
 
 	return jay_box_function(f);
 }

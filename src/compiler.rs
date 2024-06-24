@@ -553,6 +553,9 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 		// Start writing the function definition
 		writeln!(def, "jay_value\n{}(jay_value superclass, jay_closure *closure) {{", mangled_name)?;
 
+		// Save values for GC
+		writeln!(def, "\tjay_harbor(closure);\n\tjay_push(superclass);")?;
+
 		// First step: Allocate the actual class object
 		writeln!(def, "\tjay_class *class = jay_gc_alloc(sizeof(*class) + (sizeof(jay_method) * {}), JAY_GC_CLASS);",
 			class.methods.len())?;
@@ -585,13 +588,14 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 		writeln!(def, "\tclass->dispatcher = &{dispatcher_mangled};")?;
 
 		// The class tracks the closure for all methods.
-		writeln!(def, "\tclass->closure = closure;")?;
+		writeln!(def, "\tclass->closure = jay_unharbor();")?;
 
 		writeln!(def, "\tclass->methods_count = {};\n", class.methods.len())?;
 
 		// Fill in the superclass
 		// If it is nil, then the superclass is NULL, otherwise, it must be
 		// a jay_class
+		writeln!(def, "\tsuperclass = jay_pop();")?;
 		writeln!(def, "\tif(JAY_IS_NIL(superclass)) {{")?;
 		writeln!(def, "\t\tclass->superclass = NULL;")?;
 		writeln!(def, "\t}}\n\telse if(JAY_IS_CLASS(superclass)) {{")?;
