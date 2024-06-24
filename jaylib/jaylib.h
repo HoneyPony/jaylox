@@ -248,7 +248,7 @@ jay_print(jay_value value) {
 			puts("nil");
 			break;
 		case JAY_STRING:
-			puts(value.as_string->contents);
+			puts(JAY_AS_STRING(value)->contents);
 			break;
 		case JAY_TRUE:
 			puts("true");
@@ -892,11 +892,7 @@ jay_fun_from(jay_function_impl impl, size_t arity, jay_closure *closure) {
 	f->closure = closure;
 	f->implementation = impl;
 
-	jay_value v;
-	v.as_function = f;
-	// TODO: Move these tags to the jay_object; should only have a few for jay_value
-	v.tag = JAY_FUNCTION;
-	return v;
+	return jay_box_function(f);
 }
 
 // Note that methods are weird in that they are not jay_objects nor can they
