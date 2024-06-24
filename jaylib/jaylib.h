@@ -451,7 +451,7 @@ jay_gc_tag_name(uint32_t gc_tag) {
 			return "string";
 
 		case JAY_GC_BOUND_METHOD:
-			return "bound method"
+			return "bound method";
 
 		case JAY_GC_CLASS:
 			return "class";
@@ -468,6 +468,8 @@ jay_gc_tag_name(uint32_t gc_tag) {
 		case JAY_GC_CLOSURE:
 			return "closure";
 	}
+
+	return "<unknown>";
 }
 
 // Returns the size of the object.
@@ -481,7 +483,7 @@ jay_gc_trace(jay_object *object) {
 	switch(gc_tag) {
 		case JAY_GC_STRING:
 			/* no-op */
-			printf("-- string\n")
+			printf("-- string\n");
 			break;
 
 		case JAY_GC_BOUND_METHOD:
