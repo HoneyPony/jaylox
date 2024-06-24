@@ -21,6 +21,8 @@ struct jay_method;
 struct jay_string;
 struct jay_class;
 
+typedef uint32_t jay_name;
+
 #ifndef JAY_NAN_BOXING
 
 typedef struct jay_value {
@@ -47,7 +49,7 @@ typedef jay_value (*jay_function_impl)(jay_value *args, struct jay_closure *clos
 // The "dispatcher" is the function that looks up methods inside a class. It
 // essentially maps from NAME_ constants to offsets inside that classes stored
 // jay_function array. 
-typedef struct jay_method* (*jay_dispatcher_impl)(struct jay_class *class, size_t name);
+typedef struct jay_method* (*jay_dispatcher_impl)(struct jay_class *class, jay_name name);
 
 typedef struct jay_object {
 	uint64_t gc;
@@ -125,16 +127,18 @@ typedef struct jay_bound_method {
 	struct jay_instance *this;
 } jay_bound_method;
 
-typedef struct {
-	size_t name;
-	jay_value value;
-} jay_hash_entry;
-
 typedef struct jay_table {
 	jay_object object;
 	size_t table_size;
 	size_t used_entries;
-	jay_hash_entry table[];
+
+	// The table format is as such:
+	// First, we have all of the values packed tightly in an array.
+	// Then, we have all of the names packed tightly in an array.
+	//
+	// We do it like this so that the alignment is simpler. (Because values
+	// are guaranteed to have higher alignment than names).
+	char table[];
 } jay_table;
 
 typedef struct jay_instance {
@@ -501,7 +505,8 @@ jay_gc_find_size(jay_object *object) {
 			return sizeof(jay_function);
 
 		case JAY_GC_TABLE:
-			return JAY_GC_FLEX(jay_table, table_size, table);
+			jay_table *table = (jay_table*)object;
+			return sizeof(jay_table) + table->table_size * (sizeof(jay_value) + sizeof(jay_name));
 
 		case JAY_GC_CLOSURE:
 			return JAY_GC_FLEX(jay_closure, count, values);
@@ -655,6 +660,18 @@ jay_gc_visit(jay_value *field) {
 static void
 jay_gc_visit_globals();
 
+static inline
+jay_value*
+jay_table_values(jay_table *table) {
+	return (void*)(table->table);
+}
+
+static inline
+jay_name*
+jay_table_names(jay_table *table) {
+	return (void*)(table->table + (table->table_size * sizeof(jay_value)));
+}
+
 // Returns the size of the object.
 static
 size_t
@@ -696,14 +713,16 @@ jay_gc_trace(jay_object *object) {
 
 		case JAY_GC_TABLE: {
 			jay_table *table = (jay_table*)object;
+			jay_name *names = jay_table_names(table);
+			jay_value *values = jay_table_values(table);
 			for(size_t i = 0; i < table->table_size; ++i) {
-				if(table->table[i].name != JAY_NAME_TOMBSTONE) {
+				if(names[i] != JAY_NAME_TOMBSTONE) {
 #ifdef JAY_TRACE_GC_DIRECT
 					printf("gc: visit table entry %zu (name = %zu)", i, table->table[i].name);
 					jay_print(table->table[i].value);
 					fflush(stdout);
 #endif
-					jay_gc_visit(&table->table[i].value);
+					jay_gc_visit(&values[i]);
 				}
 			}
 			break;
@@ -1126,8 +1145,8 @@ jay_table_max_usage(jay_table *table) {
 
 jay_table*
 jay_new_table(size_t entries) {
-	size_t entry_bytes = (entries * sizeof(jay_hash_entry));
-	size_t bytes = entry_bytes + sizeof(jay_table);
+	size_t flexible_bytes = (entries * sizeof(jay_value)) + (entries * sizeof(jay_name));
+	size_t bytes = flexible_bytes + sizeof(jay_table);
 	jay_table *result = jay_gc_alloc(bytes, JAY_GC_TABLE);
 
 	result->table_size = entries;
@@ -1135,7 +1154,9 @@ jay_new_table(size_t entries) {
 	
 	result->used_entries = 0;
 
-	memset(result->table, 0, entry_bytes);
+	// NOTE: Because we actually only ever look at non-TOMBSTONE values, we
+	// very well could not memset this like this. But, this should be fine...
+	memset(result->table, 0, flexible_bytes);
 
 	return result;
 }
@@ -1169,48 +1190,51 @@ jay_new_instance() {
 
 // NOTE: This function is UNSAFE to call if you haven't guaranteed that there
 // is an empty bucket
-jay_hash_entry*
-jay_find_empty_bucket_in(jay_hash_entry *array, size_t array_size, size_t name) {
+// Returns the pointer to the value. Places name at the corresponding bucket.
+jay_value*
+jay_take_empty_bucket_in(jay_table *table, jay_name name) {
 	// Modulo optimization: Only works for power-of-two sizes.
-	size_t i = name & (array_size - 1);
+	size_t i = name & (table->table_size - 1);
+	jay_name *names = jay_table_names(table);
 	for(;;) {
-		i = (i + 1) & (array_size - 1);
+		i = (i + 1) & (table->table_size - 1);
 
 		// We MUST find a tombstone to exit the loop.
-		if(array[i].name == JAY_NAME_TOMBSTONE) {
-			return &array[i];
+		if(names[i] == JAY_NAME_TOMBSTONE) {
+			// Store name
+			names[i] = name;
+			return jay_table_values(table) + i;
 		}
 	}
 }
 
-// NOTE: This function is UNSAFE to call if you haven't guaranteed that there
-// is an empty bucket
-jay_hash_entry*
-jay_find_empty_bucket(jay_instance *instance, size_t name) {
-	return jay_find_empty_bucket_in(instance->table->table, instance->table->table_size, name);
-}
-
-jay_hash_entry*
-jay_find_bucket_in(jay_hash_entry *array, size_t array_size, size_t name) {
+// Finds the value bucket corresponding to the given name. Does not modify
+// the table at all.
+jay_value*
+jay_find_bucket_in(jay_table *table, jay_name name) {
 	// Modulo optimization: Only works for power-of-two sizes.
-	size_t i = name & (array_size - 1);
+	size_t i = name & (table->table_size - 1);
 	size_t check = i;
-	while(array[i].name != name) {
+
+	jay_name *names = jay_table_names(table);
+
+	while(names[i] != name) {
 		// Linear probing
-		i = (i + 1) & (array_size - 1);
+		i = (i + 1) & (table->table_size - 1);
 
 		// Item doesn't exist
-		if(i == check || array[i].name == JAY_NAME_TOMBSTONE) {
+		if(i == check || names[i] == JAY_NAME_TOMBSTONE) {
 			return NULL;
 		}
 	}
 
-	return &array[i];
+	return jay_table_values(table) + i;
 }
 
-jay_hash_entry*
-jay_find_bucket(jay_instance *instance, size_t name) {
-	return jay_find_bucket_in(instance->table->table, instance->table->table_size, name);
+static inline
+jay_value*
+jay_find_bucket(jay_instance *instance, jay_name name) {
+	return jay_find_bucket_in(instance->table, name);
 }
 
 void
@@ -1222,13 +1246,16 @@ jay_rehash(jay_instance *instance) {
 	jay_table *new_table = jay_new_table(new_size);
 	instance = JAY_AS_INSTANCE(jay_pop());
 
+	// Now that we're not allocating, it's safe to call names() and values()
+	jay_name *old_names = jay_table_names(instance->table);
+	jay_value *old_values = jay_table_values(instance->table);
+
 	for(size_t i = 0; i < instance->table->table_size; ++i) {
-		if(instance->table->table[i].name != JAY_NAME_TOMBSTONE) {
+		if(old_names[i] != JAY_NAME_TOMBSTONE) {
 			// Note: here this should always return a tombstone, as all buckets
 			// should be empty...
-			jay_hash_entry *ptr = jay_find_empty_bucket_in(new_table->table, new_size, instance->table->table[i].name);
-			ptr->name = instance->table->table[i].name;
-			ptr->value = instance->table->table[i].value;
+			jay_value *ptr = jay_take_empty_bucket_in(new_table, old_names[i]);
+			*ptr = old_values[i];
 		}
 	}
 
@@ -1253,9 +1280,8 @@ jay_put_new(jay_instance *scope, size_t name, jay_value value) {
 	}
 	// We are guaranteed an empty bucket somewhere.
 	// TODO: Consider Hopgood-Davenport probing
-	jay_hash_entry *place = jay_find_empty_bucket(scope, name);
-	place->name = name;
-	place->value = value;
+	jay_value *ptr = jay_take_empty_bucket_in(scope->table, name);
+	*ptr = value;
 
 	scope->table->used_entries += 1;
 
@@ -1296,9 +1322,9 @@ static inline
 jay_value
 jay_get_instance(jay_instance *instance, size_t name) {
 	// In compat mode, we have to look up the field first.
-	jay_hash_entry *place = jay_find_bucket(instance, name);
-	if(place) {
-		return place->value;
+	jay_value *ptr = jay_find_bucket(instance, name);
+	if(ptr) {
+		return *ptr;
 	}
 
 	jay_method *method = instance->class->dispatcher(instance->class, name);
@@ -1375,9 +1401,8 @@ jay_get_super(jay_value object, size_t name, jay_value superclass) {
 static inline
 jay_value
 jay_set_instance(jay_instance *instance, size_t name, jay_value value) {
-
-	jay_hash_entry *place = jay_find_bucket(instance, name);
-	if(!place) {
+	jay_value *ptr = jay_find_bucket(instance, name);
+	if(!ptr) {
 		// Slow path is creating a new value on the object. This shouldn't happen
 		// too often.
 		// TODO: One optimization is that jay_find_bucket() could return
@@ -1389,7 +1414,7 @@ jay_set_instance(jay_instance *instance, size_t name, jay_value value) {
 		jay_put_new(instance, name, value);
 	}
 	else {
-		place->value = value;
+		*ptr = value;
 	}
 
 	return value;
@@ -1588,9 +1613,9 @@ jay_op_invoke(size_t name, size_t arity) {
 	jay_instance *instance = JAY_AS_INSTANCE(target);
 
 	// In full compat mode, we have to look up the field first.
-	jay_hash_entry *field = jay_find_bucket(instance, name);
-	if(field) {
-		jay_push(field->value);
+	jay_value *ptr = jay_find_bucket(instance, name);
+	if(ptr) {
+		jay_push(*ptr);
 		jay_op_call(arity);
 		return;
 	}

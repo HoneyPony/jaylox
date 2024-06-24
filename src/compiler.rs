@@ -726,9 +726,9 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 
 		// Add the dispatcher forward-declaration
 		// TODO: Consider having multiple blocks of forward-declares for organization / clarity
-		writeln!(self.prelude, "jay_method* {mangled_name}(jay_class *class, size_t name);")?;
+		writeln!(self.prelude, "jay_method* {mangled_name}(jay_class *class, jay_name name);")?;
 		
-		writeln!(def, "jay_method*\n{mangled_name}(jay_class *class, size_t name) {{")?;
+		writeln!(def, "jay_method*\n{mangled_name}(jay_class *class, jay_name name) {{")?;
 
 		// First, generate a switch-case for each name, looking up the associated function. But,
 		// we actually do this in reverse, iterating through 0..n, then adding the associated
@@ -1126,7 +1126,7 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 		// Note that 0 is the TOMBSTONE so we cannot use it for a NAME
 		let mut name_value: usize = 1;
 		for name in &self.name_set {
-			writeln!(self.writer, "#define NAME_{name} ((size_t){name_value})")?;
+			writeln!(self.writer, "#define NAME_{name} ((jay_name){name_value})")?;
 			name_value += 1;
 		}
 		writeln!(self.writer, "\n/* --- Function Definitions --- */\n")?;
