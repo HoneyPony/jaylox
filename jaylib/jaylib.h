@@ -930,11 +930,14 @@ jay_new_instance() {
 	jay_push(jay_box_instance(instance));
 
 	// Allocate a table for the fields.
-	instance->table = jay_new_table(8);
+	jay_table *table = jay_new_table(8);
 
 	// Clean up GC root. We have to reset the instance pointer as well in the
 	// case that it is updated.
 	instance = JAY_AS_INSTANCE(jay_pop());
+
+	// Store table value.
+	instance->table = table;
 
 	return instance;
 }
