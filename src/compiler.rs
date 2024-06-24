@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::{collections::HashSet, fmt::Write};
 
 use crate::stmt::{Class, Function};
-use crate::VarRef;
+use crate::{CodegenOptions, VarRef};
 use crate::{expr::Expr, scanner::Token, stmt::Stmt, Lox};
 use crate::scanner::{LoxValue, TokenType};
 use crate::scanner::TokenType::*;
@@ -42,10 +42,12 @@ pub struct Compiler<'a, Writer: std::io::Write> {
 	mangled_set: HashSet<String>,
 
 	writer: Writer,
+
+	opt: CodegenOptions,
 }
 
 impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
-	pub fn new(lox: &'a mut Lox, writer: Writer) -> Self {
+	pub fn new(lox: &'a mut Lox, writer: Writer, opt: CodegenOptions) -> Self {
 		return Compiler {
 			lox,
 			prelude: String::new(),
@@ -62,6 +64,8 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 			mangled_set: HashSet::new(),
 
 			writer,
+
+			opt
 		}
 	}
 
@@ -783,6 +787,9 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 	fn compile_to_buffers(&mut self, stmts: &Vec<Stmt>, globals_count: u32) -> Result<String, fmt::Error> {
 		// Write the first part of the prelude
 		writeln!(self.prelude, "/*** This C file created by jaylox https://github.com/HoneyPony/jaylox ***/")?;
+		if self.opt.gc_stress_test {
+			writeln!(self.prelude, "#define JAY_GC_STRESS_TEST")?;
+		}
 		writeln!(self.prelude, "#include \"jaylib/jaylib.h\"\n")?;
 
 		// Write the globals array to the prelude (and the string constants array)
@@ -816,7 +823,12 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 		self.push_indent();
 
 		// The most important responsibility of main() is initializing the gc and stack
-		writeln!(main_fn, "\tjay_gc_init(16 * 1024 * 1024); // 16 megabytes")?;
+		if self.opt.gc_stress_test {
+			writeln!(main_fn, "\tjay_gc_init(512); // STRESS_TEST: small initial heap")?;
+		}
+		else {
+			writeln!(main_fn, "\tjay_gc_init(16 * 1024 * 1024); // 16 megabytes")?;
+		}
 		writeln!(main_fn, "\tjay_stack_ptr = jay_stack;")?;
 		writeln!(main_fn, "\tjay_frames_ptr = 0;\n")?;
 

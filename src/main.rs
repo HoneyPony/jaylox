@@ -58,10 +58,17 @@ enum CompileOutput {
 	StandardOut
 }
 
+#[derive(Clone)]
+pub struct CodegenOptions {
+	gc_stress_test: bool,
+}
+
 struct CompileOptions {
 	input_path: String,
 	output: CompileOutput,
 	optimization: String,
+
+	codegen: CodegenOptions,
 }
 
 impl Lox {
@@ -168,7 +175,7 @@ impl Lox {
 				let stdin = child.stdin.take()
 					.expect("Could not spawn 'gcc'.");
 
-				Compiler::new(self, stdin)
+				Compiler::new(self, stdin, options.codegen.clone())
 					.compile(&program, globals_count)?;
 
 				let ecode = child.wait()?;
@@ -180,11 +187,11 @@ impl Lox {
 			},
 			CompileOutput::CFile { path } => {
 				let out_file = File::create(path)?;
-				Compiler::new(self, out_file)
+				Compiler::new(self, out_file, options.codegen.clone())
 				.compile(&program, globals_count)
 			},
 			CompileOutput::StandardOut => {
-				Compiler::new(self, std::io::stdout())
+				Compiler::new(self, std::io::stdout(), options.codegen.clone())
 					.compile(&program, globals_count)
 			}
 		}
@@ -228,6 +235,10 @@ fn main() -> io::Result<()> {
 		input_path,
 		output: CompileOutput::Executable { path: output_path_noslash.to_string() },
 		optimization: "-O1".into(),
+
+		codegen: CodegenOptions {
+			gc_stress_test: false,
+		},
 	};
 
 	// Process remaining arguments
@@ -247,6 +258,9 @@ fn main() -> io::Result<()> {
 				"-o" => { eat_exefile = true; },
 				"-oc" => { eat_cfile = true; },
 				"-os" => { options.output = CompileOutput::StandardOut; },
+				"-gcstress" => {
+					options.codegen.gc_stress_test = true;
+				}
 				"-O1" | "-O2" | "-O3" => {
 					options.optimization = arg.clone();
 				},
