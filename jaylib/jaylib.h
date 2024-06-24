@@ -1059,7 +1059,10 @@ jay_put_new(jay_instance *scope, size_t name, jay_value value) {
 	if((scope->table->used_entries + 1) > scope->table->table_size / 2) {
 		// Push and pop in case GC is invoked.
 		jay_push(jay_box_instance(scope));
+		// We also have to push the value, because it might also change.
+		jay_push(value);
 		jay_rehash(scope);
+		value = jay_pop();
 		scope = JAY_AS_INSTANCE(jay_pop());
 	}
 	// We are guaranteed an empty bucket somewhere.
