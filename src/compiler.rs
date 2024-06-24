@@ -781,6 +781,11 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 		writeln!(self.prelude, "\tfor(size_t i = 0; i < {globals_count}; ++i) {{")?;
 		writeln!(self.prelude, "\t\tjay_gc_visit(&globals[i]);")?;
 		writeln!(self.prelude, "\t}}")?;
+		// For now, we also have to copy the string constants over, although this should change
+		// later (make them immortal)
+		writeln!(self.prelude, "\tfor(size_t i = 0; i < {}; ++i) {{", self.lox.string_constants.len())?;
+		writeln!(self.prelude, "\t\tjay_gc_visit(&global_string_constants[i]);")?;
+		writeln!(self.prelude, "\t}}")?;
 		writeln!(self.prelude, "}}\n")?;
 
 		let mut main_fn = String::new();
