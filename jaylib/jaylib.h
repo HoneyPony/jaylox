@@ -1332,18 +1332,18 @@ jay_op_call(size_t arity) {
 		
 		jay_push(new_this);
 
-		jay_call_any(
+		jay_value result = jay_call_any(
 			class->methods[0].implementation,
 			class->closure,
 			class->methods[0].arity,
 			arity + 1 // Same as above
 		);
 		
-		// For initializers, we can simply ignore the return value...
-		// That said, we do need to implement the actual returning of 'this'
-		// inside initializers in the compiler, otherwise the semantic won't
-		// be right when we re-call an initializer
-		jay_push(new_this);
+		// Originally, we just pushed new_this back on to the stack. But this
+		// isn't gc-safe, because jay_call_any might allocate. Instead, the easiest
+		// thing to do is to just trust the contract that the initializer will
+		// return this, and push that value.
+		jay_push(result);
 	}
 	else {
 		oops("can only call callable objects");

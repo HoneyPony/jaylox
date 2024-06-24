@@ -9,7 +9,7 @@ class Linked {
 	}
 }
 
-var link = Linked();
+var link = Linked(500);
 while(link != nil) {
 	print link;
 	link = link.next;
