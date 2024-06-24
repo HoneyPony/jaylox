@@ -11,6 +11,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <assert.h>
 
 struct jay_value;
 struct jay_instance;
@@ -387,6 +388,8 @@ jay_gc_copy(jay_object *previous) {
 
 	// Copy the old object over
 	memcpy(result, previous, size);
+
+	assert(((uint64_t)result->gc >> 32) == ((uint64_t)previous->gc >> 32));
 
 	// Update forwarding pointer. Note that the LSB will always be 0 due to
 	// our alignment of 8
@@ -1137,7 +1140,7 @@ jay_op_call(size_t arity) {
 		jay_class *class = JAY_AS_CLASS(jay_pop());
 		jay_push(new_this);
 
-		jay_value result = jay_call_any(
+		jay_call_any(
 			class->methods[0].implementation,
 			class->closure,
 			class->methods[0].arity,
@@ -1346,10 +1349,6 @@ jay_add(jay_value a, jay_value b) {
 		if(b.tag == JAY_STRING) {
 			jay_string *as = JAY_AS_STRING(a);
 			jay_string *bs = JAY_AS_STRING(b);
-
-			// TODO: Make this faster..?
-			size_t alen = as->length;
-			size_t blen = bs->length;
 
 			size_t length = as->length + bs->length;
 			jay_string *cat = jay_new_string(length);
