@@ -533,7 +533,10 @@ jay_bind(jay_method *method, jay_instance *this) {
 static inline
 jay_value
 jay_get(jay_value v, size_t name) {
-	jay_instance *instance = jay_as_instance(v, "can only look up properties on an instance");
+	if(!JAY_IS_INSTANCE(v)) {
+		oops("can only look up properties on an instance");
+	}
+	jay_instance *instance = JAY_AS_INSTANCE(v);
 
 	// In compat mode, we have to look up the field first.
 	jay_hash_entry *place = jay_find_bucket(instance, name);
@@ -554,7 +557,10 @@ jay_get(jay_value v, size_t name) {
 static inline
 jay_value
 jay_get(jay_value v, size_t name) {
-	jay_instance *instance = jay_as_instance(v, "can only look up properties on an instance");
+	if(!JAY_IS_INSTANCE(v)) {
+		oops("can only look up properties on an instance");
+	}
+	jay_instance *instance = JAY_AS_INSTANCE(v);
 
 	jay_method *method = instance->class->dispatcher(instance->class, name);
 	if(method) {
@@ -575,7 +581,13 @@ jay_get(jay_value v, size_t name) {
 static inline
 jay_value
 jay_get_super(jay_value object, size_t name, jay_value superclass) {
-	jay_instance *instance = jay_as_instance(object, "can only look up super properties on an instance");
+	if(!JAY_IS_INSTANCE(object)) {
+		oops("can only look up super properties on an instance");
+	}
+	if(!JAY_IS_CLASS(superclass)) {
+		oops("superclass must be a class");
+	}
+	jay_instance *instance = JAY_AS_INSTANCE(object);
 
 	// Superclass is "statically bound" so to speak -- see abc_super.lox. 
 	// Essentially, the superclass does not change to match the superclass
@@ -585,7 +597,7 @@ jay_get_super(jay_value object, size_t name, jay_value superclass) {
 	// As such, we have to somehow explicitly track the superclass. I guess
 	// this is why it is mandated to be a variable in lox -- so that that variable
 	// can always be directly looked up.
-	jay_class *superclass_real = jay_as_class(superclass, "superclass must be a class");
+	jay_class *superclass_real = JAY_AS_CLASS(superclass);
 
 	jay_method *method = superclass_real->dispatcher(superclass_real, name);
 	if(method) {
@@ -598,7 +610,10 @@ jay_get_super(jay_value object, size_t name, jay_value superclass) {
 static inline
 jay_value
 jay_set(jay_value object, size_t name, jay_value value) {
-	jay_instance *instance = jay_as_instance(object, "can only set fields on an instance");
+	if(!JAY_IS_INSTANCE(object)) {
+		oops("can only set fields on an instance");
+	}
+	jay_instance *instance = JAY_AS_INSTANCE(object);
 
 	jay_hash_entry *place = jay_find_bucket(instance, name);
 	if(!place) {
@@ -688,13 +703,13 @@ void
 jay_op_call(size_t arity) {
 	jay_value fun_value = jay_pop();
 
-	if(jay_is_function(fun_value)) {
-		jay_function *fun = jay_as_function(fun_value, "jay_op_call error (function)");
+	if(JAY_IS_FUNCTION(fun_value)) {
+		jay_function *fun = JAY_AS_FUNCTION(fun_value);
 		jay_value result = jay_call(fun, arity);
 		jay_push(result);
 	}
-	else if(jay_is_bound_method(fun_value)) {
-		jay_bound_method *method = jay_as_bound_method(fun_value, "jay_op_call error (bound method)");
+	else if(JAY_IS_BOUND_METHOD(fun_value)) {
+		jay_bound_method *method = JAY_AS_BOUND_METHOD(fun_value);
 
 		// For bound methods, push 'this' to the end of the args array
 		// Note: An important semantic point with 'this' is that it can be
@@ -717,8 +732,8 @@ jay_op_call(size_t arity) {
 		);
 		jay_push(result);
 	}
-	else if(jay_is_class(fun_value)) {
-		jay_class *class = jay_as_class(fun_value, "jay_op_call error (class)");
+	else if(JAY_IS_CLASS(fun_value)) {
+		jay_class *class = JAY_AS_CLASS(fun_value);
 
 		// We have to push the "this" as the last argument. But, this is calling
 		// "init". So, we actually just create a new instance here. That is,
@@ -751,7 +766,13 @@ jay_op_call(size_t arity) {
 static inline
 void
 jay_op_invoke_super(jay_value object, size_t name, jay_value superclass, size_t arity) {
-	jay_instance *instance = jay_as_instance(object, "can only look up super properties on an instance");
+	if(!JAY_IS_INSTANCE(object)) {
+		oops("can only look up super properties on an instance");
+	}
+	if(!JAY_IS_CLASS(superclass)) {
+		oops("superclass must be a class");
+	}
+	jay_instance *instance = JAY_AS_INSTANCE(object);
 
 	// Superclass is "statically bound" so to speak -- see abc_super.lox. 
 	// Essentially, the superclass does not change to match the superclass
@@ -761,7 +782,7 @@ jay_op_invoke_super(jay_value object, size_t name, jay_value superclass, size_t 
 	// As such, we have to somehow explicitly track the superclass. I guess
 	// this is why it is mandated to be a variable in lox -- so that that variable
 	// can always be directly looked up.
-	jay_class *superclass_real = jay_as_class(superclass, "superclass must be a class");
+	jay_class *superclass_real = JAY_AS_CLASS(superclass);
 
 	jay_method *method = superclass_real->dispatcher(superclass_real, name);
 	if(method) {
@@ -791,7 +812,11 @@ jay_op_invoke(size_t name, size_t arity) {
 	// Leave "this" on top in case we have to do a jay_op_get() and jay_op_call()
 	jay_value target = jay_top();
 
-	jay_instance *instance = jay_as_instance(target, "can only get properties on an instance");
+	if(!JAY_IS_INSTANCE(target)) {
+		oops("can only get properties on an instance");
+	}
+
+	jay_instance *instance = JAY_AS_INSTANCE(target);
 
 	// In full compat mode, we have to look up the field first.
 	jay_hash_entry *field = jay_find_bucket(instance, name);
@@ -827,7 +852,11 @@ jay_op_invoke(size_t name, size_t arity) {
 	// Leave "this" on top in case we have to do a jay_op_get() and jay_op_call()
 	jay_value target = jay_top();
 
-	jay_instance *instance = jay_as_instance(target, "can only get properties on an instance");
+	if(!JAY_IS_INSTANCE(target)) {
+		oops("can only get properties on an instance");
+	}
+
+	jay_instance *instance = JAY_AS_INSTANCE(target);
 
 	jay_method *method = instance->class->dispatcher(instance->class, name);
 	if(!method) {
@@ -1092,8 +1121,10 @@ OP_ONE(not)
 static inline
 jay_value
 jay_negate(jay_value v) {
-	double vd = jay_as_number(v, "negation expects a number");
-	return jay_box_number(-vd);
+	if(!JAY_IS_NUMBER(v)) {
+		oops("negation expects a number");
+	}
+	return jay_box_number(-JAY_AS_NUMBER(v));
 }
 OP_ONE(negate)
 

@@ -785,7 +785,7 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 		// We have to set up all the string constants in main for the rest of the
 		// code to use.
 		for (idx, constant) in self.lox.string_constants.iter().enumerate() {
-			writeln!(main_fn, "\tglobal_string_constants[{idx}] = jay_string_from_literal(\"{constant}\");")?;
+			writeln!(main_fn, "\tglobal_string_constants[{idx}] = jay_box_string(jay_string_from_literal(\"{constant}\"));")?;
 		}
 
 		// Note: Built-in functions will also be set up in main, but this requires
