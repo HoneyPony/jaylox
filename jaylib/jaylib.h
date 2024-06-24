@@ -617,9 +617,19 @@ jay_gc_go() {
 	printf("GC: COLLECT DONE! copied %zu bytes (out of %zu)\n", (size_t)(jay_gc.high_ptr - jay_gc.to_space), (jay_gc.current_size / 2));
 }
 
+//static char
+//gc_debugger[1024 * 1024];
+
+//static bool
+//gc_debugger_flag = false;
+
 static inline
 void
 jay_gc_recollect(size_t needed_size) {
+	//if(gc_debugger_flag) {
+	//	oops("already used gc debugger");
+	//}
+	//gc_debugger_flag = true;
 	printf("GC: RECOLLECT (NEED %zu)\n", needed_size);
 	printf("GC: REMAINING = %zu\n", (jay_gc.limit - jay_gc.high_ptr));
 
@@ -632,7 +642,7 @@ jay_gc_recollect(size_t needed_size) {
 	}
 
 	size_t new_size = half * 2;
-	void *new_mem = malloc(new_size);
+	void *new_mem = malloc(new_size); //gc_debugger
 
 	if(!new_mem) {
 		oops("out of memory: can't expand gc heap");
@@ -888,9 +898,13 @@ jay_new_table(size_t entries) {
 }
 
 jay_instance*
-jay_new_instance(jay_class *class) {
+jay_new_instance() {
 	jay_instance *instance = jay_gc_alloc(sizeof(*instance), JAY_GC_INSTANCE);
-	instance->class = class;
+
+	// We can't set the class yet, because an allocation could result in the class
+	// being invalid. So, instead, leave that to the caller. (The GC is happy with
+	// NULL here).
+	instance->class = NULL;
 	instance->table = NULL;
 	// So that the GC can find the instance while we're allocating the table, push it.
 	jay_push(jay_box_instance(instance));
@@ -1231,8 +1245,17 @@ jay_op_call(size_t arity) {
 
 		// We have to allocate before popping.
 
-		jay_value new_this = jay_box_instance(jay_new_instance(JAY_AS_CLASS(*fun_value)));
+		jay_instance *instance = jay_new_instance();
+
+		// As soon as all allocation is done, we are allowed to pop from the stack.
+		// (the class value may have changed since jay_new_instance).
 		jay_class *class = JAY_AS_CLASS(jay_pop());
+
+		// The caller of jay_new_instance() must initialize the class.
+		instance->class = class;
+
+		jay_value new_this = jay_box_instance(instance);
+		
 		jay_push(new_this);
 
 		jay_call_any(
