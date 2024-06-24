@@ -1168,7 +1168,7 @@ jay_get(jay_value v, size_t name) {
 
 	jay_method *method = instance->class->dispatcher(instance->class, name);
 	if(method) {
-		return jay_bind(method, instance);
+		return jay_bind(*method, instance);
 	}
 
 	oops("tried to get non-exist property");
@@ -1186,7 +1186,7 @@ jay_get(jay_value v, size_t name) {
 
 	jay_method *method = instance->class->dispatcher(instance->class, name);
 	if(method) {
-		return jay_bind(method, instance);
+		return jay_bind(*method, instance);
 	}
 
 	// Look up the field on the object.
@@ -1223,7 +1223,7 @@ jay_get_super(jay_value object, size_t name, jay_value superclass) {
 
 	jay_method *method = superclass_real->dispatcher(superclass_real, name);
 	if(method) {
-		return jay_bind(method, instance);
+		return jay_bind(*method, instance);
 	}
 
 	oops("superclass has no such method");
