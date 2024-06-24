@@ -441,8 +441,17 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 		jay_value at[{0}];
 	}} locals;
 	locals.count = {0};
-	locals.gc_scope = {1};
-	jay_push_frame(&locals);"#, fun.local_count, gc_scope)?;
+	locals.gc_scope = {1};"#, fun.local_count, gc_scope)?;
+
+			// In order to avoid giving the GC any bogus data, initialize all the
+			// ".at" values to nil.
+
+			for i in 0..fun.local_count {
+				writeln!(def, "\tlocals.at[{i}] = jay_box_nil();")?;
+			}
+
+			// Finally, push the frame so the GC can see it.
+			writeln!(def, "\tjay_push_frame(&locals);")?;
 		}
 
 		
