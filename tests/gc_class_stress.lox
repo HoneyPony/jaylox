@@ -1,0 +1,33 @@
+fun maker(captured) {
+	class TheClass {
+		init(x) {
+			this.value = captured * x;
+		}
+	}
+
+	return TheClass;
+}
+
+var Five = maker(5);
+var Ten = maker(10);
+
+for(var i = 0; i < 1024; i = i + 1) {
+	print Five(1).value;
+	print Five(2).value;
+	print Five(3).value;
+
+	print Ten(1).value;
+	print Ten(2).value;
+	print Ten(3).value;
+}
+
+fun doer(Input) {
+	for(var i = 0; i < 256; i = i + 1) {
+		print Input(10).value;
+		print Input(20).value;
+		print Input(30).value;
+	}
+}
+
+doer(Five);
+doer(Ten);
