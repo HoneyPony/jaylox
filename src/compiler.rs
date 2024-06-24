@@ -124,6 +124,51 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 		Ok(())
 	}
 
+	fn op_needs_numerical_fence(expr: &Expr) -> bool {
+		match expr {
+			Expr::Binary { left, operator, right } => {
+				// Note: We could kind of do this "recursively" but that would
+				// be inefficient. Maybe at some point we could store this information
+				// on the tree and then generate it at parse time.
+				match operator.typ {
+					Minus | Slash | Star => false,
+
+					// All other operators (including +) need checks.
+					_ => true
+				}
+			},
+			Expr::Literal(what) => {
+				// TODO: Maybe have a compiler error for this earlier..?
+				match what {
+					LoxValue::Number(_) => false,
+					_ => {
+						panic!("invalid literal operand to binary operator");
+					}
+				}
+			},
+			Expr::Unary { operator, right } => {
+				// TODO: Fence unary operators
+				true
+			},
+
+			Expr::Grouping(inner) => {
+				// For grouping exprs, we might as well traverse into them,
+				// as it's unlikely that they're very deep.
+				Self::op_needs_numerical_fence(inner)
+			}
+
+			// Some other checks we can do...
+			Expr::This { .. } => {
+				panic!("'this' cannot be an operand to binary operator");
+			},
+
+			// All other expression types need fences.
+			_ => {
+				true
+			}
+		}
+	}
+
 	fn binary_fenceop(&mut self, into: &mut String, left: &Expr, op: &Token, right: &Expr) -> fmt::Result {
 		enum Ty {
 			Number,
@@ -153,9 +198,8 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 			Ty::Bool => "bool",
 		};
 
-		// TODO: Elide fences
-		let left_fence = true;
-		let right_fence = true;
+		let left_fence = Self::op_needs_numerical_fence(left);
+		let right_fence = Self::op_needs_numerical_fence(right);
 
 		// We still use the stack machine for the exprs for now.
 		self.compile_expr(left, into)?;
