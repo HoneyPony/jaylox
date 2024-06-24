@@ -1485,7 +1485,15 @@ jay_add(jay_value a, jay_value b) {
 	}
 	oops(message);
 }
-OP_TWO(add)
+
+static inline
+void
+jay_op_add(void) {
+	// For now, only add handles gc correctly..
+	jay_value result = jay_add(jay_stack_ptr[-2], jay_stack_ptr[-1]);
+	jay_stack_ptr[-2] = result;
+	jay_stack_ptr -= 1;
+}
 
 static inline
 jay_value
