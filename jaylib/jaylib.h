@@ -344,11 +344,14 @@ jay_pop_condition() {
 
 /* --- Literals --- */
 
-#define OP_LIT(name, param, arg) \
+#define OP_LIT(name, param) \
 static inline void \
 jay_op_ ## name (param arg) { \
-	jay_push(jay_ ## name (arg)); \
+	jay_push(jay_box_ ## name (arg)); \
 }
+
+OP_LIT(number, double)
+OP_LIT(bool, bool)
 
 static inline
 jay_string*

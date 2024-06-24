@@ -188,14 +188,14 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 			Expr::Literal(value) => {
 				self.indent(into);
 				match value {
-					LoxValue::Nil => into.push_str("jay_push(jay_op_nil())"),
+					LoxValue::Nil => into.push_str("jay_push(jay_box_nil())"),
 					LoxValue::String(ptr) => {
 						// String constants are looked up inside a global array, so
 						// that we only have to initialize them once.
 						write!(into, "jay_push(global_string_constants[{}])", ptr.to_number())?;
 					},
 					LoxValue::Number(value) => write!(into, "jay_op_number({value})")?,
-					LoxValue::Bool(value) => write!(into, "jay_op_boolean({value})")?,
+					LoxValue::Bool(value) => write!(into, "jay_op_bool({value})")?,
 				}
 				write!(into, ";\n")?;
 			},
@@ -698,7 +698,7 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 					Some(value) => { self.compile_expr(value, into)?; },
 					None => {
 						self.indent(into); 
-						into.push_str("jay_push(jay_op_nil());\n"); 
+						into.push_str("jay_push(jay_box_nil());\n"); 
 					}
 				};
 
@@ -727,7 +727,7 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 					Some(initializer) => { self.compile_expr(initializer, into)?; },
 					None => {
 						self.indent(into);
-						into.push_str("jay_push(jay_op_nil());\n");
+						into.push_str("jay_push(jay_box_nil());\n");
 					}
 				}
 
