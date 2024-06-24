@@ -126,7 +126,7 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 
 	fn op_needs_numerical_fence(expr: &Expr) -> bool {
 		match expr {
-			Expr::Binary { left, operator, right } => {
+			Expr::Binary { operator, ..  } => {
 				// Note: We could kind of do this "recursively" but that would
 				// be inefficient. Maybe at some point we could store this information
 				// on the tree and then generate it at parse time.
@@ -146,7 +146,7 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 					}
 				}
 			},
-			Expr::Unary { operator, right } => {
+			Expr::Unary { .. } => {
 				// TODO: Fence unary operators
 				true
 			},
