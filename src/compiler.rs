@@ -792,11 +792,19 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 		// Create the global-visit function
 		writeln!(self.prelude, "static\nvoid\njay_gc_visit_globals(void) {{")?;
 		writeln!(self.prelude, "\tfor(size_t i = 0; i < {globals_count}; ++i) {{")?;
+		writeln!(self.prelude, "#ifdef JAY_TRACE_GC_DIRECT")?;
+		writeln!(self.prelude, "\t\tprintf(\"gc: visit global %zu \", i);")?;
+		writeln!(self.prelude, "\t\tjay_print(globals[i]);")?;
+		writeln!(self.prelude, "#endif")?;
 		writeln!(self.prelude, "\t\tjay_gc_visit(&globals[i]);")?;
 		writeln!(self.prelude, "\t}}")?;
 		// For now, we also have to copy the string constants over, although this should change
 		// later (make them immortal)
 		writeln!(self.prelude, "\tfor(size_t i = 0; i < {}; ++i) {{", self.lox.string_constants.len())?;
+		writeln!(self.prelude, "#ifdef JAY_TRACE_GC_DIRECT")?;
+		writeln!(self.prelude, "\t\tprintf(\"gc: visit string constant %zu \", i);")?;
+		writeln!(self.prelude, "\t\tjay_print(global_string_constants[i]);")?;
+		writeln!(self.prelude, "#endif")?;
 		writeln!(self.prelude, "\t\tjay_gc_visit(&global_string_constants[i]);")?;
 		writeln!(self.prelude, "\t}}")?;
 		writeln!(self.prelude, "}}\n")?;

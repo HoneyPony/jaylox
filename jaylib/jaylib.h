@@ -411,6 +411,13 @@ jay_gc_find_size(jay_object *object) {
 }
 
 static inline
+uint32_t
+jay_gc_tag(void *object) {
+	jay_object *obj = object;
+	return ((uint64_t)obj->gc >> 32);
+}
+
+static inline
 jay_object*
 jay_gc_copy(jay_object *previous) {
 	// Copies the object to a new location in to-space and updates its forwarding
@@ -424,6 +431,10 @@ jay_gc_copy(jay_object *previous) {
 	assert(jay_gc.high_ptr >= jay_gc.to_space);
 
 	size_t size = jay_gc_find_size(previous);
+
+#ifdef JAY_TRACE_GC_DIRECT
+	printf("gc:   copy %s %zu %p -> %p\n", jay_gc_tag_name(jay_gc_tag(previous)), size, previous, result);
+#endif
 
 	// Bump-allocate
 	jay_gc.high_ptr = jay_gc_align(jay_gc.high_ptr + size);
@@ -473,6 +484,9 @@ jay_gc_copy_or_forward(void *prev) {
 		jay_object* result;
 		// Return the existing forwarding pointer.
 		memcpy(&result, &previous->gc, sizeof(result));
+#ifdef JAY_TRACE_GC_DIRECT
+		printf("gc:   forward %s %zu -> %p\n", jay_gc_tag_name(jay_gc_tag(result)), previous, result);
+#endif
 		return result;
 	}
 
@@ -481,11 +495,10 @@ jay_gc_copy_or_forward(void *prev) {
 	return jay_gc_copy(previous);
 }
 
-#ifdef JAY_TRACE_GC
+#ifdef JAY_TRACE_GC_DIRECT
 	#define JAY_GC_VISIT_DIRECT(ptr) do { \
-		void *tmp = jay_gc_copy_or_forward(ptr); \
-		printf("\\-- %s: %p -> %p\n", #ptr, ptr, tmp); \
-		ptr = tmp; \
+		printf("gc: visit %s : %s %p\n", #ptr, ptr ? jay_gc_tag_name(jay_gc_tag(ptr)) : "<null>", ptr); \
+		ptr = jay_gc_copy_or_forward(ptr); \
 	} while(0)
 #else
 	#define JAY_GC_VISIT_DIRECT(ptr) ptr = jay_gc_copy_or_forward(ptr)
@@ -566,11 +579,11 @@ jay_gc_trace(jay_object *object) {
 			jay_table *table = (jay_table*)object;
 			for(size_t i = 0; i < table->table_size; ++i) {
 				if(table->table[i].name != JAY_NAME_TOMBSTONE) {
-					jay_gc_visit(&table->table[i].value);
-#ifdef JAY_TRACE_GC
-					printf("\\-- table entry %zu ", i);
+#ifdef JAY_TRACE_GC_DIRECT
+					printf("gc: visit table entry %zu ", i);
 					jay_print(table->table[i].value);
 #endif
+					jay_gc_visit(&table->table[i].value);
 				}
 			}
 			break;
@@ -580,11 +593,11 @@ jay_gc_trace(jay_object *object) {
 			jay_closure *closure = (jay_closure*)object;
 			JAY_GC_VISIT_DIRECT(closure->parent);
 			for(size_t i = 0; i < closure->count; ++i) {
-				jay_gc_visit(&closure->values[i]);
-#ifdef JAY_TRACE_GC
-					printf("\\-- closure entry %zu ", i);
-					jay_print(closure->values[i]);
+#ifdef JAY_TRACE_GC_DIRECT
+				printf("gc: visit closure entry %zu ", i);
+				jay_print(closure->values[i]);
 #endif
+				jay_gc_visit(&closure->values[i]);
 			}
 			break;
 		}
@@ -614,7 +627,7 @@ jay_gc_go() {
 
 	// We visit all roots.
 	for(jay_value *sp = jay_stack; sp != jay_stack_ptr; ++sp) {
-#ifdef JAY_TRACE_GC
+#ifdef JAY_TRACE_GC_DIRECT
 		printf("gc: visit stack ptr %p (as inst %p) -> ", sp, sp->as_instance);
 		jay_print(*sp);
 #endif
@@ -622,14 +635,14 @@ jay_gc_go() {
 	}
 
 	for(size_t sf = 0; sf < jay_frames_ptr; ++sf) {
-#ifdef JAY_TRACE_GC
+#ifdef JAY_TRACE_GC_DIRECT
 		printf("gc: visit frame %zu\n", sf);
 #endif
 		jay_stackframe *frame = jay_frames[sf];
 		JAY_GC_VISIT_DIRECT(frame->gc_scope);
 		for(size_t i = 0; i < frame->count; ++i) {
-#ifdef JAY_TRACE_GC
-			printf("\\-- frame value %zu ", i);
+#ifdef JAY_TRACE_GC_DIRECT
+			printf("gc: visit frame value %zu ", i);
 			jay_print(frame->values[i]);
 #endif
 			jay_gc_visit(&frame->values[i]);
@@ -768,6 +781,11 @@ static inline
 void*
 jay_gc_alloc(size_t size, uint32_t tag) {
 	jay_object *obj = jay_gc_alloc_impl(size);
+#ifdef JAY_TRACE_GC_DIRECT
+	printf("gc: alloc %s %zu -> %p\n", jay_gc_tag_name(tag), size, obj);
+#endif
+
+
 #ifdef JAY_TRACE_GC
 	printf("gc: alloc %zu bytes => %p (high ptr -> %p)\n", size, obj, jay_gc.high_ptr);
 	printf("gc: tag = %lu %s\n", tag, jay_gc_tag_name(tag));
