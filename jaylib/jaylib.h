@@ -409,8 +409,6 @@ jay_gc_copy(jay_object *previous) {
 
 	size_t size = jay_gc_find_size(previous);
 
-	printf("gc: copy %s %zu: %p -> %p\n", jay_gc_tag_name((uint64_t)previous->gc >> 32), size, previous, result);
-
 	// Bump-allocate
 	jay_gc.high_ptr = jay_gc_align(jay_gc.high_ptr + size);
 	assert(jay_gc.high_ptr < jay_gc.limit);
@@ -459,7 +457,6 @@ jay_gc_copy_or_forward(void *prev) {
 		jay_object* result;
 		// Return the existing forwarding pointer.
 		memcpy(&result, &previous->gc, sizeof(result));
-		printf("..  forward instance %p -> %p\n", prev, result);
 		return result;
 	}
 
@@ -503,7 +500,6 @@ jay_gc_visit(jay_value *field) {
 #endif
 		default:
 			// No action.
-			printf(" -- no copying -- \n");
 	}
 }
 
@@ -602,12 +598,11 @@ jay_gc_go() {
 
 	// We visit all roots.
 	for(jay_value *sp = jay_stack; sp != jay_stack_ptr; ++sp) {
-//#ifdef JAY_TRACE_GC
+#ifdef JAY_TRACE_GC
 		printf("gc: visit stack ptr %p (as inst %p) -> ", sp, sp->as_instance);
 		jay_print(*sp);
-//#endif
+#endif
 		jay_gc_visit(sp);
-		printf("*gc: after visit stack ptr: val = %p\n", sp->as_instance);
 	}
 
 	for(size_t sf = 0; sf < jay_frames_ptr; ++sf) {
@@ -753,7 +748,6 @@ static inline
 void*
 jay_gc_alloc(size_t size, uint32_t tag) {
 	jay_object *obj = jay_gc_alloc_impl(size);
-	printf("gc: alloc %s %zu -> %p\n", jay_gc_tag_name(tag), size, obj);
 #ifdef JAY_TRACE_GC
 	printf("gc: alloc %zu bytes => %p (high ptr -> %p)\n", size, obj, jay_gc.high_ptr);
 	printf("gc: tag = %lu %s\n", tag, jay_gc_tag_name(tag));
@@ -894,11 +888,25 @@ jay_string_from_literal(const char *literal) {
 
 jay_closure*
 jay_new_scope(jay_closure *parent, size_t count) {
+	struct {
+		size_t count;
+		jay_closure *gc_scope;
+	} locals;
+
+	// Because we don't have a great way to push a jay_closure with jay_push,
+	// just do this for now...
+	locals.count = 0;
+	locals.gc_scope = parent;
+
+	jay_push_frame(&locals);
+
 	size_t bytes = sizeof(jay_closure) + (count * sizeof(jay_value));
 	jay_closure *closure = jay_gc_alloc(bytes, JAY_GC_CLOSURE);
 	closure->count = count;
-	closure->parent = parent;
+	closure->parent = locals.gc_scope;
 	// Do we want to zero out the 'values' array..?
+
+	jay_pop_frame();
 
 	return closure;
 }
