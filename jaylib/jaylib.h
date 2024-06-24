@@ -380,6 +380,7 @@ jay_gc_copy(jay_object *previous) {
 
 	// Bump-allocate
 	jay_gc.high_ptr = jay_gc_align(jay_gc.high_ptr + size);
+	printf("gc: copy %p -> %p (%zu bytes)\n", previous, result, size);
 
 	// Copy the old object over
 	memcpy(result, previous, size);
@@ -442,19 +443,50 @@ jay_gc_visit(jay_value *field) {
 static void
 jay_gc_visit_globals();
 
+static inline
+const char*
+jay_gc_tag_name(uint32_t gc_tag) {
+	switch (gc_tag) {
+		case JAY_GC_STRING:
+			return "string";
+
+		case JAY_GC_BOUND_METHOD:
+			return "bound method"
+
+		case JAY_GC_CLASS:
+			return "class";
+
+		case JAY_GC_INSTANCE:
+			return "instance";
+
+		case JAY_GC_FUNCTION:
+			return "function";
+
+		case JAY_GC_TABLE:
+			return "table";
+
+		case JAY_GC_CLOSURE:
+			return "closure";
+	}
+}
+
 // Returns the size of the object.
 static
 size_t
 jay_gc_trace(jay_object *object) {
 	uint32_t gc_tag = (object->gc >> 32ULL);
 
+	printf("gc: trace %p = %s\n", object, jay_gc_tag_name(gc_tag));
+
 	switch(gc_tag) {
 		case JAY_GC_STRING:
 			/* no-op */
+			printf("-- string\n")
 			break;
 
 		case JAY_GC_BOUND_METHOD:
 			jay_bound_method *bound_method = (jay_bound_method*)object;
+			printf("-- bound_method: closure = %p this = %p\n", bound_method->closure, bound_method->this);
 			JAY_GC_VISIT_DIRECT(bound_method->closure);
 			JAY_GC_VISIT_DIRECT(bound_method->this);
 			break;
@@ -481,6 +513,7 @@ jay_gc_trace(jay_object *object) {
 			jay_table *table = (jay_table*)object;
 			for(size_t i = 0; i < table->table_size; ++i) {
 				if(table->table[i].name != JAY_NAME_TOMBSTONE) {
+					printf("gc: visit table entry %zu\n", i);
 					jay_gc_visit(&table->table[i].value);
 				}
 			}
@@ -498,6 +531,8 @@ jay_gc_trace(jay_object *object) {
 		default:
 			oops("unknown garbage collection type");
 	}
+
+	return jay_gc_find_size(object);
 }
 
 static
