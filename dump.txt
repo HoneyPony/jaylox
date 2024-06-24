@@ -1,0 +1,718 @@
+--- gc init --- 
+current_heap = 000001e61dcd5e50
+current_size = 0000000000001000
+to_space     = 000001e61dcd5e50
+high_ptr     = 000001e61dcd5e50
+limit        = 000001e61dcd6650
+from_space   = 000001e61dcd6650
+---
+gc: alloc 47 bytes => 000001e61dcd5e50 (high ptr -> 000001e61dcd5e80)
+gc: tag = 3 string
+gc: alloc 31 bytes => 000001e61dcd5e80 (high ptr -> 000001e61dcd5ea0)
+gc: tag = 3 string
+gc: alloc 35 bytes => 000001e61dcd5ea0 (high ptr -> 000001e61dcd5ec8)
+gc: tag = 3 string
+gc: alloc 31 bytes => 000001e61dcd5ec8 (high ptr -> 000001e61dcd5ee8)
+gc: tag = 3 string
+gc: alloc 50 bytes => 000001e61dcd5ee8 (high ptr -> 000001e61dcd5f20)
+gc: tag = 3 string
+gc: alloc 33 bytes => 000001e61dcd5f20 (high ptr -> 000001e61dcd5f48)
+gc: tag = 3 string
+gc: alloc 32 bytes => 000001e61dcd5f48 (high ptr -> 000001e61dcd5f68)
+gc: tag = 1 function
+gc: alloc 88 bytes => 000001e61dcd5f68 (high ptr -> 000001e61dcd5fc0)
+gc: tag = 4 class
+stretch tree of depth:
+15.000000
+check:
+gc: alloc 24 bytes => 000001e61dcd5fc0 (high ptr -> 000001e61dcd5fd8)
+gc: tag = 2 instance
+gc: alloc 216 bytes => 000001e61dcd5fd8 (high ptr -> 000001e61dcd60b0)
+gc: tag = 6 table
+gc: alloc 24 bytes => 000001e61dcd60b0 (high ptr -> 000001e61dcd60c8)
+gc: tag = 2 instance
+gc: alloc 216 bytes => 000001e61dcd60c8 (high ptr -> 000001e61dcd61a0)
+gc: tag = 6 table
+gc: alloc 24 bytes => 000001e61dcd61a0 (high ptr -> 000001e61dcd61b8)
+gc: tag = 2 instance
+gc: alloc 216 bytes => 000001e61dcd61b8 (high ptr -> 000001e61dcd6290)
+gc: tag = 6 table
+gc: alloc 24 bytes => 000001e61dcd6290 (high ptr -> 000001e61dcd62a8)
+gc: tag = 2 instance
+gc: alloc 216 bytes => 000001e61dcd62a8 (high ptr -> 000001e61dcd6380)
+gc: tag = 6 table
+gc: alloc 24 bytes => 000001e61dcd6380 (high ptr -> 000001e61dcd6398)
+gc: tag = 2 instance
+gc: alloc 216 bytes => 000001e61dcd6398 (high ptr -> 000001e61dcd6470)
+gc: tag = 6 table
+gc: alloc 24 bytes => 000001e61dcd6470 (high ptr -> 000001e61dcd6488)
+gc: tag = 2 instance
+gc: alloc 216 bytes => 000001e61dcd6488 (high ptr -> 000001e61dcd6560)
+gc: tag = 6 table
+gc: alloc 24 bytes => 000001e61dcd6560 (high ptr -> 000001e61dcd6578)
+gc: tag = 2 instance
+GC: RECOLLECT (NEED 0)
+GC: REMAINING = 216
+GC: TAKEN = 1832
+GC: BEGIN COLLECT!
+gc: visit stack ptr 00007ff7c1fa1080 -> 0.000000
+gc: visit stack ptr 00007ff7c1fa1080
+gc: visit stack ptr 00007ff7c1fa1090 -> 14.000000
+gc: visit stack ptr 00007ff7c1fa1090
+gc: visit stack ptr 00007ff7c1fa10a0 -> <instance>
+   > forward 000001e61dcd5fc0 -> 0000000200000001
+    gc: copy 000001e61dcd5fc0 -> 000001e61dcd7e70 (24 bytes)
+    gc: copy instance
+    gc: redirect 000001e61dcd5fc0 -> 000001e61dcd7e70
+gc: visit stack ptr 00007ff7c1fa10a0
+gc: visit stack ptr 00007ff7c1fa10b0 -> -1.000000
+gc: visit stack ptr 00007ff7c1fa10b0
+gc: visit stack ptr 00007ff7c1fa10c0 -> 13.000000
+gc: visit stack ptr 00007ff7c1fa10c0
+gc: visit stack ptr 00007ff7c1fa10d0 -> <instance>
+   > forward 000001e61dcd60b0 -> 0000000200000001
+    gc: copy 000001e61dcd60b0 -> 000001e61dcd7e88 (24 bytes)
+    gc: copy instance
+    gc: redirect 000001e61dcd60b0 -> 000001e61dcd7e88
+gc: visit stack ptr 00007ff7c1fa10d0
+gc: visit stack ptr 00007ff7c1fa10e0 -> -3.000000
+gc: visit stack ptr 00007ff7c1fa10e0
+gc: visit stack ptr 00007ff7c1fa10f0 -> 12.000000
+gc: visit stack ptr 00007ff7c1fa10f0
+gc: visit stack ptr 00007ff7c1fa1100 -> <instance>
+   > forward 000001e61dcd61a0 -> 0000000200000001
+    gc: copy 000001e61dcd61a0 -> 000001e61dcd7ea0 (24 bytes)
+    gc: copy instance
+    gc: redirect 000001e61dcd61a0 -> 000001e61dcd7ea0
+gc: visit stack ptr 00007ff7c1fa1100
+gc: visit stack ptr 00007ff7c1fa1110 -> -7.000000
+gc: visit stack ptr 00007ff7c1fa1110
+gc: visit stack ptr 00007ff7c1fa1120 -> 11.000000
+gc: visit stack ptr 00007ff7c1fa1120
+gc: visit stack ptr 00007ff7c1fa1130 -> <instance>
+   > forward 000001e61dcd6290 -> 0000000200000001
+    gc: copy 000001e61dcd6290 -> 000001e61dcd7eb8 (24 bytes)
+    gc: copy instance
+    gc: redirect 000001e61dcd6290 -> 000001e61dcd7eb8
+gc: visit stack ptr 00007ff7c1fa1130
+gc: visit stack ptr 00007ff7c1fa1140 -> -15.000000
+gc: visit stack ptr 00007ff7c1fa1140
+gc: visit stack ptr 00007ff7c1fa1150 -> 10.000000
+gc: visit stack ptr 00007ff7c1fa1150
+gc: visit stack ptr 00007ff7c1fa1160 -> <instance>
+   > forward 000001e61dcd6380 -> 0000000200000001
+    gc: copy 000001e61dcd6380 -> 000001e61dcd7ed0 (24 bytes)
+    gc: copy instance
+    gc: redirect 000001e61dcd6380 -> 000001e61dcd7ed0
+gc: visit stack ptr 00007ff7c1fa1160
+gc: visit stack ptr 00007ff7c1fa1170 -> -31.000000
+gc: visit stack ptr 00007ff7c1fa1170
+gc: visit stack ptr 00007ff7c1fa1180 -> 9.000000
+gc: visit stack ptr 00007ff7c1fa1180
+gc: visit stack ptr 00007ff7c1fa1190 -> <instance>
+   > forward 000001e61dcd6470 -> 0000000200000001
+    gc: copy 000001e61dcd6470 -> 000001e61dcd7ee8 (24 bytes)
+    gc: copy instance
+    gc: redirect 000001e61dcd6470 -> 000001e61dcd7ee8
+gc: visit stack ptr 00007ff7c1fa1190
+gc: visit stack ptr 00007ff7c1fa11a0 -> -63.000000
+gc: visit stack ptr 00007ff7c1fa11a0
+gc: visit stack ptr 00007ff7c1fa11b0 -> 9.000000
+gc: visit stack ptr 00007ff7c1fa11b0
+gc: visit stack ptr 00007ff7c1fa11c0 -> <class>
+   > forward 000001e61dcd5f68 -> 0000000400000001
+    gc: copy 000001e61dcd5f68 -> 000001e61dcd7f00 (88 bytes)
+    gc: copy class
+    gc: redirect 000001e61dcd5f68 -> 000001e61dcd7f00
+gc: visit stack ptr 00007ff7c1fa11c0
+gc: visit stack ptr 00007ff7c1fa11d0 -> <instance>
+   > forward 000001e61dcd6560 -> 0000000200000001
+    gc: copy 000001e61dcd6560 -> 000001e61dcd7f58 (24 bytes)
+    gc: copy instance
+    gc: redirect 000001e61dcd6560 -> 000001e61dcd7f58
+gc: visit stack ptr 00007ff7c1fa11d0
+-- frame->gc_scope: 0000000000000000 -> 0000000000000000
+gc: visit frame 0
+-- frame->gc_scope: 0000000000000000 -> 0000000000000000
+gc: visit frame 1
+-- frame->gc_scope: 0000000000000000 -> 0000000000000000
+gc: visit frame 2
+-- frame->gc_scope: 0000000000000000 -> 0000000000000000
+gc: visit frame 3
+-- frame->gc_scope: 0000000000000000 -> 0000000000000000
+gc: visit frame 4
+-- frame->gc_scope: 0000000000000000 -> 0000000000000000
+gc: visit frame 5
+   > forward 000001e61dcd5f48 -> 0000000100000001
+    gc: copy 000001e61dcd5f48 -> 000001e61dcd7f70 (32 bytes)
+    gc: copy function
+    gc: redirect 000001e61dcd5f48 -> 000001e61dcd7f70
+   > forward 000001e61dcd5f68 -> 000001e61dcd7f00
+   > forward 000001e61dcd5e50 -> 0000000300000001
+    gc: copy 000001e61dcd5e50 -> 000001e61dcd7f90 (46 bytes)
+    gc: copy string
+    gc: redirect 000001e61dcd5e50 -> 000001e61dcd7f90
+   > forward 000001e61dcd5e80 -> 0000000300000001
+    gc: copy 000001e61dcd5e80 -> 000001e61dcd7fc0 (30 bytes)
+    gc: copy string
+    gc: redirect 000001e61dcd5e80 -> 000001e61dcd7fc0
+   > forward 000001e61dcd5ea0 -> 0000000300000001
+    gc: copy 000001e61dcd5ea0 -> 000001e61dcd7fe0 (34 bytes)
+    gc: copy string
+    gc: redirect 000001e61dcd5ea0 -> 000001e61dcd7fe0
+   > forward 000001e61dcd5ec8 -> 0000000300000001
+    gc: copy 000001e61dcd5ec8 -> 000001e61dcd8008 (30 bytes)
+    gc: copy string
+    gc: redirect 000001e61dcd5ec8 -> 000001e61dcd8008
+   > forward 000001e61dcd5ee8 -> 0000000300000001
+    gc: copy 000001e61dcd5ee8 -> 000001e61dcd8028 (49 bytes)
+    gc: copy string
+    gc: redirect 000001e61dcd5ee8 -> 000001e61dcd8028
+   > forward 000001e61dcd5f20 -> 0000000300000001
+    gc: copy 000001e61dcd5f20 -> 000001e61dcd8060 (32 bytes)
+    gc: copy string
+    gc: redirect 000001e61dcd5f20 -> 000001e61dcd8060
+gc: trace 000001e61dcd7e70 = instance (-528 rel to high_ptr)
+   > forward 000001e61dcd5f68 -> 000001e61dcd7f00
+-- instance->class: 000001e61dcd5f68 -> 000001e61dcd7f00
+   > forward 000001e61dcd5fd8 -> 0000000600000001
+    gc: copy 000001e61dcd5fd8 -> 000001e61dcd8080 (216 bytes)
+    gc: copy table
+    gc: redirect 000001e61dcd5fd8 -> 000001e61dcd8080
+-- instance->table: 000001e61dcd5fd8 -> 000001e61dcd8080
+^^^ return size = 24
+gc: trace 000001e61dcd7e88 = instance (-720 rel to high_ptr)
+   > forward 000001e61dcd5f68 -> 000001e61dcd7f00
+-- instance->class: 000001e61dcd5f68 -> 000001e61dcd7f00
+   > forward 000001e61dcd60c8 -> 0000000600000001
+    gc: copy 000001e61dcd60c8 -> 000001e61dcd8158 (216 bytes)
+    gc: copy table
+    gc: redirect 000001e61dcd60c8 -> 000001e61dcd8158
+-- instance->table: 000001e61dcd60c8 -> 000001e61dcd8158
+^^^ return size = 24
+gc: trace 000001e61dcd7ea0 = instance (-912 rel to high_ptr)
+   > forward 000001e61dcd5f68 -> 000001e61dcd7f00
+-- instance->class: 000001e61dcd5f68 -> 000001e61dcd7f00
+   > forward 000001e61dcd61b8 -> 0000000600000001
+    gc: copy 000001e61dcd61b8 -> 000001e61dcd8230 (216 bytes)
+    gc: copy table
+    gc: redirect 000001e61dcd61b8 -> 000001e61dcd8230
+-- instance->table: 000001e61dcd61b8 -> 000001e61dcd8230
+^^^ return size = 24
+gc: trace 000001e61dcd7eb8 = instance (-1104 rel to high_ptr)
+   > forward 000001e61dcd5f68 -> 000001e61dcd7f00
+-- instance->class: 000001e61dcd5f68 -> 000001e61dcd7f00
+   > forward 000001e61dcd62a8 -> 0000000600000001
+    gc: copy 000001e61dcd62a8 -> 000001e61dcd8308 (216 bytes)
+    gc: copy table
+    gc: redirect 000001e61dcd62a8 -> 000001e61dcd8308
+-- instance->table: 000001e61dcd62a8 -> 000001e61dcd8308
+^^^ return size = 24
+gc: trace 000001e61dcd7ed0 = instance (-1296 rel to high_ptr)
+   > forward 000001e61dcd5f68 -> 000001e61dcd7f00
+-- instance->class: 000001e61dcd5f68 -> 000001e61dcd7f00
+   > forward 000001e61dcd6398 -> 0000000600000001
+    gc: copy 000001e61dcd6398 -> 000001e61dcd83e0 (216 bytes)
+    gc: copy table
+    gc: redirect 000001e61dcd6398 -> 000001e61dcd83e0
+-- instance->table: 000001e61dcd6398 -> 000001e61dcd83e0
+^^^ return size = 24
+gc: trace 000001e61dcd7ee8 = instance (-1488 rel to high_ptr)
+   > forward 000001e61dcd5f68 -> 000001e61dcd7f00
+-- instance->class: 000001e61dcd5f68 -> 000001e61dcd7f00
+   > forward 000001e61dcd6488 -> 0000000600000001
+    gc: copy 000001e61dcd6488 -> 000001e61dcd84b8 (216 bytes)
+    gc: copy table
+    gc: redirect 000001e61dcd6488 -> 000001e61dcd84b8
+-- instance->table: 000001e61dcd6488 -> 000001e61dcd84b8
+^^^ return size = 24
+gc: trace 000001e61dcd7f00 = class (-1680 rel to high_ptr)
+-- class->closure: 0000000000000000 -> 0000000000000000
+-- class->superclass: 0000000000000000 -> 0000000000000000
+^^^ return size = 88
+gc: trace 000001e61dcd7f58 = instance (-1592 rel to high_ptr)
+   > forward 000001e61dcd5f68 -> 000001e61dcd7f00
+-- instance->class: 000001e61dcd5f68 -> 000001e61dcd7f00
+-- instance->table: 0000000000000000 -> 0000000000000000
+^^^ return size = 24
+gc: trace 000001e61dcd7f70 = function (-1568 rel to high_ptr)
+-- function->closure: 0000000000000000 -> 0000000000000000
+^^^ return size = 32
+gc: trace 000001e61dcd7f90 = string (-1536 rel to high_ptr)
+-- string
+^^^ return size = 46
+gc: trace 000001e61dcd7fc0 = string (-1488 rel to high_ptr)
+-- string
+^^^ return size = 30
+gc: trace 000001e61dcd7fe0 = string (-1456 rel to high_ptr)
+-- string
+^^^ return size = 34
+gc: trace 000001e61dcd8008 = string (-1416 rel to high_ptr)
+-- string
+^^^ return size = 30
+gc: trace 000001e61dcd8028 = string (-1384 rel to high_ptr)
+-- string
+^^^ return size = 49
+gc: trace 000001e61dcd8060 = string (-1328 rel to high_ptr)
+-- string
+^^^ return size = 32
+gc: trace 000001e61dcd8080 = table (-1296 rel to high_ptr)
+gc: visit table entry 2
+gc: visit table entry 5
+^^^ return size = 216
+gc: trace 000001e61dcd8158 = table (-1080 rel to high_ptr)
+gc: visit table entry 2
+gc: visit table entry 5
+^^^ return size = 216
+gc: trace 000001e61dcd8230 = table (-864 rel to high_ptr)
+gc: visit table entry 2
+gc: visit table entry 5
+^^^ return size = 216
+gc: trace 000001e61dcd8308 = table (-648 rel to high_ptr)
+gc: visit table entry 2
+gc: visit table entry 5
+^^^ return size = 216
+gc: trace 000001e61dcd83e0 = table (-432 rel to high_ptr)
+gc: visit table entry 2
+gc: visit table entry 5
+^^^ return size = 216
+gc: trace 000001e61dcd84b8 = table (-216 rel to high_ptr)
+gc: visit table entry 2
+gc: visit table entry 5
+^^^ return size = 216
+GC: COLLECT DONE! copied 1824 bytes (out of 2048)
+gc: alloc 216 bytes => 000001e61dcd8590 (high ptr -> 000001e61dcd8668)
+gc: tag = 6 table
+GC: RECOLLECT (NEED 0)
+GC: REMAINING = 8
+GC: TAKEN = 2040
+GC: BEGIN COLLECT!
+gc: visit stack ptr 00007ff7c1fa1080 -> 0.000000
+gc: visit stack ptr 00007ff7c1fa1080
+gc: visit stack ptr 00007ff7c1fa1090 -> 14.000000
+gc: visit stack ptr 00007ff7c1fa1090
+gc: visit stack ptr 00007ff7c1fa10a0 -> <instance>
+   > forward 000001e61dcd7e70 -> 0000000200000001
+    gc: copy 000001e61dcd7e70 -> 000001e61dcd5e50 (24 bytes)
+    gc: copy instance
+    gc: redirect 000001e61dcd7e70 -> 000001e61dcd5e50
+gc: visit stack ptr 00007ff7c1fa10a0
+gc: visit stack ptr 00007ff7c1fa10b0 -> -1.000000
+gc: visit stack ptr 00007ff7c1fa10b0
+gc: visit stack ptr 00007ff7c1fa10c0 -> 13.000000
+gc: visit stack ptr 00007ff7c1fa10c0
+gc: visit stack ptr 00007ff7c1fa10d0 -> <instance>
+   > forward 000001e61dcd7e88 -> 0000000200000001
+    gc: copy 000001e61dcd7e88 -> 000001e61dcd5e68 (24 bytes)
+    gc: copy instance
+    gc: redirect 000001e61dcd7e88 -> 000001e61dcd5e68
+gc: visit stack ptr 00007ff7c1fa10d0
+gc: visit stack ptr 00007ff7c1fa10e0 -> -3.000000
+gc: visit stack ptr 00007ff7c1fa10e0
+gc: visit stack ptr 00007ff7c1fa10f0 -> 12.000000
+gc: visit stack ptr 00007ff7c1fa10f0
+gc: visit stack ptr 00007ff7c1fa1100 -> <instance>
+   > forward 000001e61dcd7ea0 -> 0000000200000001
+    gc: copy 000001e61dcd7ea0 -> 000001e61dcd5e80 (24 bytes)
+    gc: copy instance
+    gc: redirect 000001e61dcd7ea0 -> 000001e61dcd5e80
+gc: visit stack ptr 00007ff7c1fa1100
+gc: visit stack ptr 00007ff7c1fa1110 -> -7.000000
+gc: visit stack ptr 00007ff7c1fa1110
+gc: visit stack ptr 00007ff7c1fa1120 -> 11.000000
+gc: visit stack ptr 00007ff7c1fa1120
+gc: visit stack ptr 00007ff7c1fa1130 -> <instance>
+   > forward 000001e61dcd7eb8 -> 0000000200000001
+    gc: copy 000001e61dcd7eb8 -> 000001e61dcd5e98 (24 bytes)
+    gc: copy instance
+    gc: redirect 000001e61dcd7eb8 -> 000001e61dcd5e98
+gc: visit stack ptr 00007ff7c1fa1130
+gc: visit stack ptr 00007ff7c1fa1140 -> -15.000000
+gc: visit stack ptr 00007ff7c1fa1140
+gc: visit stack ptr 00007ff7c1fa1150 -> 10.000000
+gc: visit stack ptr 00007ff7c1fa1150
+gc: visit stack ptr 00007ff7c1fa1160 -> <instance>
+   > forward 000001e61dcd7ed0 -> 0000000200000001
+    gc: copy 000001e61dcd7ed0 -> 000001e61dcd5eb0 (24 bytes)
+    gc: copy instance
+    gc: redirect 000001e61dcd7ed0 -> 000001e61dcd5eb0
+gc: visit stack ptr 00007ff7c1fa1160
+gc: visit stack ptr 00007ff7c1fa1170 -> -31.000000
+gc: visit stack ptr 00007ff7c1fa1170
+gc: visit stack ptr 00007ff7c1fa1180 -> 9.000000
+gc: visit stack ptr 00007ff7c1fa1180
+gc: visit stack ptr 00007ff7c1fa1190 -> <instance>
+   > forward 000001e61dcd7ee8 -> 0000000200000001
+    gc: copy 000001e61dcd7ee8 -> 000001e61dcd5ec8 (24 bytes)
+    gc: copy instance
+    gc: redirect 000001e61dcd7ee8 -> 000001e61dcd5ec8
+gc: visit stack ptr 00007ff7c1fa1190
+gc: visit stack ptr 00007ff7c1fa11a0 -> -63.000000
+gc: visit stack ptr 00007ff7c1fa11a0
+gc: visit stack ptr 00007ff7c1fa11b0 -> 8.000000
+gc: visit stack ptr 00007ff7c1fa11b0
+gc: visit stack ptr 00007ff7c1fa11c0 -> <instance>
+   > forward 000001e61dcd6560 -> 000001e61dcd7f58
+gc: visit stack ptr 00007ff7c1fa11c0
+gc: visit stack ptr 00007ff7c1fa11d0 -> -127.000000
+gc: visit stack ptr 00007ff7c1fa11d0
+gc: visit stack ptr 00007ff7c1fa11e0 -> 8.000000
+gc: visit stack ptr 00007ff7c1fa11e0
+gc: visit stack ptr 00007ff7c1fa11f0 -> <class>
+   > forward 000001e61dcd7f00 -> 0000000400000001
+    gc: copy 000001e61dcd7f00 -> 000001e61dcd5ee0 (88 bytes)
+    gc: copy class
+    gc: redirect 000001e61dcd7f00 -> 000001e61dcd5ee0
+gc: visit stack ptr 00007ff7c1fa11f0
+-- frame->gc_scope: 0000000000000000 -> 0000000000000000
+gc: visit frame 0
+-- frame->gc_scope: 0000000000000000 -> 0000000000000000
+gc: visit frame 1
+-- frame->gc_scope: 0000000000000000 -> 0000000000000000
+gc: visit frame 2
+-- frame->gc_scope: 0000000000000000 -> 0000000000000000
+gc: visit frame 3
+-- frame->gc_scope: 0000000000000000 -> 0000000000000000
+gc: visit frame 4
+-- frame->gc_scope: 0000000000000000 -> 0000000000000000
+gc: visit frame 5
+-- frame->gc_scope: 0000000000000000 -> 0000000000000000
+gc: visit frame 6
+   > forward 000001e61dcd7f70 -> 0000000100000001
+    gc: copy 000001e61dcd7f70 -> 000001e61dcd5f38 (32 bytes)
+    gc: copy function
+    gc: redirect 000001e61dcd7f70 -> 000001e61dcd5f38
+   > forward 000001e61dcd7f00 -> 000001e61dcd5ee0
+   > forward 000001e61dcd7f90 -> 0000000300000001
+    gc: copy 000001e61dcd7f90 -> 000001e61dcd5f58 (46 bytes)
+    gc: copy string
+    gc: redirect 000001e61dcd7f90 -> 000001e61dcd5f58
+   > forward 000001e61dcd7fc0 -> 0000000300000001
+    gc: copy 000001e61dcd7fc0 -> 000001e61dcd5f88 (30 bytes)
+    gc: copy string
+    gc: redirect 000001e61dcd7fc0 -> 000001e61dcd5f88
+   > forward 000001e61dcd7fe0 -> 0000000300000001
+    gc: copy 000001e61dcd7fe0 -> 000001e61dcd5fa8 (34 bytes)
+    gc: copy string
+    gc: redirect 000001e61dcd7fe0 -> 000001e61dcd5fa8
+   > forward 000001e61dcd8008 -> 0000000300000001
+    gc: copy 000001e61dcd8008 -> 000001e61dcd5fd0 (30 bytes)
+    gc: copy string
+    gc: redirect 000001e61dcd8008 -> 000001e61dcd5fd0
+   > forward 000001e61dcd8028 -> 0000000300000001
+    gc: copy 000001e61dcd8028 -> 000001e61dcd5ff0 (49 bytes)
+    gc: copy string
+    gc: redirect 000001e61dcd8028 -> 000001e61dcd5ff0
+   > forward 000001e61dcd8060 -> 0000000300000001
+    gc: copy 000001e61dcd8060 -> 000001e61dcd6028 (32 bytes)
+    gc: copy string
+    gc: redirect 000001e61dcd8060 -> 000001e61dcd6028
+gc: trace 000001e61dcd5e50 = instance (-504 rel to high_ptr)
+   > forward 000001e61dcd7f00 -> 000001e61dcd5ee0
+-- instance->class: 000001e61dcd7f00 -> 000001e61dcd5ee0
+   > forward 000001e61dcd8080 -> 0000000600000001
+    gc: copy 000001e61dcd8080 -> 000001e61dcd6048 (216 bytes)
+    gc: copy table
+    gc: redirect 000001e61dcd8080 -> 000001e61dcd6048
+-- instance->table: 000001e61dcd8080 -> 000001e61dcd6048
+^^^ return size = 24
+gc: trace 000001e61dcd5e68 = instance (-696 rel to high_ptr)
+   > forward 000001e61dcd7f00 -> 000001e61dcd5ee0
+-- instance->class: 000001e61dcd7f00 -> 000001e61dcd5ee0
+   > forward 000001e61dcd8158 -> 0000000600000001
+    gc: copy 000001e61dcd8158 -> 000001e61dcd6120 (216 bytes)
+    gc: copy table
+    gc: redirect 000001e61dcd8158 -> 000001e61dcd6120
+-- instance->table: 000001e61dcd8158 -> 000001e61dcd6120
+^^^ return size = 24
+gc: trace 000001e61dcd5e80 = instance (-888 rel to high_ptr)
+   > forward 000001e61dcd7f00 -> 000001e61dcd5ee0
+-- instance->class: 000001e61dcd7f00 -> 000001e61dcd5ee0
+   > forward 000001e61dcd8230 -> 0000000600000001
+    gc: copy 000001e61dcd8230 -> 000001e61dcd61f8 (216 bytes)
+    gc: copy table
+    gc: redirect 000001e61dcd8230 -> 000001e61dcd61f8
+-- instance->table: 000001e61dcd8230 -> 000001e61dcd61f8
+^^^ return size = 24
+gc: trace 000001e61dcd5e98 = instance (-1080 rel to high_ptr)
+   > forward 000001e61dcd7f00 -> 000001e61dcd5ee0
+-- instance->class: 000001e61dcd7f00 -> 000001e61dcd5ee0
+   > forward 000001e61dcd8308 -> 0000000600000001
+    gc: copy 000001e61dcd8308 -> 000001e61dcd62d0 (216 bytes)
+    gc: copy table
+    gc: redirect 000001e61dcd8308 -> 000001e61dcd62d0
+-- instance->table: 000001e61dcd8308 -> 000001e61dcd62d0
+^^^ return size = 24
+gc: trace 000001e61dcd5eb0 = instance (-1272 rel to high_ptr)
+   > forward 000001e61dcd7f00 -> 000001e61dcd5ee0
+-- instance->class: 000001e61dcd7f00 -> 000001e61dcd5ee0
+   > forward 000001e61dcd83e0 -> 0000000600000001
+    gc: copy 000001e61dcd83e0 -> 000001e61dcd63a8 (216 bytes)
+    gc: copy table
+    gc: redirect 000001e61dcd83e0 -> 000001e61dcd63a8
+-- instance->table: 000001e61dcd83e0 -> 000001e61dcd63a8
+^^^ return size = 24
+gc: trace 000001e61dcd5ec8 = instance (-1464 rel to high_ptr)
+   > forward 000001e61dcd7f00 -> 000001e61dcd5ee0
+-- instance->class: 000001e61dcd7f00 -> 000001e61dcd5ee0
+   > forward 000001e61dcd84b8 -> 0000000600000001
+    gc: copy 000001e61dcd84b8 -> 000001e61dcd6480 (216 bytes)
+    gc: copy table
+    gc: redirect 000001e61dcd84b8 -> 000001e61dcd6480
+-- instance->table: 000001e61dcd84b8 -> 000001e61dcd6480
+^^^ return size = 24
+gc: trace 000001e61dcd5ee0 = class (-1656 rel to high_ptr)
+-- class->closure: 0000000000000000 -> 0000000000000000
+-- class->superclass: 0000000000000000 -> 0000000000000000
+^^^ return size = 88
+gc: trace 000001e61dcd5f38 = function (-1568 rel to high_ptr)
+-- function->closure: 0000000000000000 -> 0000000000000000
+^^^ return size = 32
+gc: trace 000001e61dcd5f58 = string (-1536 rel to high_ptr)
+-- string
+^^^ return size = 46
+gc: trace 000001e61dcd5f88 = string (-1488 rel to high_ptr)
+-- string
+^^^ return size = 30
+gc: trace 000001e61dcd5fa8 = string (-1456 rel to high_ptr)
+-- string
+^^^ return size = 34
+gc: trace 000001e61dcd5fd0 = string (-1416 rel to high_ptr)
+-- string
+^^^ return size = 30
+gc: trace 000001e61dcd5ff0 = string (-1384 rel to high_ptr)
+-- string
+^^^ return size = 49
+gc: trace 000001e61dcd6028 = string (-1328 rel to high_ptr)
+-- string
+^^^ return size = 32
+gc: trace 000001e61dcd6048 = table (-1296 rel to high_ptr)
+gc: visit table entry 2
+gc: visit table entry 5
+^^^ return size = 216
+gc: trace 000001e61dcd6120 = table (-1080 rel to high_ptr)
+gc: visit table entry 2
+gc: visit table entry 5
+^^^ return size = 216
+gc: trace 000001e61dcd61f8 = table (-864 rel to high_ptr)
+gc: visit table entry 2
+gc: visit table entry 5
+^^^ return size = 216
+gc: trace 000001e61dcd62d0 = table (-648 rel to high_ptr)
+gc: visit table entry 2
+gc: visit table entry 5
+^^^ return size = 216
+gc: trace 000001e61dcd63a8 = table (-432 rel to high_ptr)
+gc: visit table entry 2
+gc: visit table entry 5
+^^^ return size = 216
+gc: trace 000001e61dcd6480 = table (-216 rel to high_ptr)
+gc: visit table entry 2
+gc: visit table entry 5
+^^^ return size = 216
+GC: COLLECT DONE! copied 1800 bytes (out of 2048)
+gc: alloc 24 bytes => 000001e61dcd6558 (high ptr -> 000001e61dcd6570)
+gc: tag = 2 instance
+gc: alloc 216 bytes => 000001e61dcd6570 (high ptr -> 000001e61dcd6648)
+gc: tag = 6 table
+GC: RECOLLECT (NEED 0)
+GC: REMAINING = 8
+GC: TAKEN = 2040
+GC: BEGIN COLLECT!
+gc: visit stack ptr 00007ff7c1fa1080 -> 0.000000
+gc: visit stack ptr 00007ff7c1fa1080
+gc: visit stack ptr 00007ff7c1fa1090 -> 14.000000
+gc: visit stack ptr 00007ff7c1fa1090
+gc: visit stack ptr 00007ff7c1fa10a0 -> <instance>
+   > forward 000001e61dcd5e50 -> 0000000200000001
+    gc: copy 000001e61dcd5e50 -> 000001e61dcd7e70 (24 bytes)
+    gc: copy instance
+    gc: redirect 000001e61dcd5e50 -> 000001e61dcd7e70
+gc: visit stack ptr 00007ff7c1fa10a0
+gc: visit stack ptr 00007ff7c1fa10b0 -> -1.000000
+gc: visit stack ptr 00007ff7c1fa10b0
+gc: visit stack ptr 00007ff7c1fa10c0 -> 13.000000
+gc: visit stack ptr 00007ff7c1fa10c0
+gc: visit stack ptr 00007ff7c1fa10d0 -> <instance>
+   > forward 000001e61dcd5e68 -> 0000000200000001
+    gc: copy 000001e61dcd5e68 -> 000001e61dcd7e88 (24 bytes)
+    gc: copy instance
+    gc: redirect 000001e61dcd5e68 -> 000001e61dcd7e88
+gc: visit stack ptr 00007ff7c1fa10d0
+gc: visit stack ptr 00007ff7c1fa10e0 -> -3.000000
+gc: visit stack ptr 00007ff7c1fa10e0
+gc: visit stack ptr 00007ff7c1fa10f0 -> 12.000000
+gc: visit stack ptr 00007ff7c1fa10f0
+gc: visit stack ptr 00007ff7c1fa1100 -> <instance>
+   > forward 000001e61dcd5e80 -> 0000000200000001
+    gc: copy 000001e61dcd5e80 -> 000001e61dcd7ea0 (24 bytes)
+    gc: copy instance
+    gc: redirect 000001e61dcd5e80 -> 000001e61dcd7ea0
+gc: visit stack ptr 00007ff7c1fa1100
+gc: visit stack ptr 00007ff7c1fa1110 -> -7.000000
+gc: visit stack ptr 00007ff7c1fa1110
+gc: visit stack ptr 00007ff7c1fa1120 -> 11.000000
+gc: visit stack ptr 00007ff7c1fa1120
+gc: visit stack ptr 00007ff7c1fa1130 -> <instance>
+   > forward 000001e61dcd5e98 -> 0000000200000001
+    gc: copy 000001e61dcd5e98 -> 000001e61dcd7eb8 (24 bytes)
+    gc: copy instance
+    gc: redirect 000001e61dcd5e98 -> 000001e61dcd7eb8
+gc: visit stack ptr 00007ff7c1fa1130
+gc: visit stack ptr 00007ff7c1fa1140 -> -15.000000
+gc: visit stack ptr 00007ff7c1fa1140
+gc: visit stack ptr 00007ff7c1fa1150 -> 10.000000
+gc: visit stack ptr 00007ff7c1fa1150
+gc: visit stack ptr 00007ff7c1fa1160 -> <instance>
+   > forward 000001e61dcd5eb0 -> 0000000200000001
+    gc: copy 000001e61dcd5eb0 -> 000001e61dcd7ed0 (24 bytes)
+    gc: copy instance
+    gc: redirect 000001e61dcd5eb0 -> 000001e61dcd7ed0
+gc: visit stack ptr 00007ff7c1fa1160
+gc: visit stack ptr 00007ff7c1fa1170 -> -31.000000
+gc: visit stack ptr 00007ff7c1fa1170
+gc: visit stack ptr 00007ff7c1fa1180 -> 9.000000
+gc: visit stack ptr 00007ff7c1fa1180
+gc: visit stack ptr 00007ff7c1fa1190 -> <instance>
+   > forward 000001e61dcd5ec8 -> 0000000200000001
+    gc: copy 000001e61dcd5ec8 -> 000001e61dcd7ee8 (24 bytes)
+    gc: copy instance
+    gc: redirect 000001e61dcd5ec8 -> 000001e61dcd7ee8
+gc: visit stack ptr 00007ff7c1fa1190
+gc: visit stack ptr 00007ff7c1fa11a0 -> -63.000000
+gc: visit stack ptr 00007ff7c1fa11a0
+gc: visit stack ptr 00007ff7c1fa11b0 -> 8.000000
+gc: visit stack ptr 00007ff7c1fa11b0
+gc: visit stack ptr 00007ff7c1fa11c0 -> <instance>
+   > forward 000001e61dcd7f58 -> 0000000200000001
+    gc: copy 000001e61dcd7f58 -> 000001e61dcd7f00 (24 bytes)
+    gc: copy instance
+    gc: redirect 000001e61dcd7f58 -> 000001e61dcd7f00
+gc: visit stack ptr 00007ff7c1fa11c0
+gc: visit stack ptr 00007ff7c1fa11d0 -> -127.000000
+gc: visit stack ptr 00007ff7c1fa11d0
+gc: visit stack ptr 00007ff7c1fa11e0 -> 7.000000
+gc: visit stack ptr 00007ff7c1fa11e0
+gc: visit stack ptr 00007ff7c1fa11f0 -> <instance>
+   > forward 000001e61dcd6558 -> 0000000200000001
+    gc: copy 000001e61dcd6558 -> 000001e61dcd7f18 (24 bytes)
+    gc: copy instance
+    gc: redirect 000001e61dcd6558 -> 000001e61dcd7f18
+gc: visit stack ptr 00007ff7c1fa11f0
+gc: visit stack ptr 00007ff7c1fa1200 -> -255.000000
+gc: visit stack ptr 00007ff7c1fa1200
+gc: visit stack ptr 00007ff7c1fa1210 -> 7.000000
+gc: visit stack ptr 00007ff7c1fa1210
+gc: visit stack ptr 00007ff7c1fa1220 -> <class>
+   > forward 000001e61dcd5ee0 -> 0000000400000001
+    gc: copy 000001e61dcd5ee0 -> 000001e61dcd7f30 (88 bytes)
+    gc: copy class
+    gc: redirect 000001e61dcd5ee0 -> 000001e61dcd7f30
+gc: visit stack ptr 00007ff7c1fa1220
+-- frame->gc_scope: 0000000000000000 -> 0000000000000000
+gc: visit frame 0
+-- frame->gc_scope: 0000000000000000 -> 0000000000000000
+gc: visit frame 1
+-- frame->gc_scope: 0000000000000000 -> 0000000000000000
+gc: visit frame 2
+-- frame->gc_scope: 0000000000000000 -> 0000000000000000
+gc: visit frame 3
+-- frame->gc_scope: 0000000000000000 -> 0000000000000000
+gc: visit frame 4
+-- frame->gc_scope: 0000000000000000 -> 0000000000000000
+gc: visit frame 5
+-- frame->gc_scope: 0000000000000000 -> 0000000000000000
+gc: visit frame 6
+-- frame->gc_scope: 0000000000000000 -> 0000000000000000
+gc: visit frame 7
+   > forward 000001e61dcd5f38 -> 0000000100000001
+    gc: copy 000001e61dcd5f38 -> 000001e61dcd7f88 (32 bytes)
+    gc: copy function
+    gc: redirect 000001e61dcd5f38 -> 000001e61dcd7f88
+   > forward 000001e61dcd5ee0 -> 000001e61dcd7f30
+   > forward 000001e61dcd5f58 -> 0000000300000001
+    gc: copy 000001e61dcd5f58 -> 000001e61dcd7fa8 (46 bytes)
+    gc: copy string
+    gc: redirect 000001e61dcd5f58 -> 000001e61dcd7fa8
+   > forward 000001e61dcd5f88 -> 0000000300000001
+    gc: copy 000001e61dcd5f88 -> 000001e61dcd7fd8 (30 bytes)
+    gc: copy string
+    gc: redirect 000001e61dcd5f88 -> 000001e61dcd7fd8
+   > forward 000001e61dcd5fa8 -> 0000000300000001
+    gc: copy 000001e61dcd5fa8 -> 000001e61dcd7ff8 (34 bytes)
+    gc: copy string
+    gc: redirect 000001e61dcd5fa8 -> 000001e61dcd7ff8
+   > forward 000001e61dcd5fd0 -> 0000000300000001
+    gc: copy 000001e61dcd5fd0 -> 000001e61dcd8020 (30 bytes)
+    gc: copy string
+    gc: redirect 000001e61dcd5fd0 -> 000001e61dcd8020
+   > forward 000001e61dcd5ff0 -> 0000000300000001
+    gc: copy 000001e61dcd5ff0 -> 000001e61dcd8040 (49 bytes)
+    gc: copy string
+    gc: redirect 000001e61dcd5ff0 -> 000001e61dcd8040
+   > forward 000001e61dcd6028 -> 0000000300000001
+    gc: copy 000001e61dcd6028 -> 000001e61dcd8078 (32 bytes)
+    gc: copy string
+    gc: redirect 000001e61dcd6028 -> 000001e61dcd8078
+gc: trace 000001e61dcd7e70 = instance (-552 rel to high_ptr)
+   > forward 000001e61dcd5ee0 -> 000001e61dcd7f30
+-- instance->class: 000001e61dcd5ee0 -> 000001e61dcd7f30
+   > forward 000001e61dcd6048 -> 0000000600000001
+    gc: copy 000001e61dcd6048 -> 000001e61dcd8098 (216 bytes)
+    gc: copy table
+    gc: redirect 000001e61dcd6048 -> 000001e61dcd8098
+-- instance->table: 000001e61dcd6048 -> 000001e61dcd8098
+^^^ return size = 24
+gc: trace 000001e61dcd7e88 = instance (-744 rel to high_ptr)
+   > forward 000001e61dcd5ee0 -> 000001e61dcd7f30
+-- instance->class: 000001e61dcd5ee0 -> 000001e61dcd7f30
+   > forward 000001e61dcd6120 -> 0000000600000001
+    gc: copy 000001e61dcd6120 -> 000001e61dcd8170 (216 bytes)
+    gc: copy table
+    gc: redirect 000001e61dcd6120 -> 000001e61dcd8170
+-- instance->table: 000001e61dcd6120 -> 000001e61dcd8170
+^^^ return size = 24
+gc: trace 000001e61dcd7ea0 = instance (-936 rel to high_ptr)
+   > forward 000001e61dcd5ee0 -> 000001e61dcd7f30
+-- instance->class: 000001e61dcd5ee0 -> 000001e61dcd7f30
+   > forward 000001e61dcd61f8 -> 0000000600000001
+    gc: copy 000001e61dcd61f8 -> 000001e61dcd8248 (216 bytes)
+    gc: copy table
+    gc: redirect 000001e61dcd61f8 -> 000001e61dcd8248
+-- instance->table: 000001e61dcd61f8 -> 000001e61dcd8248
+^^^ return size = 24
+gc: trace 000001e61dcd7eb8 = instance (-1128 rel to high_ptr)
+   > forward 000001e61dcd5ee0 -> 000001e61dcd7f30
+-- instance->class: 000001e61dcd5ee0 -> 000001e61dcd7f30
+   > forward 000001e61dcd62d0 -> 0000000600000001
+    gc: copy 000001e61dcd62d0 -> 000001e61dcd8320 (216 bytes)
+    gc: copy table
+    gc: redirect 000001e61dcd62d0 -> 000001e61dcd8320
+-- instance->table: 000001e61dcd62d0 -> 000001e61dcd8320
+^^^ return size = 24
+gc: trace 000001e61dcd7ed0 = instance (-1320 rel to high_ptr)
+   > forward 000001e61dcd5ee0 -> 000001e61dcd7f30
+-- instance->class: 000001e61dcd5ee0 -> 000001e61dcd7f30
+   > forward 000001e61dcd63a8 -> 0000000600000001
+    gc: copy 000001e61dcd63a8 -> 000001e61dcd83f8 (216 bytes)
+    gc: copy table
+    gc: redirect 000001e61dcd63a8 -> 000001e61dcd83f8
+-- instance->table: 000001e61dcd63a8 -> 000001e61dcd83f8
+^^^ return size = 24
+gc: trace 000001e61dcd7ee8 = instance (-1512 rel to high_ptr)
+   > forward 000001e61dcd5ee0 -> 000001e61dcd7f30
+-- instance->class: 000001e61dcd5ee0 -> 000001e61dcd7f30
+   > forward 000001e61dcd6480 -> 0000000600000001
+    gc: copy 000001e61dcd6480 -> 000001e61dcd84d0 (216 bytes)
+    gc: copy table
+    gc: redirect 000001e61dcd6480 -> 000001e61dcd84d0
+-- instance->table: 000001e61dcd6480 -> 000001e61dcd84d0
+^^^ return size = 24
+gc: trace 000001e61dcd7f00 = instance (-1704 rel to high_ptr)
+   > forward 000001e61dcd7f00 -> 0000000200000001
+    gc: copy 000001e61dcd7f00 -> 000001e61dcd85a8 (24 bytes)
+    gc: copy instance
+    gc: redirect 000001e61dcd7f00 -> 000001e61dcd85a8
+-- instance->class: 000001e61dcd7f00 -> 000001e61dcd85a8
+-- instance->table: 0000000000000000 -> 0000000000000000
+runtime error: unknown garbage collection type

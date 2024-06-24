@@ -1458,41 +1458,39 @@ jay_dbg_stack(const char *message) {
 }
 
 static inline
-jay_value
-jay_add(jay_value a, jay_value b) {
-	const char *message = "addition expects two numbers or two strings";
-	if(JAY_IS_NUMBER(a)) {
-		if(JAY_IS_NUMBER(b)) {
-			return jay_box_number(JAY_AS_NUMBER(a) + JAY_AS_NUMBER(b));
-		}
-	}
-	if(a.tag == JAY_STRING) {
-		if(b.tag == JAY_STRING) {
-			jay_string *as = JAY_AS_STRING(a);
-			jay_string *bs = JAY_AS_STRING(b);
+void
+jay_op_add(void) {
+	// For now, only add handles gc correctly..
 
-			size_t length = as->length + bs->length;
+	if(JAY_IS_STRING(jay_stack_ptr[-2])) {
+		if(JAY_IS_STRING(jay_stack_ptr[-1])) {
+			size_t length = 
+				JAY_AS_STRING(jay_stack_ptr[-2])->length + JAY_AS_STRING(jay_stack_ptr[-1])->length;
 			jay_string *cat = jay_new_string(length);
 
-			memcpy(cat->contents,              as->contents, as->length);
-			memcpy(cat->contents + as->length, bs->contents, bs->length);
+			// Now that we're done allocating, we can unwrap the stack things
+			// for the rest of the function.
+
+			jay_string *a = JAY_AS_STRING(jay_stack_ptr[-1]);
+			jay_string *b = JAY_AS_STRING(jay_stack_ptr[-2]);
+
+			memcpy(cat->contents,             a->contents, a->length);
+			memcpy(cat->contents + a->length, b->contents, b->length);
 
 			// Recompute hash
 			cat->hash = jay_compute_string_hash(cat->contents, length);
 
-			return jay_box_string(cat);
-		}	
+			return jay_box_string(cat);	
+		}
 	}
-	oops(message);
-}
 
-static inline
-void
-jay_op_add(void) {
-	// For now, only add handles gc correctly..
-	jay_value result = jay_add(jay_stack_ptr[-2], jay_stack_ptr[-1]);
-	jay_stack_ptr[-2] = result;
-	jay_stack_ptr -= 1;
+	if(JAY_IS_NUMBER(jay_stack_ptr[-2])) {
+		if(JAY_IS_NUMBER(jay_stack_ptr[-1])) {
+			return jay_box_number(JAY_AS_NUMBER(jay_stack_ptr[-1]) + JAY_AS_NUMBER(jay_stack_ptr[-2]));
+		}
+	}
+
+	oops("addition expects two numbers or two strings");
 }
 
 static inline
