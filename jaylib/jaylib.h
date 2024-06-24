@@ -603,10 +603,11 @@ jay_gc_go() {
 	// We visit all roots.
 	for(jay_value *sp = jay_stack; sp != jay_stack_ptr; ++sp) {
 //#ifdef JAY_TRACE_GC
-		printf("gc: visit stack ptr %p -> ", sp);
+		printf("gc: visit stack ptr %p (as inst %p) -> ", sp, sp->as_instance);
 		jay_print(*sp);
 //#endif
 		jay_gc_visit(sp);
+		printf("*gc: after visit stack ptr: val = %p\n", sp->as_instance);
 	}
 
 	for(size_t sf = 0; sf < jay_frames_ptr; ++sf) {
@@ -1034,7 +1035,10 @@ jay_put_new(jay_instance *scope, size_t name, jay_value value) {
 static inline
 jay_value
 jay_bind(jay_method *method, jay_instance *this) {
+	// Juggle with GC
+	jay_push(jay_box_instance(this));
 	jay_bound_method *result = jay_gc_alloc(sizeof(*result), JAY_GC_BOUND_METHOD);
+	this = JAY_AS_INSTANCE(jay_pop());
 	result->implementation = method->implementation;
 	result->arity = method->arity;
 	result->closure = method->parent->closure;
