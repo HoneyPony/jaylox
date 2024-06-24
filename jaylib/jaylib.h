@@ -163,6 +163,8 @@ static struct {
 
 	uintptr_t limit;
 	uintptr_t high_ptr;
+
+	bool flag_auto_recollect;
 } jay_gc;
 
 // Use 0 for the tombstone so that we can memset() the array to 0 / use calloc.
@@ -673,6 +675,26 @@ jay_gc_go() {
 #ifdef JAY_TRACE_GC_DIRECT
 	printf("GC: COLLECT DONE! copied %zu bytes (out of %zu)\n", (size_t)(jay_gc.high_ptr - jay_gc.to_space), (jay_gc.current_size / 2));
 #endif
+
+	// Based on the proportion of collected memory, enable a flag to automatically
+	// expand the memory next time. (E.g., if we think we're using 80% of the memory,
+	// collection will likely be too often). The ratio can be set here...
+	size_t used = (size_t)(jay_gc.high_ptr - jay_gc.to_space);
+	size_t avail = (jay_gc.current_size / 2);
+
+	const size_t flag_ratio = 2;
+
+	// If we have used absolutely nothing, don't need the flag.
+	if(used == 0) {
+		jay_gc.flag_auto_recollect = false;
+	}
+	else {
+		// Check ratio. Guaranteed to succeed because used > 0.
+		size_t ratio = avail / used;
+
+		// If we're using a lot of memory, automatically expand the heap next time.
+		jay_gc.flag_auto_recollect = (ratio <= flag_ratio);
+	}
 }
 
 //static char
@@ -684,10 +706,6 @@ jay_gc_go() {
 static inline
 void
 jay_gc_recollect(size_t needed_size) {
-	//if(gc_debugger_flag) {
-	//	oops("already used gc debugger");
-	//}
-	//gc_debugger_flag = true;
 
 #ifdef JAY_TRACE_GC_DIRECT
 	printf("GC: RECOLLECT (NEED %zu)\n", needed_size);
@@ -699,6 +717,15 @@ jay_gc_recollect(size_t needed_size) {
 #ifdef JAY_TRACE_GC_DIRECT
 	printf("GC: TAKEN = %zu\n", taken);
 #endif
+
+	// Always double at least once.
+	// This is for the following reasons:
+	// - If we're calling from flag_auto_recollect, we're trying to expand the
+	//   heap.
+	// - If we're calling from gc_alloc_impl, then we know we didn't have enough
+	//   space, so we might as well double it at least once.
+	half *= 2;
+
 	while((taken + needed_size) >= half) {
 		// TODO: Overflow check?
 		half *= 2;
@@ -740,9 +767,11 @@ jay_gc_recollect(size_t needed_size) {
 
 static inline
 void
-jay_gc_collect() {
-	//jay_gc_recollect(0);
-	//return;
+jay_gc_collect(size_t desired_size) {
+	if(jay_gc.flag_auto_recollect) {
+		jay_gc_recollect(desired_size);
+		return;
+	}
 
 	// Reset the high pointer and to_space to point to the from_space
 	jay_gc.high_ptr = jay_gc.from_space;
@@ -771,7 +800,7 @@ jay_gc_alloc_impl(size_t size) {
 	}
 
 	// If the allocation failed, then collect.
-	jay_gc_collect();
+	jay_gc_collect(size);
 
 	// Try the allocation again.
 	result = (void*)jay_gc.high_ptr;
@@ -836,6 +865,9 @@ jay_gc_init(size_t init_size) {
 
 	jay_gc.from_space = jay_gc.to_space + (init_size / 2);
 	jay_gc.limit = jay_gc.from_space; // Limit is halfway up initially
+
+	// Don't automatically expand the heap, initially.
+	jay_gc.flag_auto_recollect = false;
 
 #ifdef JAY_TRACE_GC
 	puts("--- gc init --- ");
