@@ -29,7 +29,8 @@ typedef struct jay_value {
 		struct jay_function     *as_function;
 		struct jay_bound_method *as_bound_method;
 		struct jay_class        *as_class;
-		struct jay_string       *as_string;        
+		struct jay_string       *as_string;
+		struct jay_object       *as_object;    
 	};
 } jay_value;
 
@@ -47,10 +48,7 @@ typedef jay_value (*jay_function_impl)(jay_value *args, struct jay_closure *clos
 typedef struct jay_method* (*jay_dispatcher_impl)(struct jay_class *class, size_t name);
 
 typedef struct jay_object {
-	struct jay_object *gc_next;
-	struct jay_object *gc_prev;
-	uint32_t type;
-	uint32_t gc_info;
+	uint64_t gc;
 } jay_object;
 
 typedef struct jay_closure {
@@ -94,6 +92,8 @@ typedef struct jay_class {
 	// The same closure is used for all methods inside a class
 	jay_closure *closure;
 
+	size_t methods_count;
+
 	// The first method inside each class will be its init.
 	jay_method methods[];
 } jay_class;
@@ -128,13 +128,17 @@ typedef struct {
 	struct jay_value value;
 } jay_hash_entry;
 
+typedef struct jay_table {
+	jay_object object;
+	size_t table_size;
+	size_t used_entries;
+	jay_hash_entry table[];
+} jay_table;
+
 typedef struct jay_instance {
 	jay_object object;
 
-	jay_hash_entry *members;
-	size_t array_size;
-	size_t used_entries;
-
+	jay_table *table;
 
 	jay_class *class;
 } jay_instance;
@@ -148,6 +152,17 @@ typedef struct jay_string {
 
 	char contents[];
 } jay_string;
+
+static struct {
+	uintptr_t current_heap;
+	size_t current_size;
+	
+	uintptr_t to_space;
+	uintptr_t from_space;
+
+	uintptr_t limit;
+	uintptr_t high_ptr;
+} jay_gc;
 
 // Use 0 for the tombstone so that we can memset() the array to 0 / use calloc.
 #define JAY_NAME_TOMBSTONE 0
@@ -175,6 +190,18 @@ static size_t jay_frames_ptr;
 #define JAY_CLASS        7
 #define JAY_BOUND_METHOD 8
 
+// The GC tags are distinct from the normal tags, due to the fact that they
+// kind of have to be for the NaN boxing version. We need to be careful to
+// always use the correct GC_ or not tag.
+#define JAY_GC_FUNCTION     1
+#define JAY_GC_INSTANCE     2
+#define JAY_GC_STRING       3
+#define JAY_GC_CLASS        4
+#define JAY_GC_BOUND_METHOD 5
+// Tables are used internally by the jay_instance.
+#define JAY_GC_TABLE        6
+#define JAY_GC_CLOSURE      7
+
 #define JAY_IS_NUMBER(v) ((v).tag == 0)
 #define JAY_AS_NUMBER(v) ((v).as_number)
 
@@ -198,6 +225,8 @@ static size_t jay_frames_ptr;
 
 #define JAY_IS_BOUND_METHOD(v) ((v).tag == JAY_BOUND_METHOD)
 #define JAY_AS_BOUND_METHOD(v) ((v).as_bound_method)
+
+#define JAY_AS_OBJECT(v) ((v).as_object)
 
 #define JAY_TAG(v) ((v).tag)
 
@@ -290,13 +319,286 @@ oops(const char *message) {
 #endif
 
 static inline
-void*
-jay_malloc(size_t size) {
-	void *res = malloc(size);
-	if(!res) {
-		oops("out of memory");
+uintptr_t
+jay_gc_align(uintptr_t val) {
+	const uintptr_t alignment = 8;
+	// Note: If we were doing various alignments, we would need to use & for
+	// speed -- but the compiler should optimize a % 8 properly.
+	return (val + alignment - 1) % alignment;
+}
+
+static inline
+size_t
+jay_gc_find_size(jay_object *object) {
+	uint32_t gc_tag = (object->gc >> 32ULL);
+
+	//#define JAY_GC_FLEX(ty, LENGTH, WHAT) ( ((((ty*)object)->LENGTH) * (sizeof ((ty*)object)->WHAT[0])) + sizeof(WHAT) )
+	#define JAY_GC_FLEX(ty, LENGTH, WHAT) ( sizeof((ty){0}.WHAT[0]) * ((ty*)object)->LENGTH ) + sizeof(ty);
+
+	switch(gc_tag) {
+		case JAY_GC_STRING:
+			return JAY_GC_FLEX(jay_string, length, contents);
+
+		case JAY_GC_BOUND_METHOD:
+			return sizeof(jay_bound_method);
+
+		case JAY_GC_CLASS:
+			// TODO: Initialize methods_count
+			return JAY_GC_FLEX(jay_class, methods_count, methods);
+
+		case JAY_GC_INSTANCE:
+			return sizeof(jay_instance);
+
+		case JAY_GC_FUNCTION:
+			return sizeof(jay_function);
+
+		case JAY_GC_TABLE:
+			return JAY_GC_FLEX(jay_table, table_size, table);
+
+		case JAY_GC_CLOSURE:
+			return JAY_GC_FLEX(jay_closure, count, values);
+
+		default:
+			oops("unknown garbage collection type");
 	}
-	return res;
+}
+
+static inline
+jay_object*
+jay_gc_copy(jay_object *previous) {
+	// Copies the object to a new location in to-space and updates its forwarding
+	// pointer. Returns the new location of the object.
+	//
+	// This assumes we have enough space in to-space to copy the object. It should
+	// therefore only be called during GC.
+
+	// Allocate from high ptr
+	jay_object *result = (void*)jay_gc.high_ptr;
+
+	size_t size = jay_gc_find_size(previous);
+
+	// Bump-allocate
+	jay_gc.high_ptr = jay_gc_align(jay_gc.high_ptr + size);
+
+	// Copy the old object over
+	memcpy(result, previous, size);
+
+	// Update forwarding pointer. Note that the LSB will always be 0 due to
+	// our alignment of 8
+	memcpy(&previous->gc, result, sizeof(result));
+
+	return result;
+}
+
+// GC Note: We use an LSB value of 0 to mean forwarding pointer and LSB value
+// of 1 to mean not-yet-forwarded.
+//
+// This is so that we can quickly copy the forwarding pointer (it needs no change),
+// and because we store the GC tag in the top 32 bits anyways so the shift will
+// remove the bit. (Also, hopefully the compiler will just generate a 32 bit 
+// load).
+
+static inline
+void*
+jay_gc_copy_or_forward(void *prev) {
+	if(!prev) return NULL;
+	jay_object *previous = prev;
+
+	if((previous->gc & 1) == 0) {
+		jay_object* result;
+		// Return the existing forwarding pointer.
+		memcpy(&result, &previous->gc, sizeof(result));
+		return result;
+	}
+
+	// Otherwise, copy the object, then update its forwarding pointer, and
+	// finally return the same pointer.
+	return jay_gc_copy(previous);
+}
+
+#define JAY_GC_VISIT_DIRECT(ptr) ptr = jay_gc_copy_or_forward(ptr)
+
+static inline
+void
+jay_gc_visit(jay_value *field) {
+	switch(JAY_TAG(*field)) {
+		case JAY_INSTANCE:
+		case JAY_CLASS:
+		case JAY_FUNCTION:
+		case JAY_BOUND_METHOD:
+		case JAY_STRING:
+#ifdef JAY_NAN_BOXING
+#else
+			JAY_GC_VISIT_DIRECT(field->as_object);
+#endif
+		default:
+			// No action.
+			;
+	}
+}
+
+// To be generated by the compiler.
+static void
+jay_gc_visit_globals();
+
+// Returns the size of the object.
+static
+size_t
+jay_gc_trace(jay_object *object) {
+	uint32_t gc_tag = (object->gc >> 32ULL);
+
+	switch(gc_tag) {
+		case JAY_GC_STRING:
+			/* no-op */
+			break;
+
+		case JAY_GC_BOUND_METHOD:
+			jay_bound_method *bound_method = (jay_bound_method*)object;
+			JAY_GC_VISIT_DIRECT(bound_method->closure);
+			JAY_GC_VISIT_DIRECT(bound_method->this);
+			break;
+
+		case JAY_GC_CLASS:
+			// TODO: Initialize methods_count
+			jay_class *class = (jay_class*)object;
+			JAY_GC_VISIT_DIRECT(class->closure);
+			JAY_GC_VISIT_DIRECT(class->superclass);
+			break;
+
+		case JAY_GC_INSTANCE:
+			jay_instance *instance = (jay_instance*)object;
+			JAY_GC_VISIT_DIRECT(instance->class);
+			JAY_GC_VISIT_DIRECT(instance->table);
+			break;
+
+		case JAY_GC_FUNCTION:
+			jay_function *function = (jay_function*)object;
+			JAY_GC_VISIT_DIRECT(function->closure);
+			break;
+
+		case JAY_GC_TABLE: {
+			jay_table *table = (jay_table*)object;
+			for(size_t i = 0; i < table->table_size; ++i) {
+				if(table->table[i].name != JAY_NAME_TOMBSTONE) {
+					jay_gc_visit(&table->table[i].value);
+				}
+			}
+		}
+
+		case JAY_GC_CLOSURE: {
+			jay_closure *closure = (jay_closure*)object;
+			JAY_GC_VISIT_DIRECT(closure->parent);
+			for(size_t i = 0; i < closure->count; ++i) {
+				jay_gc_visit(&closure->values[i]);
+			}
+			break;
+		}
+
+		default:
+			oops("unknown garbage collection type");
+	}
+}
+
+static
+void
+jay_gc_collect() {
+	// Reset the high pointer and to_space to point to the from_space
+	jay_gc.high_ptr = jay_gc.from_space;
+
+	// And the from space points to the to-space
+	jay_gc.from_space = jay_gc.to_space;
+
+	// (to space points to old from space)
+	jay_gc.to_space = jay_gc.high_ptr;
+
+	// update limit
+	jay_gc.limit = jay_gc.to_space + (jay_gc.current_size / 2);
+
+	// We will scan through the new to-space to copy any more referenced objects.
+	uintptr_t scan = jay_gc.high_ptr;
+
+	// We visit all roots.
+	for(jay_value *sp = jay_stack; sp != jay_stack_ptr; ++sp) {
+		jay_gc_visit(sp);
+	}
+
+	for(size_t sf = 0; sf < jay_frames_ptr; ++sf) {
+		jay_stackframe *frame = jay_frames[sf];
+		JAY_GC_VISIT_DIRECT(frame->gc_scope);
+		for(size_t i = 0; i < frame->count; ++i) {
+			jay_gc_visit(&frame->values[i]);
+		}
+	}
+
+	jay_gc_visit_globals();
+
+	while(scan < jay_gc.high_ptr) {
+		jay_object *to_scan = (void*)scan;
+		scan = jay_gc_align(scan + jay_gc_trace(to_scan));
+	}
+}
+
+static inline
+void*
+jay_gc_alloc_impl(size_t size) {
+	void *result = (void*)jay_gc.high_ptr;
+	uintptr_t next = jay_gc_align(jay_gc.high_ptr + size);
+
+	if(next < jay_gc.limit) {
+		jay_gc.high_ptr = next;
+		return result;
+	}
+
+	// If the allocation failed, then collect.
+	jay_gc_collect();
+
+	// Try the allocation again.
+	result = (void*)jay_gc.high_ptr;
+	next = jay_gc_align(jay_gc.high_ptr + size);
+
+	if(next < jay_gc.limit) {
+		jay_gc.high_ptr = next;
+		return result;
+	}
+
+	oops("GC heap widening unimplemented");
+	// If it STILL failed, then collect to a new to space.
+	//jay_gc_recollect(size);
+
+	// After recollect(), either our realloc failed, our we definitely have
+	// enough space.
+	result = (void*)jay_gc.high_ptr;
+	jay_gc.high_ptr = jay_gc_align(jay_gc.high_ptr + size);
+	return result;
+}
+
+// The size should include the size of the gc_obj.
+static inline
+void*
+jay_gc_alloc(size_t size, uint32_t tag) {
+	jay_object *obj = jay_gc_alloc_impl(size);
+	// The gc pointer is initialized with 1 in the LSB, as well as the tag in
+	// the high bits.
+	obj->gc = 1 | ((uint64_t)tag << 32ULL);
+	return obj;
+}
+
+static inline
+void
+jay_gc_init(size_t init_size) {
+	void *mem = malloc(init_size);
+	if(!mem) {
+		oops("out of memory: can't create gc heap");
+	}
+
+	jay_gc.current_heap = (uintptr_t)mem;
+	jay_gc.current_size = init_size;
+
+	jay_gc.to_space = (uintptr_t)mem;
+	jay_gc.high_ptr = (uintptr_t)mem;
+
+	jay_gc.from_space = jay_gc.to_space + (init_size / 2);
+	jay_gc.limit = jay_gc.from_space; // Limit is halfway up initially
 }
 
 static inline
@@ -357,7 +659,7 @@ static inline
 jay_string*
 jay_new_string(size_t length) {
 	// Add 1 for the NUL terminator
-	jay_string *string = jay_malloc(sizeof(jay_string) + length + 1);
+	jay_string *string = jay_gc_alloc(sizeof(jay_string) + length + 1, JAY_GC_STRING);
 	string->length = length;
 	// Set the NUL terminator
 	string->contents[length] = '\0';
@@ -393,7 +695,7 @@ jay_string_from_literal(const char *literal) {
 jay_closure*
 jay_new_scope(jay_closure *parent, size_t count) {
 	size_t bytes = sizeof(jay_closure) + (count * sizeof(jay_value));
-	jay_closure *closure = jay_malloc(bytes);
+	jay_closure *closure = jay_gc_alloc(bytes, JAY_GC_CLOSURE);
 	closure->count = count;
 	closure->parent = parent;
 	// Do we want to zero out the 'values' array..?
@@ -401,26 +703,28 @@ jay_new_scope(jay_closure *parent, size_t count) {
 	return closure;
 }
 
+jay_table*
+jay_new_table(size_t entries) {
+	size_t entry_bytes = (entries * sizeof(jay_hash_entry));
+	size_t bytes = entry_bytes + sizeof(jay_table);
+	jay_table *result = jay_gc_alloc(bytes, JAY_GC_TABLE);
+
+	result->table_size = entries;
+	result->used_entries = 0;
+
+	memset(result->table, 0, entry_bytes);
+
+	return result;
+}
+
 jay_instance*
 jay_new_instance(jay_class *class) {
-	jay_instance *instance = jay_malloc(sizeof(*instance));
+	jay_instance *instance = jay_gc_alloc(sizeof(*instance), JAY_GC_INSTANCE);
 	
 	instance->class = class;
 
 	// Set up "hash" table
-	instance->array_size = 8;
-	size_t table_bytes = instance->array_size * sizeof(*instance->members);
-	// TODO: jay_malloc? Somehow make the table a jay_object for GC..?
-	// Actually, it doesn't really need to be GC, because it's owned by the
-	// instance...
-	// Also, consider a small-instance optimization that would keep this array
-	// in the instance
-	instance->members = jay_malloc(table_bytes);
-
-	// We MUST reset the instances to tombstones, otherwise we will have problems.
-	memset(instance->members, 0, table_bytes); // Calloc?
-
-	instance->used_entries = 0;
+	instance->table = jay_new_table(8);
 
 	return instance;
 }
@@ -447,7 +751,7 @@ jay_find_empty_bucket_in(jay_hash_entry *array, size_t array_size, size_t name) 
 // is an empty bucket
 jay_hash_entry*
 jay_find_empty_bucket(jay_instance *instance, size_t name) {
-	return jay_find_empty_bucket_in(instance->members, instance->array_size, name);
+	return jay_find_empty_bucket_in(instance->table->table, instance->table->table_size, name);
 }
 
 jay_hash_entry*
@@ -470,36 +774,36 @@ jay_find_bucket_in(jay_hash_entry *array, size_t array_size, size_t name) {
 
 jay_hash_entry*
 jay_find_bucket(jay_instance *instance, size_t name) {
-	return jay_find_bucket_in(instance->members, instance->array_size, name);
+	return jay_find_bucket_in(instance->table->table, instance->table->table_size, name);
 }
 
 void
 jay_rehash(jay_instance *instance) {
-	size_t new_size = instance->array_size * 2;
-	size_t array_bytes = sizeof(jay_hash_entry) * new_size;
-	// TODO: calloc()
-	jay_hash_entry *new_array = jay_malloc(array_bytes);
-	memset(new_array, 0, array_bytes); // Must reset to TOMBSTONEs
+	size_t new_size = instance->table->table_size * 2;
+	
+	jay_table *new_table = jay_new_table(new_size);
 
-	for(size_t i = 0; i < instance->array_size; ++i) {
-		if(instance->members[i].name != JAY_NAME_TOMBSTONE) {
+	for(size_t i = 0; i < instance->table->table_size; ++i) {
+		if(instance->table->table[i].name != JAY_NAME_TOMBSTONE) {
 			// Note: here this should always return a tombstone, as all buckets
 			// should be empty...
-			jay_hash_entry *ptr = jay_find_empty_bucket_in(new_array, new_size, instance->members[i].name);
-			ptr->name = instance->members[i].name;
-			ptr->value = instance->members[i].value;
+			jay_hash_entry *ptr = jay_find_empty_bucket_in(new_table->table, new_size, instance->table->table[i].name);
+			ptr->name = instance->table->table[i].name;
+			ptr->value = instance->table->table[i].value;
 		}
 	}
 
-	free(instance->members);
+	// We can't free() the old table, because it's managed by the GC. It will
+	// eventually be recycled. TODO: Consider allocating the initial size
+	// based on the estimated entries in init().
 
-	instance->members = new_array;
-	instance->array_size = new_size;
+	new_table->used_entries = instance->table->used_entries;
+	instance->table = new_table;
 }
 
 jay_value
 jay_put_new(jay_instance *scope, size_t name, jay_value value) {
-	if((scope->used_entries + 1) > scope->array_size / 2) {
+	if((scope->table->used_entries + 1) > scope->table->table_size / 2) {
 		jay_rehash(scope);
 	}
 	// We are guaranteed an empty bucket somewhere.
@@ -508,7 +812,7 @@ jay_put_new(jay_instance *scope, size_t name, jay_value value) {
 	place->name = name;
 	place->value = value;
 
-	scope->used_entries += 1;
+	scope->table->used_entries += 1;
 
 	return value;
 }
@@ -519,7 +823,7 @@ jay_put_new(jay_instance *scope, size_t name, jay_value value) {
 static inline
 jay_value
 jay_bind(jay_method *method, jay_instance *this) {
-	jay_bound_method *result = jay_malloc(sizeof(*result));
+	jay_bound_method *result = jay_gc_alloc(sizeof(*result), JAY_GC_BOUND_METHOD);
 	result->implementation = method->implementation;
 	result->arity = method->arity;
 	result->closure = method->parent->closure;
@@ -890,7 +1194,7 @@ jay_op_invoke(size_t name, size_t arity) {
 static inline
 jay_value
 jay_fun_from(jay_function_impl impl, size_t arity, jay_closure *closure) {
-	jay_function *f = jay_malloc(sizeof(*f));
+	jay_function *f = jay_gc_alloc(sizeof(*f), JAY_GC_FUNCTION);
 	f->arity = arity;
 	f->closure = closure;
 	f->implementation = impl;

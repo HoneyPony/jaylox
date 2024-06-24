@@ -770,7 +770,14 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 
 		// Write the globals array to the prelude (and the string constants array)
 		writeln!(self.prelude, "static jay_value globals[{globals_count}];")?;
-		writeln!(self.prelude, "static jay_value global_string_constants[{}];", self.lox.string_constants.len())?;
+		writeln!(self.prelude, "static jay_value global_string_constants[{}];\n", self.lox.string_constants.len())?;
+
+		// Create the global-visit function
+		writeln!(self.prelude, "static\nvoid\njay_gc_visit_globals(void) {{")?;
+		writeln!(self.prelude, "\tfor(size_t i = 0; i < {globals_count}; ++i) {{")?;
+		writeln!(self.prelude, "\t\tjay_gc_visit(&globals[i]);")?;
+		writeln!(self.prelude, "\t}}")?;
+		writeln!(self.prelude, "}}\n")?;
 
 		let mut main_fn = String::new();
 
@@ -778,7 +785,8 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 		// In particular, each function being compiled will need its own string...
 		self.push_indent();
 
-		// The most important responsibility of main() is initializing the stack
+		// The most important responsibility of main() is initializing the gc and stack
+		writeln!(main_fn, "\tjay_gc_init(16 * 1024 * 1024); // 16 megabytes")?;
 		writeln!(main_fn, "\tjay_stack_ptr = jay_stack;")?;
 		writeln!(main_fn, "\tjay_frames_ptr = 0;\n")?;
 
