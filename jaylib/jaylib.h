@@ -4,6 +4,8 @@
 // TODO: Make this a compiler option or something
 #define JAY_FULL_COMPAT
 
+#define JAY_TRACE_GC
+
 #include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
@@ -322,9 +324,10 @@ static inline
 uintptr_t
 jay_gc_align(uintptr_t val) {
 	const uintptr_t alignment = 8;
-	// Note: If we were doing various alignments, we would need to use & for
-	// speed -- but the compiler should optimize a % 8 properly.
-	return (val + alignment - 1) % alignment;
+	// This clears out the low bits of the value, after making sure it is high
+	// enough (i.e. the initial + alignment - 1). Clearing out the bits makes
+	// sure they're all zeroes.
+	return (val + alignment - 1) & ~(alignment - 1);
 }
 
 static inline
@@ -577,6 +580,10 @@ static inline
 void*
 jay_gc_alloc(size_t size, uint32_t tag) {
 	jay_object *obj = jay_gc_alloc_impl(size);
+#ifdef JAY_TRACE_GC
+	printf("gc: alloc %zu bytes => %p (high ptr -> %p)\n", size, obj, jay_gc.high_ptr);
+	printf("gc: tag = %lu\n", tag);
+#endif
 	// The gc pointer is initialized with 1 in the LSB, as well as the tag in
 	// the high bits.
 	obj->gc = 1 | ((uint64_t)tag << 32ULL);
@@ -591,6 +598,14 @@ jay_gc_init(size_t init_size) {
 		oops("out of memory: can't create gc heap");
 	}
 
+	uintptr_t memcheck = (uintptr_t)mem;
+	if((memcheck & 0x7) != 0) {
+		// Malloc should be guaranteed to align to at least 8 bytes due to 
+		// it being able to return long*, etc, so we might as well not try
+		// to handle this case ourselves.
+		oops("gc heap not aligned to 8 bytes--giving up");
+	}
+
 	jay_gc.current_heap = (uintptr_t)mem;
 	jay_gc.current_size = init_size;
 
@@ -599,6 +614,17 @@ jay_gc_init(size_t init_size) {
 
 	jay_gc.from_space = jay_gc.to_space + (init_size / 2);
 	jay_gc.limit = jay_gc.from_space; // Limit is halfway up initially
+
+#ifdef JAY_TRACE_GC
+	puts("--- gc init --- ");
+	printf("current_heap = %p\n", jay_gc.current_heap);
+	printf("current_size = %p\n", jay_gc.current_size);
+	printf("to_space     = %p\n", jay_gc.to_space);
+	printf("high_ptr     = %p\n", jay_gc.high_ptr);
+	printf("limit        = %p\n", jay_gc.limit);
+	printf("from_space   = %p\n", jay_gc.from_space);
+	puts("---");
+#endif
 }
 
 static inline
