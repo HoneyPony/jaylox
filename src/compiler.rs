@@ -963,6 +963,9 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 		if self.opt.nan_boxing {
 			writeln!(self.prelude, "#define JAY_NAN_BOXING")?;
 		}
+		if self.opt.assume_correct {
+			writeln!(self.prelude, "#define JAY_ASSUME_CORRECT")?;
+		}
 		writeln!(self.prelude, "#include \"jaylib/jaylib.h\"\n")?;
 
 		// Write the globals array to the prelude (and the string constants array)

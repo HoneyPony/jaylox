@@ -1894,6 +1894,12 @@ jay_negate(jay_value v) {
 }
 OP_ONE(negate)
 
+#ifdef JAY_ASSUME_CORRECT
+
+#define jay_fence_number(v)
+
+#else
+
 static inline
 void 
 jay_fence_number(jay_value v) {
@@ -1901,6 +1907,8 @@ jay_fence_number(jay_value v) {
 		oops("operation expects numerical arguments");
 	}
 }
+
+#endif
 
 /* --- Builtin Functions (e.g. clock) --- */
 
