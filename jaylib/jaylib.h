@@ -1894,6 +1894,14 @@ jay_negate(jay_value v) {
 }
 OP_ONE(negate)
 
+static inline
+void 
+jay_fence_number(jay_value v) {
+	if(!JAY_IS_NUMBER(v)) {
+		oops("operation expects numerical arguments");
+	}
+}
+
 /* --- Builtin Functions (e.g. clock) --- */
 
 static

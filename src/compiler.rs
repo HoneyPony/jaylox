@@ -108,18 +108,11 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 		self.name_set.insert(name.lexeme.clone());
 	}
 
-	fn binary_op(&mut self, into: &mut String, left: &Expr, op: &Token, right: &Expr) -> fmt::Result {
+	fn binary_stackop(&mut self, into: &mut String, left: &Expr, op: &Token, right: &Expr) -> fmt::Result {
 		let fun = match op.typ {
-			Minus => "jay_op_sub",
 			Plus => "jay_op_add",
-			Slash => "jay_op_div",
-			Star => "jay_op_mul",
 			BangEqual => "jay_op_neq",
 			EqualEqual => "jay_op_eq",
-			Greater => "jay_op_gt",
-			GreaterEqual => "jay_op_ge",
-			Less => "jay_op_lt",
-			LessEqual => "jay_op_le",
 			_ => unreachable!()
 		};
 
@@ -129,6 +122,81 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 		write!(into, "{fun}();\n")?;
 
 		Ok(())
+	}
+
+	fn binary_fenceop(&mut self, into: &mut String, left: &Expr, op: &Token, right: &Expr) -> fmt::Result {
+		enum Ty {
+			Number,
+			Bool
+		}
+		
+		let (op, ty, input_ty) = match op.typ {
+			Minus => ("-", Ty::Number, Ty::Number),
+			Slash => ("/",  Ty::Number, Ty::Number),
+			Star => ("*",  Ty::Number, Ty::Number),
+			
+			Greater => (">", Ty::Bool, Ty::Number),
+			GreaterEqual => (">=", Ty::Bool, Ty::Number),
+			Less => ("<", Ty::Bool, Ty::Number),
+			LessEqual => ("<=", Ty::Bool, Ty::Number),
+
+			_ => unreachable!()
+		};
+
+		let (in_ty_lower, in_ty_cap) = match input_ty {
+			Ty::Number => ("number", "NUMBER"),
+			Ty::Bool => ("bool", "BOOL"),
+		};
+
+		let out_ty_lower = match ty {
+			Ty::Number => "number",
+			Ty::Bool => "bool",
+		};
+
+		// TODO: Elide fences
+		let left_fence = true;
+		let right_fence = true;
+
+		// We still use the stack machine for the exprs for now.
+		self.compile_expr(left, into)?;
+		self.compile_expr(right, into)?;
+
+		if left_fence { 
+			self.indent(into);
+			// Fence for the input types
+			writeln!(into, "jay_fence_{in_ty_lower}(jay_stack_ptr[-2]);")?;
+		}
+		if right_fence { 
+			self.indent(into);
+			writeln!(into, "jay_fence_{in_ty_lower}(jay_stack_ptr[-1]);")?;
+		}
+
+		// Now that the types are checked, we can just directly generate the
+		// operation.
+		self.indent(into);
+		writeln!(into,
+			"jay_stack_ptr[-2] = jay_box_{out_ty_lower}(JAY_AS_{in_ty_cap}(jay_stack_ptr[-2]) {op} JAY_AS_{in_ty_cap}(jay_stack_ptr[-1]));")?;
+		
+		// Finally, we have to explicitly pop one of the values.
+		self.indent(into);
+		writeln!(into, "jay_stack_ptr -= 1;")?;
+
+		Ok(())
+	}
+
+	fn binary_op(&mut self, into: &mut String, left: &Expr, op: &Token, right: &Expr) -> fmt::Result {
+		match op.typ {
+			Plus | BangEqual | EqualEqual => {
+				self.binary_stackop(into, left, op, right)
+			}
+
+			Minus | Slash | Star |
+			Greater | GreaterEqual | Less | LessEqual => {
+				self.binary_fenceop(into, left, op, right)
+			}
+
+			_ => unreachable!()
+		}
 	}
 
 	fn compile_expr(&mut self, expr: &Expr, into: &mut String) -> fmt::Result {
