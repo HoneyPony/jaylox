@@ -302,6 +302,9 @@ JAY_MK_BOXER(jay_string*, JAY_STRING, string)
 #define JAY_CLASS        ((uint64_t)0x7ffc000000000003)
 #define JAY_BOUND_METHOD ((uint64_t)0x7ffc000000000004)
 
+// Note: For our version of NaN boxing, we assume that the 3 LSBs of a reference
+// type will all be 0. This is because we align everything to 8-byte boundary.
+
 static inline
 double
 jay_unbox_double(jay_value v) {
