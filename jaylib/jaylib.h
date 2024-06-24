@@ -1441,10 +1441,22 @@ jay_op_invoke(size_t name, size_t arity) {
 static inline
 jay_value
 jay_fun_from(jay_function_impl impl, size_t arity, jay_closure *closure) {
+	struct {
+		size_t count;
+		jay_closure *gc_scope;
+	} locals;
+
+	locals.count = 0;
+	locals.gc_scope = closure;
+
+	jay_push_frame(&locals);
+
 	jay_function *f = jay_gc_alloc(sizeof(*f), JAY_GC_FUNCTION);
 	f->arity = arity;
-	f->closure = closure;
+	f->closure = locals.gc_scope;
 	f->implementation = impl;
+
+	jay_pop_frame();
 
 	return jay_box_function(f);
 }
