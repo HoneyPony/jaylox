@@ -459,6 +459,7 @@ jay_gc_copy_or_forward(void *prev) {
 		jay_object* result;
 		// Return the existing forwarding pointer.
 		memcpy(&result, &previous->gc, sizeof(result));
+		printf("..  forward instance %p -> %p\n", prev, result);
 		return result;
 	}
 
@@ -482,17 +483,27 @@ void
 jay_gc_visit(jay_value *field) {
 	switch(JAY_TAG(*field)) {
 		case JAY_INSTANCE:
+			field->as_instance = jay_gc_copy_or_forward(field->as_instance);
+			break;
 		case JAY_CLASS:
+			field->as_class = jay_gc_copy_or_forward(field->as_class);
+			break;
 		case JAY_FUNCTION:
+			field->as_function = jay_gc_copy_or_forward(field->as_function);
+			break;
 		case JAY_BOUND_METHOD:
+			field->as_bound_method = jay_gc_copy_or_forward(field->as_bound_method);
+			break;
 		case JAY_STRING:
+			field->as_string = jay_gc_copy_or_forward(field->as_string);
+			break;
+
 #ifdef JAY_NAN_BOXING
 #else
-			field->as_object = jay_gc_copy_or_forward(field->as_object);
 #endif
 		default:
 			// No action.
-			;
+			printf(" -- no copying -- \n");
 	}
 }
 
@@ -591,10 +602,10 @@ jay_gc_go() {
 
 	// We visit all roots.
 	for(jay_value *sp = jay_stack; sp != jay_stack_ptr; ++sp) {
-#ifdef JAY_TRACE_GC
+//#ifdef JAY_TRACE_GC
 		printf("gc: visit stack ptr %p -> ", sp);
 		jay_print(*sp);
-#endif
+//#endif
 		jay_gc_visit(sp);
 	}
 
