@@ -503,6 +503,8 @@ jay_gc_trace(jay_object *object) {
 static
 void
 jay_gc_collect() {
+	printf("jay: gc collect!\n");
+
 	// Reset the high pointer and to_space to point to the from_space
 	jay_gc.high_ptr = jay_gc.from_space;
 
@@ -1032,15 +1034,18 @@ jay_op_call_direct(struct jay_function *fun, size_t arity) {
 static inline
 void
 jay_op_call(size_t arity) {
-	jay_value fun_value = jay_pop();
+	// We have to not pop the function pointer yet, as the GC might move it
+	// when we allocate a new instance, etc.
+	jay_value *fun_value = &jay_stack_ptr[-1];
 
-	if(JAY_IS_FUNCTION(fun_value)) {
-		jay_function *fun = JAY_AS_FUNCTION(fun_value);
+	if(JAY_IS_FUNCTION(*fun_value)) {
+		jay_function *fun = JAY_AS_FUNCTION(*fun_value);
+		jay_pop();
 		jay_value result = jay_call(fun, arity);
 		jay_push(result);
 	}
-	else if(JAY_IS_BOUND_METHOD(fun_value)) {
-		jay_bound_method *method = JAY_AS_BOUND_METHOD(fun_value);
+	else if(JAY_IS_BOUND_METHOD(*fun_value)) {
+		jay_bound_method *method = JAY_AS_BOUND_METHOD(*fun_value);
 
 		// For bound methods, push 'this' to the end of the args array
 		// Note: An important semantic point with 'this' is that it can be
@@ -1049,6 +1054,10 @@ jay_op_call(size_t arity) {
 		//
 		// Maybe the compiler can literally just add a 'this' variable to
 		// the array when parsing a function?
+
+		// No possibility of allocation, so pop first.
+
+		jay_pop();
 		jay_push(jay_box_instance(method->this));
 
 		// Note that we add 1 to the passed-in arity. That is, we're expecting
@@ -1063,9 +1072,7 @@ jay_op_call(size_t arity) {
 		);
 		jay_push(result);
 	}
-	else if(JAY_IS_CLASS(fun_value)) {
-		jay_class *class = JAY_AS_CLASS(fun_value);
-
+	else if(JAY_IS_CLASS(*fun_value)) {
 		// We have to push the "this" as the last argument. But, this is calling
 		// "init". So, we actually just create a new instance here. That is,
 		// the caller of a class object is responsible for creating a new 'this'
@@ -1073,7 +1080,10 @@ jay_op_call(size_t arity) {
 		// special-cased, as then it can easily be called again or bound, like
 		// any other class method.
 
-		jay_value new_this = jay_box_instance(jay_new_instance(class));
+		// We have to allocate before popping.
+
+		jay_value new_this = jay_box_instance(jay_new_instance(JAY_AS_CLASS(*fun_value)));
+		jay_class *class = JAY_AS_CLASS(jay_pop());
 		jay_push(new_this);
 
 		jay_value result = jay_call_any(
