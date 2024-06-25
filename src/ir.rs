@@ -6,7 +6,7 @@ use crate::{expr::Expr, scanner::{LoxValue, TokenType}, stmt::Stmt, VarRef};
 #[derive(Clone, Copy, Eq, PartialEq)]
 pub struct Val(usize);
 
-enum Ir {
+pub enum Ir {
 	Binop {
 		output: Val,
 		left: Val,
@@ -49,8 +49,8 @@ enum Ir {
 	Block(Vec<Ir>)
 }
 
-struct IrFunction {
-	code: Vec<Ir>
+pub struct IrFunction {
+	pub code: Vec<Ir>
 }
 
 struct ValInfo {
@@ -64,8 +64,8 @@ struct ValInfo {
 }
 
 pub struct IrCompiler {
-	main: IrFunction,
-	others: Vec<IrFunction>,
+	pub main: IrFunction,
+	pub others: Vec<IrFunction>,
 
 	current_stack: u32,
 
@@ -90,6 +90,19 @@ enum Location {
 }
 
 impl IrCompiler {
+	pub fn new() -> IrCompiler {
+		return IrCompiler {
+			main: IrFunction { code: vec![] },
+
+			others: vec![],
+
+			current_stack: 0,
+			vals: vec![],
+
+			var_vals: HashMap::new()
+		}
+	}
+
 	fn location(&self, val: Val) -> Location {
 		return Location::Floating;
 	}
@@ -314,5 +327,9 @@ impl IrCompiler {
 		}
 
 		return IrFunction { code }
+	}
+
+	pub fn compile(&mut self, program: Vec<Stmt>) {
+		self.main = self.compile_function(&program);
 	}
 }

@@ -12,6 +12,7 @@ use std::process::{exit, Command, Stdio};
 use std::io;
 
 use compiler::Compiler;
+use ir::IrCompiler;
 //use resolver::Resolver;
 use scanner::{Scanner, Token, TokenType};
 use parser::Parser;
@@ -158,6 +159,9 @@ impl Lox {
 		// Don't resolve if we had an error
 		if self.had_error { return Ok(()); }
 
+		let mut ir = IrCompiler::new();
+		ir.compile(program);
+
 		// TODO: Consider using Box<dyn Write> to make this code simpler, and
 		// possibly speed up the compilation of the project a lot.. it's not clear
 		// exactly how much Rust is going to be monomorphizing in Compiler, given
@@ -179,7 +183,7 @@ impl Lox {
 					.expect("Could not spawn 'gcc'.");
 
 				Compiler::new(self, stdin, options.codegen.clone())
-					.compile(&program, globals_count)?;
+					.compile(&ir.main, globals_count)?;
 
 				let ecode = child.wait()?;
 				if !ecode.success() {
@@ -191,11 +195,11 @@ impl Lox {
 			CompileOutput::CFile { path } => {
 				let out_file = File::create(path)?;
 				Compiler::new(self, out_file, options.codegen.clone())
-				.compile(&program, globals_count)
+				.compile(&ir.main, globals_count)
 			},
 			CompileOutput::StandardOut => {
 				Compiler::new(self, std::io::stdout(), options.codegen.clone())
-					.compile(&program, globals_count)
+					.compile(&ir.main, globals_count)
 			}
 		}
 	}
