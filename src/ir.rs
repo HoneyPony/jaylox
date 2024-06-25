@@ -1,8 +1,10 @@
-use crate::{expr::Expr, scanner::TokenType, stmt::Stmt};
+use std::collections::HashMap;
+
+use crate::{expr::Expr, scanner::{LoxValue, TokenType}, stmt::Stmt, VarRef};
 
 
 #[derive(Clone, Copy, Eq, PartialEq)]
-pub struct Val(u64);
+pub struct Val(usize);
 
 enum Ir {
 	Binop {
@@ -27,18 +29,49 @@ enum Ir {
 
 		then_branch: Vec<Ir>,
 		else_branch: Vec<Ir>,
-	}
+	},
+
+	Print {
+		input: Val
+	},
+
+	Literal {
+		output: Val,
+		literal: LoxValue,
+	},
+
+	Assign {
+		output: Val,
+		identity: VarRef,
+		value: Val,
+	},
+
+	Block(Vec<Ir>)
 }
 
 struct IrFunction {
 	code: Vec<Ir>
 }
 
+struct ValInfo {
+	location: Location,
+
+	// How many values will be popped off the stack after this operation.
+	pop: Option<u32>,
+
+	// Only relevant to Location::Stack. Kept separate for convenience...
+	stack_index: u32,
+}
+
 pub struct IrCompiler {
 	main: IrFunction,
 	others: Vec<IrFunction>,
 
-	current_stack: u32
+	current_stack: u32,
+
+	vals: Vec<ValInfo>,
+
+	var_vals: HashMap<VarRef, Val>,
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -51,6 +84,9 @@ enum Location {
 
 	// Anchored: Something like locals.at[0]
 	Anchored,
+
+	// The computed value is unused (only side effects)
+	None,
 }
 
 impl IrCompiler {
@@ -67,14 +103,74 @@ impl IrCompiler {
 		return Location::Floating;
 	}
 
+	/// If the given location is Stack, then return Stack, otherwise return
+	/// Floating. This lets us easily have stack-based operations remain
+	/// stack-based.
+	fn location_follow(&self, a: Val) -> Location {
+		if self.location(a) == Location::Stack { return Location::Stack; }
+		return Location::Floating;
+	}
+
 	fn new_location(&mut self, location: Location) -> Val {
-		return Val(0);
+		let index = self.vals.len();
+
+		let mut info = ValInfo {
+			location,
+			pop: None,
+			stack_index: 0
+		};
+
+		if location == Location::Stack {
+			self.current_stack += 1;
+			info.stack_index = self.current_stack;
+		}
+
+		self.vals.push(info);
+
+		return Val(index);
+	}
+
+	fn var_location(&mut self, var: VarRef) -> Val {
+		if let Some(val) = self.var_vals.get(&var) {
+			return *val;
+		}
+
+		let val = self.new_location(Location::Anchored);
+		self.var_vals.insert(var, val);
+
+		return val;
 	}
 
 	// Given the specified Val, ensures that its entire evaluation stack is
-	// popped and then that value is pushed.
-	fn collapse(&mut self, val: Val) {
+	// popped and then that value is pushed. Note: MUST be called BEFORE
+	// any other locations are generated with new_location.
+	fn collapse(&mut self) {
+		let info = unsafe { self.vals.last_mut().unwrap_unchecked() };
 
+		if info.location != Location::Stack {
+			// Only safe because we're modifying the last generated element.
+			info.location = Location::Stack;
+			self.current_stack += 1;
+			info.stack_index = self.current_stack;
+		}
+
+		info.pop = Some(self.current_stack);
+
+		self.current_stack = 0;
+	}
+
+	fn remove_output(&mut self, val: Val) {
+		let info = unsafe { self.vals.get_unchecked_mut(val.0) };
+
+		info.location = Location::None;
+	}
+
+	fn synthesize_nil(&mut self, into: &mut Vec<Ir>) -> Val {
+		let output = self.new_location(Location::Floating);
+		let literal = LoxValue::Nil;
+		into.push(Ir::Literal { output, literal });
+
+		return output;
 	}
 
 	fn compile_expr(&mut self, into: &mut Vec<Ir>, expr: &Expr) -> Val {
@@ -97,7 +193,7 @@ impl IrCompiler {
 			Expr::Call { callee, paren, arguments } => {
 				for param in arguments {
 					let val = self.compile_expr(into, param);
-					self.collapse(val);
+					self.collapse();
 				}
 
 				let callee = self.compile_expr(into, callee);
@@ -109,15 +205,35 @@ impl IrCompiler {
 				return output;
 			},
 			Expr::Get { object, name } => todo!(),
-			Expr::Grouping(_) => todo!(),
-			Expr::Literal(_) => todo!(),
+			Expr::Grouping(inner) => {
+				return self.compile_expr(into, expr);
+			},
+			Expr::Literal(literal) => {
+				let output = self.new_location(Location::Floating);
+
+				into.push(Ir::Literal { output, literal: literal.clone() });
+
+				return output;
+			},
 			Expr::Logical { left, operator, right } => todo!(),
 			Expr::Set { object, name, value } => todo!(),
 			Expr::Super { keyword, method, identity, this_identity } => todo!(),
-			Expr::This { keyword, identity } => todo!(),
+			Expr::This { keyword, identity } => {
+				return self.var_location(*identity);
+			},
 			Expr::Unary { operator, right } => todo!(),
-			Expr::Variable { name, identity } => todo!(),
-			Expr::Assign { name, value, identity } => todo!(),
+			Expr::Variable { name, identity } => {
+				return self.var_location(*identity);
+			},
+			Expr::Assign { name, value, identity } => {
+				let value = self.compile_expr(into, value);
+
+				let output = self.new_location(self.location_follow(value));
+
+				into.push(Ir::Assign { output, identity: *identity, value });
+
+				return output;
+			},
 		}
 	}
 
@@ -143,9 +259,23 @@ impl IrCompiler {
 
 	fn compile_stmt(&mut self, into: &mut Vec<Ir>, stmt: &Stmt) {
 		match stmt {
-			Stmt::Block(_) => todo!(),
+			Stmt::Block(inner) => {
+				let mut code = vec![];
+
+				for stmt in inner {
+					self.compile_stmt(&mut code, stmt);
+				}
+
+				into.push(Ir::Block(code));
+			},
 			Stmt::Class(_) => todo!(),
-			Stmt::Expression(_) => todo!(),
+			Stmt::Expression(expr) => {
+				let input = self.compile_expr(into, expr);
+
+				self.remove_output(input);
+
+				// No IR gen needed.
+			},
 			Stmt::ExternFunction { var_name, c_name, arity, identity } => todo!(),
 			Stmt::Function(_) => todo!(),
 			Stmt::If { condition, then_branch, else_branch } => {
@@ -156,9 +286,22 @@ impl IrCompiler {
 
 				into.push(Ir::If { input, then_branch, else_branch });
 			},
-			Stmt::Print(_) => todo!(),
+			Stmt::Print(expr) => {
+				let input = self.compile_expr(into, expr);
+
+				into.push(Ir::Print { input });
+			},
 			Stmt::Return { keyword, value } => todo!(),
-			Stmt::Var { name, initializer, identity } => todo!(),
+			Stmt::Var { name, initializer, identity } => {
+				let value = match initializer {
+					Some(init) => self.compile_expr(into, init),
+					None => self.synthesize_nil(into)
+				};
+
+				let output = self.new_location(Location::None);
+
+				into.push(Ir::Assign { output, identity: *identity, value });
+			},
 			Stmt::While { condition, body } => todo!(),
 		}
 	}
