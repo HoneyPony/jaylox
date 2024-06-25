@@ -2,7 +2,7 @@ use core::fmt;
 use std::collections::HashMap;
 use std::{collections::HashSet, fmt::Write};
 
-use crate::ir::{Ir, IrCompiler, IrFunction, IrVals};
+use crate::ir::{Ir, IrCompiler, IrFunction, IrVals, Location, Val};
 use crate::stmt::{Class, Function};
 use crate::{CodegenOptions, VarRef};
 use crate::{expr::Expr, scanner::Token, stmt::Stmt, Lox};
@@ -23,6 +23,8 @@ pub struct Compiler<'a, Writer: std::io::Write> {
 	name_set: HashSet<String>,
 
 	current_indent: i32,
+
+	floating: HashMap<Val, String>,
 
 	/// Tracks whether we currently have a 'locals' frame (wrt 'return' statements.)
 	has_locals_frame: bool,
@@ -57,6 +59,8 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 			function_defs: Vec::new(),
 			name_set: HashSet::new(),
 			current_indent: 0,
+
+			floating: HashMap::new(),
 
 			// The main function has no locals frame or captures frame.
 			has_locals_frame: false,
@@ -188,6 +192,64 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 		}
 	}
 
+	// The thing to remember when compiling IR is that, if something is on
+	// the stack, we already pushed the corresponding Ir instruction on the stack.
+	//
+	// So, for example, in Ir::Assign, we don't need to try to compile the
+	// 'output' expression or 'value' expression. Instead, we generate the code
+	// to assign identity, based on our output.
+	//
+	// In particular, if our output is "stack", we go on to the jay_stack.
+	// Otherwise, we are generated as floating.
+
+	fn to_output(&mut self, val: Val, codegen: String, into: &mut String) -> fmt::Result {
+		let location = self.vals.get_location(val);
+		match location {
+			Location::Floating => {
+				self.floating.insert(val, codegen);
+			},
+			Location::Stack => {
+				self.indent(into);
+				writeln!(into, "jay_stack_ptr[-{}] = ({});", codegen)?;
+			},
+			Location::Anchored(_) => {
+				// I believe this doesn't make sense.
+				// Maybe in cases where we want to elide a jay_push/jay_pop for
+				// adds..?
+				panic!("Output should not be anchored");
+			},
+			Location::None => {
+				// Nothing
+			},
+		}
+
+		Ok(())
+	}
+
+	fn get_input(&self, val: Val, into: &mut String) -> fmt::Result {
+		let location = self.vals.get_location(val);
+		match location {
+			Location::Floating => {
+				self.floating.insert(val, codegen);
+			},
+			Location::Stack => {
+				self.indent(into);
+				writeln!(into, "jay_push({});", codegen)?;
+			},
+			Location::Anchored(_) => {
+				// I believe this doesn't make sense.
+				// Maybe in cases where we want to elide a jay_push/jay_pop for
+				// adds..?
+				panic!("Output should not be anchored");
+			},
+			Location::None => {
+				// Nothing
+			},
+		}
+
+		Ok(())
+	}
+
 	fn compile_ir(&mut self, ir: &Ir, into: &mut String) -> fmt::Result {
 		match ir {
 			Ir::Binop { output, left, right, op } => todo!(),
@@ -196,8 +258,22 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 			Ir::If { input, then_branch, else_branch } => todo!(),
 			Ir::Print { input } => todo!(),
 			Ir::Literal { output, literal } => todo!(),
-			Ir::Assign { output, identity, value } => todo!(),
-			Ir::Block(_) => todo!(),
+			Ir::Assign { output, identity, value } => {
+				let mut codegen = String::new();
+				self.compile_var(identity, &codegen);
+				write!(codegen, " = {}")
+			},
+			Ir::Block(block) => {
+				self.indent(into);
+				writeln!(into, "{{")?;
+
+				self.push_indent();
+				self.compile_ir_block(block, into)?;
+				self.pop_indent();
+
+				self.indent(into);
+				writeln!(into, "}}")?;
+			},
 		}
 
 		Ok(())

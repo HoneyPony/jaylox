@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::{expr::Expr, scanner::{LoxValue, TokenType}, stmt::Stmt, VarRef};
 
 
-#[derive(Clone, Copy, Eq, PartialEq)]
+#[derive(Clone, Copy, Eq, PartialEq, Hash)]
 pub struct Val(usize);
 
 pub enum Ir {
@@ -83,10 +83,14 @@ impl IrVals {
 			var_vals: HashMap::new(),
 		}
 	}
+
+	pub fn get_location(&self, val: Val) -> Location {
+		unsafe { self.vals.get_unchecked(val.0).location }
+	}
 }
 
 #[derive(Clone, Copy, PartialEq)]
-enum Location {
+pub enum Location {
 	// Floating: A completely temporary expression.
 	Floating,
 
@@ -94,7 +98,7 @@ enum Location {
 	Stack,
 
 	// Anchored: Something like locals.at[0]
-	Anchored,
+	Anchored(VarRef),
 
 	// The computed value is unused (only side effects)
 	None,
@@ -156,7 +160,7 @@ impl IrCompiler {
 			return *val;
 		}
 
-		let val = self.new_location(Location::Anchored);
+		let val = self.new_location(Location::Anchored(var));
 		self.vals.var_vals.insert(var, val);
 
 		return val;
