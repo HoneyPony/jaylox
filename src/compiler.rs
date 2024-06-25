@@ -2,7 +2,7 @@ use core::fmt;
 use std::collections::HashMap;
 use std::{collections::HashSet, fmt::Write};
 
-use crate::ir::{Ir, IrCompiler, IrFunction};
+use crate::ir::{Ir, IrCompiler, IrFunction, IrVals};
 use crate::stmt::{Class, Function};
 use crate::{CodegenOptions, VarRef};
 use crate::{expr::Expr, scanner::Token, stmt::Stmt, Lox};
@@ -45,10 +45,12 @@ pub struct Compiler<'a, Writer: std::io::Write> {
 	writer: Writer,
 
 	opt: CodegenOptions,
+
+	vals: IrVals,
 }
 
 impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
-	pub fn new(lox: &'a mut Lox, writer: Writer, opt: CodegenOptions) -> Self {
+	pub fn new(lox: &'a mut Lox, vals: IrVals, writer: Writer, opt: CodegenOptions) -> Self {
 		return Compiler {
 			lox,
 			prelude: String::new(),
@@ -66,7 +68,9 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 
 			writer,
 
-			opt
+			opt,
+
+			vals
 		}
 	}
 
@@ -185,6 +189,17 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 	}
 
 	fn compile_ir(&mut self, ir: &Ir, into: &mut String) -> fmt::Result {
+		match ir {
+			Ir::Binop { output, left, right, op } => todo!(),
+			Ir::This { output } => todo!(),
+			Ir::Call { output, callee, arity } => todo!(),
+			Ir::If { input, then_branch, else_branch } => todo!(),
+			Ir::Print { input } => todo!(),
+			Ir::Literal { output, literal } => todo!(),
+			Ir::Assign { output, identity, value } => todo!(),
+			Ir::Block(_) => todo!(),
+		}
+
 		Ok(())
 	}
 
@@ -271,7 +286,7 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 		Ok(main_fn)
 	}
 
-	pub fn compile(&mut self, fun: &IrFunction, globals_count: u32) -> std::io::Result<()> {
+	pub fn compile(&mut self, main: &IrFunction, globals_count: u32) -> std::io::Result<()> {
 		// We use write! a lot and so get fmt::Result, but most of the compilation
 		// process should not fail (unless we OOM or something). By contrast, it
 		// is very possible that, while writing out to the self.writer, there is
@@ -280,7 +295,7 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 		// So, wrap all of the compiling-to-buffers in its own function, and assume
 		// that it almost certainly won't error. Then, the error from writing to
 		// self.writer can be returned to the caller.
-		let main_fn = match self.compile_to_buffers(fun, globals_count) {
+		let main_fn = match self.compile_to_buffers(main, globals_count) {
 			Ok(main_fn) => main_fn,
 			Err(err) => {
 				panic!("Compiler error while writing to buffers: {}", err);

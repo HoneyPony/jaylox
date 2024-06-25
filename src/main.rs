@@ -159,8 +159,10 @@ impl Lox {
 		// Don't resolve if we had an error
 		if self.had_error { return Ok(()); }
 
-		let mut ir = IrCompiler::new();
-		ir.compile(program);
+		let (main, vals) = {
+			let mut ir = IrCompiler::new();
+			ir.compile(program)
+		};
 
 		// TODO: Consider using Box<dyn Write> to make this code simpler, and
 		// possibly speed up the compilation of the project a lot.. it's not clear
@@ -182,8 +184,8 @@ impl Lox {
 				let stdin = child.stdin.take()
 					.expect("Could not spawn 'gcc'.");
 
-				Compiler::new(self, stdin, options.codegen.clone())
-					.compile(&ir.main, globals_count)?;
+				Compiler::new(self, vals, stdin, options.codegen.clone())
+					.compile(&main, globals_count)?;
 
 				let ecode = child.wait()?;
 				if !ecode.success() {
@@ -194,12 +196,12 @@ impl Lox {
 			},
 			CompileOutput::CFile { path } => {
 				let out_file = File::create(path)?;
-				Compiler::new(self, out_file, options.codegen.clone())
-				.compile(&ir.main, globals_count)
+				Compiler::new(self, vals, out_file, options.codegen.clone())
+				.compile(&main, globals_count)
 			},
 			CompileOutput::StandardOut => {
-				Compiler::new(self, std::io::stdout(), options.codegen.clone())
-					.compile(&ir.main, globals_count)
+				Compiler::new(self, vals, std::io::stdout(), options.codegen.clone())
+					.compile(&main, globals_count)
 			}
 		}
 	}

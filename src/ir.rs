@@ -65,13 +65,24 @@ struct ValInfo {
 
 pub struct IrCompiler {
 	pub main: IrFunction,
-	pub others: Vec<IrFunction>,
 
 	current_stack: u32,
 
-	vals: Vec<ValInfo>,
+	pub vals: IrVals,
+}
 
-	var_vals: HashMap<VarRef, Val>,
+pub struct IrVals {
+	pub vals: Vec<ValInfo>,
+	pub var_vals: HashMap<VarRef, Val>,
+}
+
+impl IrVals {
+	pub fn new() -> Self {
+		return IrVals {
+			vals: vec![],
+			var_vals: HashMap::new(),
+		}
+	}
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -94,12 +105,9 @@ impl IrCompiler {
 		return IrCompiler {
 			main: IrFunction { code: vec![] },
 
-			others: vec![],
-
 			current_stack: 0,
-			vals: vec![],
-
-			var_vals: HashMap::new()
+			
+			vals: IrVals::new(),
 		}
 	}
 
@@ -125,7 +133,7 @@ impl IrCompiler {
 	}
 
 	fn new_location(&mut self, location: Location) -> Val {
-		let index = self.vals.len();
+		let index = self.vals.vals.len();
 
 		let mut info = ValInfo {
 			location,
@@ -138,18 +146,18 @@ impl IrCompiler {
 			info.stack_index = self.current_stack;
 		}
 
-		self.vals.push(info);
+		self.vals.vals.push(info);
 
 		return Val(index);
 	}
 
 	fn var_location(&mut self, var: VarRef) -> Val {
-		if let Some(val) = self.var_vals.get(&var) {
+		if let Some(val) = self.vals.var_vals.get(&var) {
 			return *val;
 		}
 
 		let val = self.new_location(Location::Anchored);
-		self.var_vals.insert(var, val);
+		self.vals.var_vals.insert(var, val);
 
 		return val;
 	}
@@ -158,7 +166,7 @@ impl IrCompiler {
 	// popped and then that value is pushed. Note: MUST be called BEFORE
 	// any other locations are generated with new_location.
 	fn collapse(&mut self) {
-		let info = unsafe { self.vals.last_mut().unwrap_unchecked() };
+		let info = unsafe { self.vals.vals.last_mut().unwrap_unchecked() };
 
 		if info.location != Location::Stack {
 			// Only safe because we're modifying the last generated element.
@@ -173,7 +181,7 @@ impl IrCompiler {
 	}
 
 	fn remove_output(&mut self, val: Val) {
-		let info = unsafe { self.vals.get_unchecked_mut(val.0) };
+		let info = unsafe { self.vals.vals.get_unchecked_mut(val.0) };
 
 		info.location = Location::None;
 	}
@@ -329,7 +337,9 @@ impl IrCompiler {
 		return IrFunction { code }
 	}
 
-	pub fn compile(&mut self, program: Vec<Stmt>) {
+	pub fn compile(mut self, program: Vec<Stmt>) -> (IrFunction, IrVals) {
 		self.main = self.compile_function(&program);
+
+		return (self.main, self.vals);
 	}
 }
