@@ -8,6 +8,28 @@ use crate::{expr::Expr, scanner::Token, stmt::Stmt, Lox};
 use crate::scanner::{LoxValue, TokenType};
 use crate::scanner::TokenType::*;
 
+macro_rules! inf_write {
+	($into:expr, $($arg:tt)*) => {
+		match write!($into, $($arg)*) {
+			Ok(_) => {},
+			Err(_) => {
+				panic!("compiler: 'infallible' write to buffer failed");
+			}
+		}
+	}
+}
+
+macro_rules! inf_writeln {
+	($into:expr, $($arg:tt)*) => {
+		match writeln!($into, $($arg)*) {
+			Ok(_) => {},
+			Err(_) => {
+				panic!("compiler: 'infallible' write to buffer failed");
+			}
+		}
+	}
+}
+
 
 pub struct Compiler<'a, Writer: std::io::Write> {
 	pub lox: &'a mut Lox,
@@ -108,7 +130,7 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 		self.name_set.insert(name.lexeme.clone());
 	}
 
-	fn binary_stackop(&mut self, into: &mut String, left: &Expr, op: &Token, right: &Expr) -> fmt::Result {
+	fn binary_stackop(&mut self, into: &mut String, left: &Expr, op: &Token, right: &Expr) {
 		let fun = match op.typ {
 			Plus => "jay_op_add",
 			BangEqual => "jay_op_neq",
@@ -116,12 +138,10 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 			_ => unreachable!()
 		};
 
-		self.compile_expr(left, into)?;
-		self.compile_expr(right, into)?;
+		self.compile_expr(left, into);
+		self.compile_expr(right, into);
 		self.indent(into);
-		write!(into, "{fun}();\n")?;
-
-		Ok(())
+		inf_write!(into, "{fun}();\n");
 	}
 
 	fn op_needs_numerical_fence(expr: &Expr) -> bool {
@@ -169,7 +189,7 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 		}
 	}
 
-	fn binary_fenceop(&mut self, into: &mut String, left: &Expr, op: &Token, right: &Expr) -> fmt::Result {
+	fn binary_fenceop(&mut self, into: &mut String, left: &Expr, op: &Token, right: &Expr) {
 		enum Ty {
 			Number,
 			Bool
@@ -202,33 +222,31 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 		let right_fence = Self::op_needs_numerical_fence(right);
 
 		// We still use the stack machine for the exprs for now.
-		self.compile_expr(left, into)?;
-		self.compile_expr(right, into)?;
+		self.compile_expr(left, into);
+		self.compile_expr(right, into);
 
 		if left_fence { 
 			self.indent(into);
 			// Fence for the input types
-			writeln!(into, "jay_fence_{in_ty_lower}(jay_stack_ptr[-2]);")?;
+			inf_writeln!(into, "jay_fence_{in_ty_lower}(jay_stack_ptr[-2]);");
 		}
 		if right_fence { 
 			self.indent(into);
-			writeln!(into, "jay_fence_{in_ty_lower}(jay_stack_ptr[-1]);")?;
+			inf_writeln!(into, "jay_fence_{in_ty_lower}(jay_stack_ptr[-1]);");
 		}
 
 		// Now that the types are checked, we can just directly generate the
 		// operation.
 		self.indent(into);
-		writeln!(into,
-			"jay_stack_ptr[-2] = jay_box_{out_ty_lower}(JAY_AS_{in_ty_cap}(jay_stack_ptr[-2]) {op} JAY_AS_{in_ty_cap}(jay_stack_ptr[-1]));")?;
+		inf_writeln!(into,
+			"jay_stack_ptr[-2] = jay_box_{out_ty_lower}(JAY_AS_{in_ty_cap}(jay_stack_ptr[-2]) {op} JAY_AS_{in_ty_cap}(jay_stack_ptr[-1]));");
 		
 		// Finally, we have to explicitly pop one of the values.
 		self.indent(into);
-		writeln!(into, "jay_stack_ptr -= 1;")?;
-
-		Ok(())
+		inf_writeln!(into, "jay_stack_ptr -= 1;");
 	}
 
-	fn binary_op(&mut self, into: &mut String, left: &Expr, op: &Token, right: &Expr) -> fmt::Result {
+	fn binary_op(&mut self, into: &mut String, left: &Expr, op: &Token, right: &Expr) {
 		match op.typ {
 			Plus | BangEqual | EqualEqual => {
 				self.binary_stackop(into, left, op, right)
@@ -243,63 +261,59 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 		}
 	}
 
-	fn compile_literal_inline(&mut self, into: &mut String, lit: &LoxValue) -> fmt::Result {
+	fn compile_literal_inline(&mut self, into: &mut String, lit: &LoxValue) {
 		match lit {
 			LoxValue::Nil => into.push_str("jay_box_nil()"),
 			LoxValue::String(ptr) => {
 				// String constants are looked up inside a global array, so
 				// that we only have to initialize them once.
-				write!(into, "global_string_constants[{}]", ptr.to_number())?;
+				inf_write!(into, "global_string_constants[{}]", ptr.to_number());
 			},
-			LoxValue::Number(value) => write!(into, "jay_box_number({value})")?,
-			LoxValue::Bool(value) => write!(into, "jay_box_bool({value})")?,
+			LoxValue::Number(value) => inf_write!(into, "jay_box_number({value})"),
+			LoxValue::Bool(value) => inf_write!(into, "jay_box_bool({value})"),
 		}
-
-		Ok(())
 	}
 
-	fn compile_assign(&mut self, into: &mut String, value: &Expr, identity: &VarRef, do_push: bool) -> fmt::Result {
+	fn compile_assign(&mut self, into: &mut String, value: &Expr, identity: &VarRef, do_push: bool) {
 		match value {
 			Expr::Literal(_) | Expr::Variable { .. } => {},
 			_ => {
 				// If it's a literal or variable, we don't need the expr pushed.
 				// TODO: Build a better optimizer that doesn't need all these
 				// separate checks...
-				self.compile_expr(value, into)?;
+				self.compile_expr(value, into);
 			}
 		}
 		self.indent(into);
 		if do_push {
-			write!(into, "jay_push(")?;
+			inf_write!(into, "jay_push(");
 		}
-		self.compile_var(*identity, into)?;
+		self.compile_var(*identity, into);
 		match value {
 			Expr::Literal(value) => {
-				write!(into, " = ")?;
-				self.compile_literal_inline(into, value)?;
+				inf_write!(into, " = ");
+				self.compile_literal_inline(into, value);
 			},
 			Expr::Variable { identity, .. } => {
-				write!(into, " = ")?;
-				self.compile_var(*identity, into)?;
+				inf_write!(into, " = ");
+				self.compile_var(*identity, into);
 			},
 
 			// For non-special cased assignments, just pop.
 			_ => {
-				write!(into, " = jay_pop()")?;
+				inf_write!(into, " = jay_pop()");
 			}
 		}
 		if do_push {
-			write!(into, ")")?;
+			inf_write!(into, ")");
 		}
-		write!(into, ";\n")?;
-
-		Ok(())
+		inf_write!(into, ";\n");
 	}
 
-	fn compile_expr(&mut self, expr: &Expr, into: &mut String) -> fmt::Result {
+	fn compile_expr(&mut self, expr: &Expr, into: &mut String) {
 		match expr {
 			Expr::Binary { left, operator, right } => {
-				self.binary_op(into, left, operator, right)?;
+				self.binary_op(into, left, operator, right);
 			},
 			Expr::Call { callee, arguments, .. } => {
 				// Push all args, push the callee, then do jay_op_call.
@@ -307,37 +321,37 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 				// arguments, no matter what kind of call/invoke we do. They
 				// all need the arguments pushed onto the stack as such.
 				for arg in arguments {
-					self.compile_expr(arg, into)?;
+					self.compile_expr(arg, into);
 				}
 
 				match callee.as_ref() {
 					// If the callee is a Get, then instead of making a new bound
 					// method, do an invoke
 					Expr::Get { object, name } => {
-						self.compile_expr(object, into)?;
+						self.compile_expr(object, into);
 
 						self.add_name(name);
 						self.indent(into);
-						write!(into, "jay_op_invoke(NAME_{}, {});\n",
-							name.lexeme, arguments.len())?;
+						inf_write!(into, "jay_op_invoke(NAME_{}, {});\n",
+							name.lexeme, arguments.len());
 					}
 					// For superclass calls, use invoke_super
 					Expr::Super { method, identity, this_identity, .. } => {
 						self.add_name(method);
 						self.indent(into);
-						write!(into, "jay_op_invoke_super(")?;
-						self.compile_var(*this_identity, into)?;
-						write!(into, ", NAME_{}, ", method.lexeme)?;
-						self.compile_var(*identity, into)?;
-						writeln!(into, ", {});", arguments.len())?;
+						inf_write!(into, "jay_op_invoke_super(");
+						self.compile_var(*this_identity, into);
+						inf_write!(into, ", NAME_{}, ", method.lexeme);
+						self.compile_var(*identity, into);
+						inf_writeln!(into, ", {});", arguments.len());
 					},
 					// For regular calls, just compile the inner expression,
 					// and then do a normal call.
 					_ => {
-						self.compile_expr(callee, into)?;
+						self.compile_expr(callee, into);
 
 						self.indent(into);
-						write!(into, "jay_op_call({});\n", arguments.len())?;
+						inf_write!(into, "jay_op_call({});\n", arguments.len());
 					}
 				}
 				
@@ -345,13 +359,13 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 				
 			},
 			Expr::Grouping(inner) => {
-				self.compile_expr(inner, into)?;
+				self.compile_expr(inner, into);
 			},
 			Expr::Literal(value) => {
 				self.indent(into);
-				write!(into, "jay_push(")?;
-				self.compile_literal_inline(into, value)?;
-				write!(into, ");\n")?;
+				inf_write!(into, "jay_push(");
+				self.compile_literal_inline(into, value);
+				inf_write!(into, ");\n");
 			},
 			Expr::Logical { left, operator, right } => {
 				// We must implement the short-circuiting semantic. This is actually
@@ -375,23 +389,23 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 				};
 
 				// First, generate the left expression.
-				self.compile_expr(left, into)?;
+				self.compile_expr(left, into);
 				// Check if the left expression should short-circuit.
 				self.indent(into);
-				write!(into, "if({}jay_truthy(jay_top())) {{\n", invert)?;
+				inf_write!(into, "if({}jay_truthy(jay_top())) {{\n", invert);
 
 				self.push_indent();
 
 				// If it's not short-circuiting, pop it, then evaluate the right 
 				// expression (and leave it on top of the stack).
 				self.indent(into);
-				write!(into, "jay_pop();\n")?;
+				inf_write!(into, "jay_pop();\n");
 
-				self.compile_expr(right, into)?;
+				self.compile_expr(right, into);
 				self.pop_indent();
 				
 				self.indent(into);
-				write!(into, "}}\n")?;
+				inf_write!(into, "}}\n");
 
 				// Done!
 			},
@@ -407,54 +421,54 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 						// TODO: If we ever add bounds checking, we will need
 						// to do it here.
 						self.indent(into);
-						writeln!(into, "jay_stack_ptr += 1;")?;
+						inf_writeln!(into, "jay_stack_ptr += 1;");
 					},
 					_ => {
 						// Generate a fence for non-This objects. Also,
 						// don't compile the inner expr for This objects.
-						self.compile_expr(object, into)?;
+						self.compile_expr(object, into);
 
 						self.indent(into);
-						writeln!(into, "jay_fence_get(jay_stack_ptr[-1]);")?;
+						inf_writeln!(into, "jay_fence_get(jay_stack_ptr[-1]);");
 					}
 				};
 
 				self.add_name(name);
 				self.indent(into);
 
-				write!(into, "jay_stack_ptr[-1] = ")?;
+				inf_write!(into, "jay_stack_ptr[-1] = ");
 
 				match object.as_ref() {
 					Expr::This { identity, .. } => {
 						// We know that 'this' is always an instance.
 						// TODO: Maybe generate a 'const pointer' 'this' that
 						// we can just reference directly..?
-						write!(into, "jay_get_instance(JAY_AS_INSTANCE(")?;
-						self.compile_var(*identity, into)?;
-						write!(into, "), NAME_{});\n", name.lexeme)?;
+						inf_write!(into, "jay_get_instance(JAY_AS_INSTANCE(");
+						self.compile_var(*identity, into);
+						inf_write!(into, "), NAME_{});\n", name.lexeme);
 					},
 					_ => {
-						write!(into, "jay_get_instance(JAY_AS_INSTANCE(jay_stack_ptr[-1]), NAME_{});\n", name.lexeme)?;
+						inf_write!(into, "jay_get_instance(JAY_AS_INSTANCE(jay_stack_ptr[-1]), NAME_{});\n", name.lexeme);
 					}
 				}
 			},
 			Expr::Set { object, name, value } => {
-				self.compile_expr(value, into)?;
+				self.compile_expr(value, into);
 
 				match object.as_ref() {
 					Expr::This { .. } => {
 						// Make one extra spot on the stack ptr for the following
 						// arithmetic.
 						self.indent(into);
-						writeln!(into, "jay_stack_ptr += 1;")?;
+						inf_writeln!(into, "jay_stack_ptr += 1;");
 					},
 					_ => {
 						// Generate a fence for non-This objects. Also,
 						// don't compile the inner expr for This objects.
-						self.compile_expr(object, into)?;
+						self.compile_expr(object, into);
 
 						self.indent(into);
-						writeln!(into, "jay_fence_set(jay_stack_ptr[-1]);")?;
+						inf_writeln!(into, "jay_fence_set(jay_stack_ptr[-1]);");
 					}
 				}
 
@@ -462,25 +476,25 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 				self.indent(into);
 
 				// Write to -2 because the set expression takes 2 args.
-				write!(into, "jay_stack_ptr[-2] = ")?;
+				inf_write!(into, "jay_stack_ptr[-2] = ");
 
 				match object.as_ref() {
 					Expr::This { identity, .. } => {
 						// We know that 'this' is always an instance.
 						// TODO: Maybe generate a 'const pointer' 'this' that
 						// we can just reference directly..?
-						write!(into, "jay_set_instance(JAY_AS_INSTANCE(")?;
-						self.compile_var(*identity, into)?;
-						write!(into, "), NAME_{}, jay_stack_ptr[-2]);\n", name.lexeme)?;
+						inf_write!(into, "jay_set_instance(JAY_AS_INSTANCE(");
+						self.compile_var(*identity, into);
+						inf_write!(into, "), NAME_{}, jay_stack_ptr[-2]);\n", name.lexeme);
 					},
 					_ => {
-						write!(into, "jay_set_instance(JAY_AS_INSTANCE(jay_stack_ptr[-1]), NAME_{}, jay_stack_ptr[-2]);\n", name.lexeme)?;
+						inf_write!(into, "jay_set_instance(JAY_AS_INSTANCE(jay_stack_ptr[-1]), NAME_{}, jay_stack_ptr[-2]);\n", name.lexeme);
 					}
 				}
 
 				// Decrement stack pointer.
 				self.indent(into);
-				write!(into, "jay_stack_ptr -= 1;")?;
+				inf_write!(into, "jay_stack_ptr -= 1;");
 			},
 			Expr::Super { method, identity, this_identity, .. } => {
 				// Super is a little unique in that it is one of the only
@@ -497,11 +511,11 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 
 				self.add_name(method);
 				self.indent(into);
-				write!(into, "jay_op_get_super(")?;
-				self.compile_var(*this_identity, into)?;
-				write!(into, ", NAME_{}, ", method.lexeme)?;
-				self.compile_var(*identity, into)?;
-				writeln!(into, ");")?;
+				inf_write!(into, "jay_op_get_super(");
+				self.compile_var(*this_identity, into);
+				inf_write!(into, ", NAME_{}, ", method.lexeme);
+				self.compile_var(*identity, into);
+				inf_writeln!(into, ");");
 			},
 			Expr::Unary { operator, right } => {
 				let op = match operator.typ {
@@ -511,33 +525,31 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 				};
 
 				self.indent(into);
-				self.compile_expr(right, into)?;
-				write!(into, "{op}();\n")?;
+				self.compile_expr(right, into);
+				inf_write!(into, "{op}();\n");
 			},
 			// Variables and This are essentially equivalent. Actually... I guess we could
 			// scrap Expr::This, and then just generate Expr::Variable in its place...
 			Expr::Variable { identity, .. } | Expr::This { identity, .. } => {
 				self.indent(into);
-				write!(into, "jay_push(")?;
-				self.compile_var(*identity, into)?;
-				write!(into, ");\n")?;
+				inf_write!(into, "jay_push(");
+				self.compile_var(*identity, into);
+				inf_write!(into, ");\n");
 			},
 			Expr::Assign { value, identity, .. } => {
 				// For exprs, we have to push, in case the value is needed.
-				self.compile_assign(into, value, identity, true)?;
+				self.compile_assign(into, value, identity, true);
 			},
 		}
-
-		Ok(())
 	}
 
-	fn compile_var(&mut self, var: VarRef, into: &mut String) -> fmt::Result {
+	fn compile_var(&mut self, var: VarRef, into: &mut String) {
 		match self.lox.get_var_type(var) {
 			crate::VarType::Local => {
-				write!(into, "locals.at[{}]", self.lox.get_var_mut(var).index)
+				inf_write!(into, "locals.at[{}]", self.lox.get_var_mut(var).index)
 			},
 			crate::VarType::Parameter => {
-				write!(into, "args[{}]", self.lox.get_var_mut(var).index)
+				inf_write!(into, "args[{}]", self.lox.get_var_mut(var).index)
 			},
 			// CapturedParameters are made to be handled the same, based on
 			// some special code generated by compile_function()
@@ -564,7 +576,7 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 				let index = self.lox.get_var_mut(var).index;
 
 				if depth == 0 && self.has_captures_frame {
-					write!(into, "scope->values[{index}]")?;
+					inf_write!(into, "scope->values[{index}]");
 				}
 				else {
 					// The hops amount is 'depth' if our scope == closure. This is because
@@ -574,26 +586,26 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 					// If captures does hop us up 1, then to get to depth only requires depth - 1
 					// more steps.
 					let hops = if self.has_captures_frame { depth - 1 } else { depth };
-					write!(into, "closure->")?;
+					inf_write!(into, "closure->");
 					// Walk up correct number of parents.
 					for _ in 0..hops {
-						write!(into, "parent->")?;
+						inf_write!(into, "parent->");
 					}
 					// Finally, access the values array.
-					write!(into, "values[{index}]")?;
+					inf_write!(into, "values[{index}]");
 				}
 
-				Ok(())
+				
 			},
 			crate::VarType::Global => {
-				write!(into, "globals[{}]", self.lox.get_var_mut(var).index)
+				inf_write!(into, "globals[{}]", self.lox.get_var_mut(var).index)
 			}
 		}
 	}
 
 	// NOTE: Provide 'into' if the function should be stored in the scope
 	// (So set to None when generated methods)
-	fn compile_function(&mut self, fun: &Function, mangled_name: &String) -> fmt::Result {
+	fn compile_function(&mut self, fun: &Function, mangled_name: &String) {
 		let mut def = String::new();
 
 		// Track 'has_locals_frame' down the call stack
@@ -608,10 +620,10 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 		self.current_indent = 0;
 
 		// Add the mangled name to the function definition list
-		writeln!(self.prelude, "jay_value {mangled_name}(jay_value *arguments, jay_closure *closure);")?;
+		inf_writeln!(self.prelude, "jay_value {mangled_name}(jay_value *arguments, jay_closure *closure);");
 
 		// Start writing the function definition
-		writeln!(def, "jay_value\n{}(jay_value *args, jay_closure *closure) {{", mangled_name)?;
+		inf_writeln!(def, "jay_value\n{}(jay_value *args, jay_closure *closure) {{", mangled_name);
 		self.push_indent();
 
 		// There are two separate but related 'scope' variables.
@@ -633,7 +645,7 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 			// The "scope" value for this function will be a new scope,
 			// instead of being the same as the parent scope.
 			// We allocate as many variables as are captured from this function.
-			writeln!(def, "\tjay_closure *scope = jay_new_scope(closure, {});\n", fun.captured.len())?;
+			inf_writeln!(def, "\tjay_closure *scope = jay_new_scope(closure, {});\n", fun.captured.len());
 
 			// Add the new variables. Note that "captured" here means a function
 			// LOWER DOWN the chain captured them. Our own function sort of
@@ -649,7 +661,7 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 				match self.lox.get_var_type(*v) {
 					crate::VarType::CapturedParameter(param_idx) => {
 						// TODO: Consider adding get_var() / get_var_idx()
-						writeln!(def, "\tscope->values[{}] = args[{}];\n", self.lox.get_var_mut(*v).index, param_idx)?;
+						inf_writeln!(def, "\tscope->values[{}] = args[{}];\n", self.lox.get_var_mut(*v).index, param_idx);
 					},
 					_ => { /* No special treatment needed */ }
 				}
@@ -660,38 +672,37 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 			gc_scope = "scope";
 		}
 		else {
-			writeln!(def, "\tjay_closure *scope = closure;\n")?;
+			inf_writeln!(def, "\tjay_closure *scope = closure;\n");
 		}
 
 		// Create the 'locals' struct.
 		if self.has_locals_frame {
-			writeln!(def,r#"	struct {{
+			inf_writeln!(def,r#"	struct {{
 		size_t count;
 		jay_closure *gc_scope;
 		jay_value at[{0}];
 	}} locals;
 	locals.count = {0};
-	locals.gc_scope = {1};"#, fun.local_count, gc_scope)?;
+	locals.gc_scope = {1};"#, fun.local_count, gc_scope);
 
 			// In order to avoid giving the GC any bogus data, initialize all the
 			// ".at" values to nil.
 
 			for i in 0..fun.local_count {
-				writeln!(def, "\tlocals.at[{i}] = jay_box_nil();")?;
+				inf_writeln!(def, "\tlocals.at[{i}] = jay_box_nil();");
 			}
 
 			// Finally, push the frame so the GC can see it.
-			writeln!(def, "\tjay_push_frame(&locals);")?;
+			inf_writeln!(def, "\tjay_push_frame(&locals);");
 		}
 
 		
-
 		// Generate the code inside the function.
-		self.compile_stmts(&fun.body, &mut def)?;
+		self.compile_stmts(&fun.body, &mut def);
 
 		// Finally, put a default return value.
 		if self.has_locals_frame {
-			writeln!(def, "\tjay_pop_frame();")?;
+			inf_writeln!(def, "\tjay_pop_frame();");
 		}
 		if fun.is_initializer() {
 			// For initializers, we can directly figure out the 'this' value here,
@@ -700,15 +711,15 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 			// Note that it's impossible for 'this' to become a closure param.
 			// But, if we WANTED to support that case, we could simply modify
 			// the parser to always add 'return this;' to the end of a function.
-			writeln!(def, "\treturn args[{}];", fun.param_count - 1)?;
+			inf_writeln!(def, "\treturn args[{}];", fun.param_count - 1);
 		}
 		else {
-			writeln!(def, "\treturn jay_box_nil();")?;
+			inf_writeln!(def, "\treturn jay_box_nil();");
 		}
 
 		// End the function.
 		self.pop_indent();
-		writeln!(def, "}}")?;
+		inf_writeln!(def, "}}");
 
 		self.function_defs.push(def);
 
@@ -717,18 +728,16 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 		// Restore locals and captures and initializer
 		self.has_locals_frame = enclosing_locals;
 		self.has_captures_frame = enclosing_captures;
-		
-		Ok(())
 	}
 
-	fn compile_class_dispatcher(&mut self, class: &Class, mangled_name: &String) -> fmt::Result {
+	fn compile_class_dispatcher(&mut self, class: &Class, mangled_name: &String) {
 		let mut def = String::new();
 
 		// Add the dispatcher forward-declaration
 		// TODO: Consider having multiple blocks of forward-declares for organization / clarity
-		writeln!(self.prelude, "jay_method* {mangled_name}(jay_class *class, jay_name name);")?;
+		inf_writeln!(self.prelude, "jay_method* {mangled_name}(jay_class *class, jay_name name);");
 		
-		writeln!(def, "jay_method*\n{mangled_name}(jay_class *class, jay_name name) {{")?;
+		inf_writeln!(def, "jay_method*\n{mangled_name}(jay_class *class, jay_name name) {{");
 
 		// First, generate a switch-case for each name, looking up the associated function. But,
 		// we actually do this in reverse, iterating through 0..n, then adding the associated
@@ -737,58 +746,56 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 		// TODO: As an optimization, simply leave out any names that aren't referenced elsewhere.
 		// There's no actual reason to do add_name here except for convenience.
 
-		writeln!(def, "\tswitch(name) {{")?;
+		inf_writeln!(def, "\tswitch(name) {{");
 
 		for (idx, method) in class.methods.iter().enumerate() {
 			self.add_name(&method.name);
-			writeln!(def, "\t\tcase NAME_{}: return &class->methods[{}];", method.name.lexeme, idx)?;
+			inf_writeln!(def, "\t\tcase NAME_{}: return &class->methods[{}];", method.name.lexeme, idx);
 		}
 
-		writeln!(def, "\t}}\n")?;
+		inf_writeln!(def, "\t}}\n");
 
 		// If the switch-case didn't look it up, then look it up in the superclass.
-		writeln!(def, "\tif(class->superclass) {{")?;
-		writeln!(def, "\t\treturn class->superclass->dispatcher(class->superclass, name);")?;
-		writeln!(def, "\t}}\n")?;
+		inf_writeln!(def, "\tif(class->superclass) {{");
+		inf_writeln!(def, "\t\treturn class->superclass->dispatcher(class->superclass, name);");
+		inf_writeln!(def, "\t}}\n");
 
 		// If we still didn't find it, return NULL.
 		// In this case, we are probably inside a get expression, and then we will
 		// look for a field. That will then return an error--and so we don't want
 		// to return an error here.
 
-		writeln!(def, "\treturn NULL;")?;
+		inf_writeln!(def, "\treturn NULL;");
 
-		writeln!(def, "}}")?;
+		inf_writeln!(def, "}}");
 
 		self.function_defs.push(def);
-
-		Ok(())
 	}
 
-	fn compile_class(&mut self, class: &Class, mangled_name: &String) -> fmt::Result {
+	fn compile_class(&mut self, class: &Class, mangled_name: &String) {
 		// To create the class-defining function, we need the dispatcher.
 		let dispatcher_mangled = self.mangle(
 			format!("jdisp_{}", class.name.lexeme));
-		self.compile_class_dispatcher(class, &dispatcher_mangled)?;
+		self.compile_class_dispatcher(class, &dispatcher_mangled);
 
 		let mut def = String::new();
 
 		// Add the mangled name to the function definition list
-		writeln!(self.prelude, "jay_value {mangled_name}(jay_value superclass, jay_closure *closure);")?;
+		inf_writeln!(self.prelude, "jay_value {mangled_name}(jay_value superclass, jay_closure *closure);");
 
 		// Reset indent for top-level functions
 		let enclosing_indent = self.current_indent;
 		self.current_indent = 0;
 
 		// Start writing the function definition
-		writeln!(def, "jay_value\n{}(jay_value superclass, jay_closure *closure) {{", mangled_name)?;
+		inf_writeln!(def, "jay_value\n{}(jay_value superclass, jay_closure *closure) {{", mangled_name);
 
 		// Save values for GC
-		writeln!(def, "\tjay_harbor(closure);\n\tjay_push(superclass);")?;
+		inf_writeln!(def, "\tjay_harbor(closure);\n\tjay_push(superclass);");
 
 		// First step: Allocate the actual class object
-		writeln!(def, "\tjay_class *class = jay_gc_alloc(sizeof(*class) + (sizeof(jay_method) * {}), JAY_GC_CLASS);",
-			class.methods.len())?;
+		inf_writeln!(def, "\tjay_class *class = jay_gc_alloc(sizeof(*class) + (sizeof(jay_method) * {}), JAY_GC_CLASS);",
+			class.methods.len());
 
 		// Fill out the method table
 		// TODO: If we want to be able to have init in a jay_bound_method, I geuss
@@ -799,12 +806,12 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 			
 			// The C function should be the same, due to the 'this' variable being
 			// automatically added at the end.
-			self.compile_function(method, &method_mangled_name)?;
+			self.compile_function(method, &method_mangled_name);
 
 			// Methods do not store the closure, because the have a pointer back
 			// to the class.
-			writeln!(def, "\tclass->methods[{idx}] = jay_method_from(class, {method_mangled_name}, {});",
-				method.param_count)?;
+			inf_writeln!(def, "\tclass->methods[{idx}] = jay_method_from(class, {method_mangled_name}, {});",
+				method.param_count);
 		}
 
 		// The dispatcher is simply initialized to be the dispatcher function we
@@ -815,43 +822,41 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 		// where a class cannot have a superclass, and implement a faster dispatcher
 		// for it. But, the extra checks for doing that might make it slower than
 		// just always checking for the superclass...
-		writeln!(def, "\tclass->dispatcher = &{dispatcher_mangled};")?;
+		inf_writeln!(def, "\tclass->dispatcher = &{dispatcher_mangled};");
 
 		// The class tracks the closure for all methods.
-		writeln!(def, "\tclass->closure = jay_unharbor();")?;
+		inf_writeln!(def, "\tclass->closure = jay_unharbor();");
 
-		writeln!(def, "\tclass->methods_count = {};\n", class.methods.len())?;
+		inf_writeln!(def, "\tclass->methods_count = {};\n", class.methods.len());
 
 		// Fill in the superclass
 		// If it is nil, then the superclass is NULL, otherwise, it must be
 		// a jay_class
-		writeln!(def, "\tsuperclass = jay_pop();")?;
-		writeln!(def, "\tif(JAY_IS_NIL(superclass)) {{")?;
-		writeln!(def, "\t\tclass->superclass = NULL;")?;
-		writeln!(def, "\t}}\n\telse if(JAY_IS_CLASS(superclass)) {{")?;
-		writeln!(def, "\t\tclass->superclass = JAY_AS_CLASS(superclass);")?;
-		writeln!(def, "\t}}\n\telse {{")?;
-		writeln!(def, "\t\toops(\"superclass must be class\");")?;
-		writeln!(def, "\t}}")?;
+		inf_writeln!(def, "\tsuperclass = jay_pop();");
+		inf_writeln!(def, "\tif(JAY_IS_NIL(superclass)) {{");
+		inf_writeln!(def, "\t\tclass->superclass = NULL;");
+		inf_writeln!(def, "\t}}\n\telse if(JAY_IS_CLASS(superclass)) {{");
+		inf_writeln!(def, "\t\tclass->superclass = JAY_AS_CLASS(superclass);");
+		inf_writeln!(def, "\t}}\n\telse {{");
+		inf_writeln!(def, "\t\toops(\"superclass must be class\");");
+		inf_writeln!(def, "\t}}");
 
-		writeln!(def, "\treturn jay_box_class(class);\n")?;
+		inf_writeln!(def, "\treturn jay_box_class(class);\n");
 
-		writeln!(def, "}}")?;
+		inf_writeln!(def, "}}");
 
 		self.current_indent = enclosing_indent;
 
 		self.function_defs.push(def);
-
-		Ok(())
 	}
 
-	fn compile_stmt(&mut self, stmt: &Stmt, into: &mut String) -> fmt::Result {
+	fn compile_stmt(&mut self, stmt: &Stmt, into: &mut String) {
 		match stmt {
 			Stmt::Block(stmts) => {
 				self.indent(into);
 				into.push_str("{\n");
 				self.push_indent();
-				self.compile_stmts(stmts, into)?;
+				self.compile_stmts(stmts, into);
 				self.pop_indent();
 				self.indent(into);
 				into.push_str("}\n");
@@ -859,37 +864,37 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 			Stmt::Class(class) => {
 				let mangled_name = self.mangle(format!("jclass_{}", class.name.lexeme));
 
-				self.compile_class(class, &mangled_name)?;
+				self.compile_class(class, &mangled_name);
 
 				self.indent(into);
-				self.compile_var(class.identity, into)?;
+				self.compile_var(class.identity, into);
 				// The class is a function that takes a superclass and a scope,
 				// and creates a class accordingly.
 				// As such, the associated local variable is initialized by
 				// calling this function.
-				write!(into, " = {mangled_name}(/* superclass = */ ")?;
+				inf_write!(into, " = {mangled_name}(/* superclass = */ ");
 
 				// Compile the superclass variable/null
 				if let Some(superclass) = class.superclass {
-					self.compile_var(superclass, into)?;
+					self.compile_var(superclass, into);
 				}
 				else {
-					write!(into, "jay_box_nil()")?;
+					inf_write!(into, "jay_box_nil()");
 				}
 
-				writeln!(into, ", scope);")?;
+				inf_writeln!(into, ", scope);");
 			},
 			Stmt::Expression(expr) => {
 				match expr {
 					Expr::Assign { value, identity, .. } => {
 						// Elide extra stack shenanigans for assignment statements.
-						self.compile_assign(into, value, identity, false)?;
+						self.compile_assign(into, value, identity, false);
 					},
 
 					// For any exprs we don't special case, just compile them
 					// and pop.
 					_ => {
-						self.compile_expr(expr, into)?;
+						self.compile_expr(expr, into);
 						// After the expression is done, pop the unused value.
 						self.indent(into);
 						into.push_str("jay_pop();\n");
@@ -898,7 +903,7 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 			},
 			Stmt::Function(fun) => {
 				let mangled_name = self.mangle(format!("jf_{}", fun.name.lexeme));
-				self.compile_function(fun, &mangled_name)?;
+				self.compile_function(fun, &mangled_name);
 
 				// In the outer scope, we need to have a reference to this function
 				// in our closure. And, that function's closure is our 'scope.' So,
@@ -910,25 +915,25 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 			
 				self.indent(into);
 				// Essentially, generate an assignment with the var.
-				self.compile_var(fun.identity.expect("non-methods must have an identity"), into)?;
-				writeln!(into, " = jay_fun_from({}, {}, scope);",
-					mangled_name, fun.param_count)?;
+				self.compile_var(fun.identity.expect("non-methods must have an identity"), into);
+				inf_writeln!(into, " = jay_fun_from({}, {}, scope);",
+					mangled_name, fun.param_count);
 			},
 			// TODO: Do we even need to have a var_name field on ExternFunction..?
 			Stmt::ExternFunction { c_name, arity, identity, .. } => {
 				// Like a function, except we don't need to compile anything -- just
 				// insert the known name into the current scope.
-				self.compile_var(*identity, into)?;
-				writeln!(into, " = jay_fun_from({c_name}, {arity}, scope);")?;
+				self.compile_var(*identity, into);
+				inf_writeln!(into, " = jay_fun_from({c_name}, {arity}, scope);");
 			},
 			Stmt::If { condition, then_branch, else_branch } => {
-				self.compile_expr(condition, into)?;
+				self.compile_expr(condition, into);
 				self.indent(into);
 				// Note: We have to use braces due to the fact that expressions can be multi-line.
 				into.push_str("if(jay_pop_condition()) {\n");
 
 				self.push_indent();
-				self.compile_stmt(then_branch, into)?;
+				self.compile_stmt(then_branch, into);
 				self.pop_indent();
 
 				self.indent(into);
@@ -939,7 +944,7 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 					into.push_str("else {\n");
 
 					self.push_indent();
-					self.compile_stmt(&else_branch, into)?;
+					self.compile_stmt(&else_branch, into);
 					self.pop_indent();
 
 					self.indent(into);
@@ -947,13 +952,13 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 				}
 			},
 			Stmt::Print(expr) => {
-				self.compile_expr(expr, into)?;
+				self.compile_expr(expr, into);
 				self.indent(into);
 				into.push_str("jay_op_print();\n");
 			},
 			Stmt::Return { value, .. } => {
 				match value {
-					Some(value) => { self.compile_expr(value, into)?; },
+					Some(value) => { self.compile_expr(value, into); },
 					None => {
 						self.indent(into); 
 						into.push_str("jay_push(jay_box_nil());\n"); 
@@ -988,13 +993,13 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 					Some(initializer) => {
 						// If we have an initializer, re-use the compile_assign
 						// logic to compile it "inline".
-						self.compile_assign(into, initializer, identity, false)?;
+						self.compile_assign(into, initializer, identity, false);
 					},
 					None => {
 						// Otherwise, just compile the variable = jay_box_nil().
 						self.indent(into);
-						self.compile_var(*identity, into)?;
-						write!(into, " = jay_box_nil();\n")?;
+						self.compile_var(*identity, into);
+						inf_write!(into, " = jay_box_nil();\n");
 					}
 				}
 			},
@@ -1003,66 +1008,62 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 				into.push_str("for(;;) {\n");
 
 				self.push_indent();
-				self.compile_expr(condition, into)?;
+				self.compile_expr(condition, into);
 				self.indent(into);
 				into.push_str("if(!jay_pop_condition()) { break; }\n");
 
-				self.compile_stmt(body, into)?;
+				self.compile_stmt(body, into);
 
 				self.pop_indent();
 				self.indent(into);
 				into.push_str("}\n");
 			},
 		}
-
-		Ok(())
 	}
 
-	fn compile_stmts(&mut self, stmts: &Vec<Stmt>, into: &mut String) -> fmt::Result {
+	fn compile_stmts(&mut self, stmts: &Vec<Stmt>, into: &mut String) {
 		for stmt in stmts {
-			self.compile_stmt(stmt, into)?;
+			self.compile_stmt(stmt, into);
 		}
-
-		Ok(())
 	}
 
 	fn compile_to_buffers(&mut self, stmts: &Vec<Stmt>, globals_count: u32) -> Result<String, fmt::Error> {
 		// Write the first part of the prelude
-		writeln!(self.prelude, "/*** This C file created by jaylox https://github.com/HoneyPony/jaylox ***/")?;
+		inf_writeln!(self.prelude, "/*** This C file created by jaylox https://github.com/HoneyPony/jaylox ***/");
 		if self.opt.gc_stress_test {
-			writeln!(self.prelude, "#define JAY_GC_STRESS_TEST")?;
+			inf_writeln!(self.prelude, "#define JAY_GC_STRESS_TEST");
 		}
 		if self.opt.nan_boxing {
-			writeln!(self.prelude, "#define JAY_NAN_BOXING")?;
+			inf_writeln!(self.prelude, "#define JAY_NAN_BOXING");
 		}
 		if self.opt.assume_correct {
-			writeln!(self.prelude, "#define JAY_ASSUME_CORRECT")?;
+			inf_writeln!(self.prelude, "#define JAY_ASSUME_CORRECT");
 		}
-		writeln!(self.prelude, "#include \"jaylib/jaylib.h\"\n")?;
+		inf_writeln!(self.prelude, "#include \"jaylib/jaylib.h\"\n");
 
 		// Write the globals array to the prelude (and the string constants array)
-		writeln!(self.prelude, "static jay_value globals[{globals_count}];")?;
-		writeln!(self.prelude, "static jay_value global_string_constants[{}];\n", self.lox.string_constants.len())?;
+		inf_writeln!(self.prelude, "static jay_value globals[{globals_count}];");
+		inf_writeln!(self.prelude, "static jay_value global_string_constants[{}];\n", self.lox.string_constants.len());
 
 		// Create the global-visit function
-		writeln!(self.prelude, "static\nvoid\njay_gc_visit_globals(void) {{")?;
-		writeln!(self.prelude, "\tfor(size_t i = 0; i < {globals_count}; ++i) {{")?;
-		writeln!(self.prelude, "#ifdef JAY_TRACE_GC_DIRECT")?;
-		writeln!(self.prelude, "\t\tprintf(\"gc: visit global %zu \", i);")?;
-		writeln!(self.prelude, "\t\tjay_print(globals[i]);")?;
-		writeln!(self.prelude, "#endif")?;
-		writeln!(self.prelude, "\t\tjay_gc_visit(&globals[i]);")?;
-		writeln!(self.prelude, "\t}}")?;
+		inf_writeln!(self.prelude, "static\nvoid\njay_gc_visit_globals(void) {{");
+		inf_writeln!(self.prelude, "\tfor(size_t i = 0; i < {globals_count}; ++i) {{");
+		inf_writeln!(self.prelude, "#ifdef JAY_TRACE_GC_DIRECT");
+		inf_writeln!(self.prelude, "\t\tprintf(\"gc: visit global %zu \", i);");
+		inf_writeln!(self.prelude, "\t\tjay_print(globals[i]);");
+		inf_writeln!(self.prelude, "#endif");
+		inf_writeln!(self.prelude, "\t\tjay_gc_visit(&globals[i]);");
+		inf_writeln!(self.prelude, "\t}}");
 		// For now, we also have to copy the string constants over, although this should change
 		// later (make them immortal)
-		writeln!(self.prelude, "\tfor(size_t i = 0; i < {}; ++i) {{", self.lox.string_constants.len())?;
-		writeln!(self.prelude, "#ifdef JAY_TRACE_GC_DIRECT")?;
-		writeln!(self.prelude, "\t\tprintf(\"gc: visit string constant %zu \", i);")?;
-		writeln!(self.prelude, "\t\tjay_print(global_string_constants[i]);")?;
-		writeln!(self.prelude, "#endif")?;
-		writeln!(self.prelude, "\t\tjay_gc_visit(&global_string_constants[i]);")?;
-		writeln!(self.prelude, "\t}}")?;
-		writeln!(self.prelude, "}}\n")?;
+		inf_writeln!(self.prelude, "\tfor(size_t i = 0; i < {}; ++i) {{", self.lox.string_constants.len());
+		inf_writeln!(self.prelude, "#ifdef JAY_TRACE_GC_DIRECT");
+		inf_writeln!(self.prelude, "\t\tprintf(\"gc: visit string constant %zu \", i);");
+		inf_writeln!(self.prelude, "\t\tjay_print(global_string_constants[i]);");
+		inf_writeln!(self.prelude, "#endif");
+		inf_writeln!(self.prelude, "\t\tjay_gc_visit(&global_string_constants[i]);");
+		inf_writeln!(self.prelude, "\t}}");
+		inf_writeln!(self.prelude, "}}\n");
 
 		let mut main_fn = String::new();
 
@@ -1072,18 +1073,18 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 
 		// The most important responsibility of main() is initializing the gc and stack
 		if self.opt.gc_stress_test {
-			writeln!(main_fn, "\tjay_gc_init(512); // STRESS_TEST: small initial heap")?;
+			inf_writeln!(main_fn, "\tjay_gc_init(512); // STRESS_TEST: small initial heap");
 		}
 		else {
-			writeln!(main_fn, "\tjay_gc_init(16 * 1024 * 1024); // 16 megabytes")?;
+			inf_writeln!(main_fn, "\tjay_gc_init(16 * 1024 * 1024); // 16 megabytes");
 		}
-		writeln!(main_fn, "\tjay_stack_ptr = jay_stack;")?;
-		writeln!(main_fn, "\tjay_frames_ptr = 0;\n")?;
+		inf_writeln!(main_fn, "\tjay_stack_ptr = jay_stack;");
+		inf_writeln!(main_fn, "\tjay_frames_ptr = 0;\n");
 
 		// We have to set up all the string constants in main for the rest of the
 		// code to use.
 		for (idx, constant) in self.lox.string_constants.iter().enumerate() {
-			writeln!(main_fn, "\tglobal_string_constants[{idx}] = jay_box_string(jay_string_from_literal(\"{constant}\"));")?;
+			inf_writeln!(main_fn, "\tglobal_string_constants[{idx}] = jay_box_string(jay_string_from_literal(\"{constant}\"));");
 		}
 
 		// Note: Built-in functions will also be set up in main, but this requires
@@ -1091,18 +1092,18 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 
 		self.indent(&mut main_fn);
 		// Create the scope for the main fn
-		writeln!(main_fn, "jay_closure *scope = NULL;")?;
+		inf_writeln!(main_fn, "jay_closure *scope = NULL;");
 
 		// Compile the actual top-level code (any normal statements will go
 		// into main; other things will go into their own functions)
-		self.compile_stmts(stmts, &mut main_fn)?;
+		self.compile_stmts(stmts, &mut main_fn);
 		self.pop_indent();
 
 		Ok(main_fn)
 	}
 
 	pub fn compile(&mut self, stmts: &Vec<Stmt>, globals_count: u32) -> std::io::Result<()> {
-		// We use write! a lot and so get fmt::Result, but most of the compilation
+		// We use inf_write! a lot and so get fmt::Result, but most of the compilation
 		// process should not fail (unless we OOM or something). By contrast, it
 		// is very possible that, while writing out to the self.writer, there is
 		// an error (e.g. read-only file target).
