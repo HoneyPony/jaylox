@@ -1,5 +1,6 @@
 use core::fmt;
 use std::collections::HashMap;
+use std::rc::Rc;
 use std::{collections::HashSet, fmt::Write};
 
 use crate::stmt::{Class, Function};
@@ -30,7 +31,12 @@ macro_rules! inf_writeln {
 	}
 }
 
-
+enum Val {
+	OnStack,
+	DoubleConst(String),
+	BoolConst(String),
+	Literal(LoxValue),
+}
 pub struct Compiler<'a, Writer: std::io::Write> {
 	pub lox: &'a mut Lox,
 
@@ -66,6 +72,8 @@ pub struct Compiler<'a, Writer: std::io::Write> {
 	writer: Writer,
 
 	opt: CodegenOptions,
+
+	tmp_idx: u32,
 }
 
 impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
@@ -87,8 +95,16 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 
 			writer,
 
-			opt
+			opt,
+
+			tmp_idx: 0,
 		}
+	}
+
+	fn tmp_name(&mut self) -> String {
+		let name = format!("tmp{}", self.tmp_idx);
+		self.tmp_idx += 1;
+		name
 	}
 
 	fn mangle(&mut self, starting_point: String) -> String {
@@ -130,7 +146,29 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 		self.name_set.insert(name.lexeme.clone());
 	}
 
-	fn binary_stackop(&mut self, into: &mut String, left: &Expr, op: &Token, right: &Expr) {
+	fn stackify(&mut self, val: &Val, into: &mut String) {
+		match val {
+			Val::OnStack => { 
+				// If it's already on the stack, we don't have to do anything.
+			},
+			Val::DoubleConst(str) => {
+				self.indent(into);
+				inf_writeln!(into, "jay_push(jay_box_number({str}));");
+			},
+			Val::BoolConst(str) => {
+				self.indent(into);
+				inf_writeln!(into, "jay_push(jay_box_bool({str}));")
+			}
+			Val::Literal(lit) => {
+				self.indent(into);
+				inf_write!(into, "jay_push(");
+				self.compile_literal_inline(into, lit);
+				inf_writeln!(into, ");");
+			},
+		}
+	}
+
+	fn binary_stackop(&mut self, into: &mut String, left: &Expr, op: &Token, right: &Expr) -> Val {
 		let fun = match op.typ {
 			Plus => "jay_op_add",
 			BangEqual => "jay_op_neq",
@@ -138,10 +176,14 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 			_ => unreachable!()
 		};
 
-		self.compile_expr(left, into);
-		self.compile_expr(right, into);
+		self.compile_expr_tostack(left, into);
+		self.compile_expr_tostack(right, into);
+
+
 		self.indent(into);
 		inf_write!(into, "{fun}();\n");
+
+		Val::OnStack
 	}
 
 	fn op_needs_numerical_fence(expr: &Expr) -> bool {
@@ -189,7 +231,7 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 		}
 	}
 
-	fn binary_fenceop(&mut self, into: &mut String, left: &Expr, op: &Token, right: &Expr) {
+	fn binary_fenceop(&mut self, into: &mut String, left: &Expr, op: &Token, right: &Expr) -> Val {
 		enum Ty {
 			Number,
 			Bool
@@ -213,8 +255,8 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 			Ty::Bool => ("bool", "BOOL"),
 		};
 
-		let out_ty_lower = match ty {
-			Ty::Number => "number",
+		let out_ty_ctype = match ty {
+			Ty::Number => "double",
 			Ty::Bool => "bool",
 		};
 
@@ -222,8 +264,8 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 		let right_fence = Self::op_needs_numerical_fence(right);
 
 		// We still use the stack machine for the exprs for now.
-		self.compile_expr(left, into);
-		self.compile_expr(right, into);
+		self.compile_expr_tostack(left, into);
+		self.compile_expr_tostack(right, into);
 
 		if left_fence { 
 			self.indent(into);
@@ -235,18 +277,26 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 			inf_writeln!(into, "jay_fence_{in_ty_lower}(jay_stack_ptr[-1]);");
 		}
 
+		let tmp_name = self.tmp_name();
+
 		// Now that the types are checked, we can just directly generate the
 		// operation.
 		self.indent(into);
 		inf_writeln!(into,
-			"jay_stack_ptr[-2] = jay_box_{out_ty_lower}(JAY_AS_{in_ty_cap}(jay_stack_ptr[-2]) {op} JAY_AS_{in_ty_cap}(jay_stack_ptr[-1]));");
+			"const {out_ty_ctype} {tmp_name} = (JAY_AS_{in_ty_cap}(jay_stack_ptr[-2]) {op} JAY_AS_{in_ty_cap}(jay_stack_ptr[-1]));");
 		
-		// Finally, we have to explicitly pop one of the values.
+		// Finally, we have to explicitly pop as many of the values as were on 
+		// the stack.
 		self.indent(into);
-		inf_writeln!(into, "jay_stack_ptr -= 1;");
+		inf_writeln!(into, "jay_stack_ptr -= 2;");
+
+		match ty {
+			Ty::Number => Val::DoubleConst(tmp_name),
+			Ty::Bool => Val::BoolConst(tmp_name),
+		}
 	}
 
-	fn binary_op(&mut self, into: &mut String, left: &Expr, op: &Token, right: &Expr) {
+	fn binary_op(&mut self, into: &mut String, left: &Expr, op: &Token, right: &Expr) -> Val {
 		match op.typ {
 			Plus | BangEqual | EqualEqual => {
 				self.binary_stackop(into, left, op, right)
@@ -281,7 +331,7 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 				// If it's a literal or variable, we don't need the expr pushed.
 				// TODO: Build a better optimizer that doesn't need all these
 				// separate checks...
-				self.compile_expr(value, into);
+				self.compile_expr_tostack(value, into);
 			}
 		}
 		self.indent(into);
@@ -310,10 +360,16 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 		inf_write!(into, ";\n");
 	}
 
-	fn compile_expr(&mut self, expr: &Expr, into: &mut String) {
+	fn compile_expr_tostack(&mut self, expr: &Expr, into: &mut String) -> Val {
+		let val = self.compile_expr(expr, into);
+		self.stackify(&val, into);
+		val
+	}
+
+	fn compile_expr(&mut self, expr: &Expr, into: &mut String) -> Val {
 		match expr {
 			Expr::Binary { left, operator, right } => {
-				self.binary_op(into, left, operator, right);
+				self.binary_op(into, left, operator, right)
 			},
 			Expr::Call { callee, arguments, .. } => {
 				// Push all args, push the callee, then do jay_op_call.
@@ -321,14 +377,14 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 				// arguments, no matter what kind of call/invoke we do. They
 				// all need the arguments pushed onto the stack as such.
 				for arg in arguments {
-					self.compile_expr(arg, into);
+					self.compile_expr_tostack(arg, into);
 				}
 
 				match callee.as_ref() {
 					// If the callee is a Get, then instead of making a new bound
 					// method, do an invoke
 					Expr::Get { object, name } => {
-						self.compile_expr(object, into);
+						self.compile_expr_tostack(object, into);
 
 						self.add_name(name);
 						self.indent(into);
@@ -348,24 +404,24 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 					// For regular calls, just compile the inner expression,
 					// and then do a normal call.
 					_ => {
-						self.compile_expr(callee, into);
+						self.compile_expr_tostack(callee, into);
 
 						self.indent(into);
 						inf_write!(into, "jay_op_call({});\n", arguments.len());
 					}
 				}
 				
-
-				
+				Val::OnStack
 			},
 			Expr::Grouping(inner) => {
-				self.compile_expr(inner, into);
+				self.compile_expr(inner, into)
 			},
 			Expr::Literal(value) => {
-				self.indent(into);
-				inf_write!(into, "jay_push(");
-				self.compile_literal_inline(into, value);
-				inf_write!(into, ");\n");
+				//self.indent(into);
+				//inf_write!(into, "jay_push(");
+				//self.compile_literal_inline(into, value);
+				//inf_write!(into, ");\n");
+				Val::Literal(value.clone())
 			},
 			Expr::Logical { left, operator, right } => {
 				// We must implement the short-circuiting semantic. This is actually
@@ -389,7 +445,7 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 				};
 
 				// First, generate the left expression.
-				self.compile_expr(left, into);
+				self.compile_expr_tostack(left, into);
 				// Check if the left expression should short-circuit.
 				self.indent(into);
 				inf_write!(into, "if({}jay_truthy(jay_top())) {{\n", invert);
@@ -401,13 +457,14 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 				self.indent(into);
 				inf_write!(into, "jay_pop();\n");
 
-				self.compile_expr(right, into);
+				self.compile_expr_tostack(right, into);
 				self.pop_indent();
 				
 				self.indent(into);
 				inf_write!(into, "}}\n");
 
 				// Done!
+				Val::OnStack
 			},
 			Expr::Get { object, name } => {
 
@@ -426,7 +483,7 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 					_ => {
 						// Generate a fence for non-This objects. Also,
 						// don't compile the inner expr for This objects.
-						self.compile_expr(object, into);
+						self.compile_expr_tostack(object, into);
 
 						self.indent(into);
 						inf_writeln!(into, "jay_fence_get(jay_stack_ptr[-1]);");
@@ -451,9 +508,11 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 						inf_write!(into, "jay_get_instance(JAY_AS_INSTANCE(jay_stack_ptr[-1]), NAME_{});\n", name.lexeme);
 					}
 				}
+
+				Val::OnStack
 			},
 			Expr::Set { object, name, value } => {
-				self.compile_expr(value, into);
+				self.compile_expr_tostack(value, into);
 
 				match object.as_ref() {
 					Expr::This { .. } => {
@@ -465,7 +524,7 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 					_ => {
 						// Generate a fence for non-This objects. Also,
 						// don't compile the inner expr for This objects.
-						self.compile_expr(object, into);
+						self.compile_expr_tostack(object, into);
 
 						self.indent(into);
 						inf_writeln!(into, "jay_fence_set(jay_stack_ptr[-1]);");
@@ -495,6 +554,8 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 				// Decrement stack pointer.
 				self.indent(into);
 				inf_write!(into, "jay_stack_ptr -= 1;");
+
+				Val::OnStack
 			},
 			Expr::Super { method, identity, this_identity, .. } => {
 				// Super is a little unique in that it is one of the only
@@ -516,6 +577,8 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 				inf_write!(into, ", NAME_{}, ", method.lexeme);
 				self.compile_var(*identity, into);
 				inf_writeln!(into, ");");
+
+				Val::OnStack
 			},
 			Expr::Unary { operator, right } => {
 				let op = match operator.typ {
@@ -525,8 +588,10 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 				};
 
 				self.indent(into);
-				self.compile_expr(right, into);
+				self.compile_expr_tostack(right, into);
 				inf_write!(into, "{op}();\n");
+
+				Val::OnStack
 			},
 			// Variables and This are essentially equivalent. Actually... I guess we could
 			// scrap Expr::This, and then just generate Expr::Variable in its place...
@@ -535,10 +600,13 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 				inf_write!(into, "jay_push(");
 				self.compile_var(*identity, into);
 				inf_write!(into, ");\n");
+
+				Val::OnStack
 			},
 			Expr::Assign { value, identity, .. } => {
 				// For exprs, we have to push, in case the value is needed.
 				self.compile_assign(into, value, identity, true);
+				Val::OnStack
 			},
 		}
 	}
@@ -894,10 +962,15 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 					// For any exprs we don't special case, just compile them
 					// and pop.
 					_ => {
-						self.compile_expr(expr, into);
-						// After the expression is done, pop the unused value.
-						self.indent(into);
-						into.push_str("jay_pop();\n");
+						let val = self.compile_expr(expr, into);
+						match val {
+							Val::OnStack => {
+								// After the expression is done, pop the unused value.
+								self.indent(into);
+								into.push_str("jay_pop();\n");
+							},
+							_ => { }
+						}
 					}
 				}
 			},
@@ -927,7 +1000,7 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 				inf_writeln!(into, " = jay_fun_from({c_name}, {arity}, scope);");
 			},
 			Stmt::If { condition, then_branch, else_branch } => {
-				self.compile_expr(condition, into);
+				self.compile_expr_tostack(condition, into);
 				self.indent(into);
 				// Note: We have to use braces due to the fact that expressions can be multi-line.
 				into.push_str("if(jay_pop_condition()) {\n");
@@ -952,13 +1025,13 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 				}
 			},
 			Stmt::Print(expr) => {
-				self.compile_expr(expr, into);
+				self.compile_expr_tostack(expr, into);
 				self.indent(into);
 				into.push_str("jay_op_print();\n");
 			},
 			Stmt::Return { value, .. } => {
 				match value {
-					Some(value) => { self.compile_expr(value, into); },
+					Some(value) => { self.compile_expr_tostack(value, into); },
 					None => {
 						self.indent(into); 
 						into.push_str("jay_push(jay_box_nil());\n"); 
@@ -1008,7 +1081,7 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 				into.push_str("for(;;) {\n");
 
 				self.push_indent();
-				self.compile_expr(condition, into);
+				self.compile_expr_tostack(condition, into);
 				self.indent(into);
 				into.push_str("if(!jay_pop_condition()) { break; }\n");
 
