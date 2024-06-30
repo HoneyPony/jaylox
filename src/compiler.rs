@@ -76,6 +76,13 @@ pub struct Compiler<'a, Writer: std::io::Write> {
 	tmp_idx: u32,
 }
 
+#[derive(Clone, Copy)]
+enum Ty {
+	Number,
+	Bool
+}
+
+
 impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 	pub fn new(lox: &'a mut Lox, writer: Writer, opt: CodegenOptions) -> Self {
 		return Compiler {
@@ -231,12 +238,66 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 		}
 	}
 
-	fn binary_fenceop(&mut self, into: &mut String, left: &Expr, op: &Token, right: &Expr) -> Val {
-		enum Ty {
-			Number,
-			Bool
+	fn compile_val(&mut self, val: &Val, stackidx: u32, into: &mut String) {
+		match val {
+			Val::OnStack => {
+				inf_write!(into, "jay_stack_ptr[-{stackidx}]");
+			},
+			Val::DoubleConst(what) => {
+				inf_write!(into, "jay_box_number({what})");
+			},
+			Val::BoolConst(what) => {
+				inf_write!(into, "jay_box_bool({what})");
+			},
+			Val::Literal(lit) => {
+				self.compile_literal_inline(into, lit);
+			},
 		}
-		
+	}
+
+	fn compile_val_as(&mut self, val: &Val, stackidx: u32, as_ty: Ty, into: &mut String) {
+		match (as_ty, val) {
+			(Ty::Number, Val::DoubleConst(n)) => {
+				inf_write!(into, "{n}");
+			},
+			(Ty::Bool, Val::BoolConst(n)) => {
+				inf_write!(into, "{n}");
+			},
+			(Ty::Number, Val::Literal(LoxValue::Number(n))) => {
+				inf_write!(into, "{n}");
+			},
+			(Ty::Bool, Val::Literal(LoxValue::Bool(n))) => {
+				inf_write!(into, "{n}");
+			},
+
+			_ => {
+				let ty = match as_ty {
+					Ty::Number => "NUMBER",
+					Ty::Bool => "BOOL",
+				};
+				inf_write!(into, "JAY_AS_{ty}(");
+				self.compile_val(val, stackidx, into);
+				inf_write!(into, ")");
+			}
+		}
+	}
+
+	fn fence(&mut self, fn_name: &str, val: &Val, stackidx: u32, into: &mut String) {
+		self.indent(into);
+		inf_write!(into, "{fn_name}(");
+		self.compile_val(val, stackidx, into);
+		inf_writeln!(into, ");");
+	}
+
+	fn stack_idx(val: &Val, prev: u32) -> u32 {
+		return prev + match val {
+			Val::OnStack => 1,
+			_ => 0
+		}
+	}
+
+	fn binary_fenceop(&mut self, into: &mut String, left: &Expr, op: &Token, right: &Expr) -> Val {
+
 		let (op, ty, input_ty) = match op.typ {
 			Minus => ("-", Ty::Number, Ty::Number),
 			Slash => ("/",  Ty::Number, Ty::Number),
@@ -250,9 +311,9 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 			_ => unreachable!()
 		};
 
-		let (in_ty_lower, in_ty_cap) = match input_ty {
-			Ty::Number => ("number", "NUMBER"),
-			Ty::Bool => ("bool", "BOOL"),
+		let (in_ty_fence, in_ty_cap) = match input_ty {
+			Ty::Number => ("jay_fence_number", "NUMBER"),
+			Ty::Bool => ("jay_fence_bool", "BOOL"),
 		};
 
 		let out_ty_ctype = match ty {
@@ -264,17 +325,17 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 		let right_fence = Self::op_needs_numerical_fence(right);
 
 		// We still use the stack machine for the exprs for now.
-		self.compile_expr_tostack(left, into);
-		self.compile_expr_tostack(right, into);
+		let left = self.compile_expr(left, into);
+		let right = self.compile_expr(right, into);
+
+		let right_stack_idx = Self::stack_idx(&right, 0);
+		let left_stack_idx = Self::stack_idx(&left, right_stack_idx);
 
 		if left_fence { 
-			self.indent(into);
-			// Fence for the input types
-			inf_writeln!(into, "jay_fence_{in_ty_lower}(jay_stack_ptr[-2]);");
+			self.fence(in_ty_fence, &left, left_stack_idx, into);
 		}
 		if right_fence { 
-			self.indent(into);
-			inf_writeln!(into, "jay_fence_{in_ty_lower}(jay_stack_ptr[-1]);");
+			self.fence(in_ty_fence, &right, right_stack_idx, into);
 		}
 
 		let tmp_name = self.tmp_name();
@@ -282,13 +343,17 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 		// Now that the types are checked, we can just directly generate the
 		// operation.
 		self.indent(into);
-		inf_writeln!(into,
-			"const {out_ty_ctype} {tmp_name} = (JAY_AS_{in_ty_cap}(jay_stack_ptr[-2]) {op} JAY_AS_{in_ty_cap}(jay_stack_ptr[-1]));");
-		
+		inf_write!(into,
+			"const {out_ty_ctype} {tmp_name} = ");
+		self.compile_val_as(&left, left_stack_idx, input_ty, into);
+		inf_write!(into, " {op} ");
+		self.compile_val_as(&right, right_stack_idx, input_ty, into);
+		inf_writeln!(into, ";");
+
 		// Finally, we have to explicitly pop as many of the values as were on 
 		// the stack.
 		self.indent(into);
-		inf_writeln!(into, "jay_stack_ptr -= 2;");
+		inf_writeln!(into, "jay_stack_ptr -= {left_stack_idx};");
 
 		match ty {
 			Ty::Number => Val::DoubleConst(tmp_name),
