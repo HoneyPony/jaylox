@@ -42,6 +42,11 @@ struct jay_class;
 
 typedef uint32_t jay_name;
 
+#ifndef JAY_MAX_FIELD
+	// If this value hasn't been defined, just define a default so that IDEs are happier
+	#define JAY_MAX_FIELD 0
+#endif
+
 #ifdef JAY_ASSERT_GC
 	#define jay_gc_assert(...) assert(__VA_ARGS__)
 #else
