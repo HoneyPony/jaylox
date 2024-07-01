@@ -1,6 +1,28 @@
 #ifndef JAYLIB_H
 #define JAYLIB_H
 
+// Options available for jaylib.h:
+//
+// #define JAY_NAN_BOXING
+// - Switches the internal value representation from a 16-byte tag+value
+//   to an 8-byte NaN boxed value. Generally improves code speed.
+//
+// #define JAY_GC_STRESS_TEST
+// - Causes every allocation to perform a garbage collection. Useful for sniffing
+//   out GC bugs.
+//   (Note that most GC bugs are due to calling a possibly-allocating function
+//   while holding on to a reference without push() or harbor()ing it)
+//
+// #define JAY_ASSERT_GC
+// - Turns on some internal GC safety checks. Can be used to find some seriously
+//   broken things.
+//
+// #define JAY_MAX_FIELD
+// - Should be defined to be 1 more than the maximum number for a field entry.
+//   E.g. if field names are x = 1, y = 2, z = 3, then JAY_MAX_FIELD should be 4,
+//   so that (name < JAY_MAX_FIELD) will always return true for any name used
+//   as a field name.
+
 #include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
