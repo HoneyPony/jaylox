@@ -1743,6 +1743,14 @@ void
 jay_op_add(void) {
 	// For now, only add handles gc correctly..
 
+	if(JAY_IS_NUMBER(jay_stack_ptr[-2])) {
+		if(JAY_IS_NUMBER(jay_stack_ptr[-1])) {
+			jay_stack_ptr[-2] = jay_box_number(JAY_AS_NUMBER(jay_stack_ptr[-1]) + JAY_AS_NUMBER(jay_stack_ptr[-2]));
+			jay_stack_ptr -= 1;
+			return;
+		}
+	}
+
 	if(JAY_IS_STRING(jay_stack_ptr[-2])) {
 		if(JAY_IS_STRING(jay_stack_ptr[-1])) {
 			size_t length = 
@@ -1762,14 +1770,6 @@ jay_op_add(void) {
 			cat->hash = jay_compute_string_hash(cat->contents, length);
 
 			jay_stack_ptr[-2] = jay_box_string(cat);
-			jay_stack_ptr -= 1;
-			return;
-		}
-	}
-
-	if(JAY_IS_NUMBER(jay_stack_ptr[-2])) {
-		if(JAY_IS_NUMBER(jay_stack_ptr[-1])) {
-			jay_stack_ptr[-2] = jay_box_number(JAY_AS_NUMBER(jay_stack_ptr[-1]) + JAY_AS_NUMBER(jay_stack_ptr[-2]));
 			jay_stack_ptr -= 1;
 			return;
 		}
