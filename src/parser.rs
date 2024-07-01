@@ -99,9 +99,13 @@ impl<'a> Parser<'a> {
 		// Otherwise, we know we got here from check_closure, so we know that
 		// the variable IS definitely a global, and so it should be marked as
 		// such.
-		self.lox.get_var_mut(ptr).typ = VarType::Global;
-		self.lox.get_var_mut(ptr).index = self.global_index;
-		self.global_index += 1;
+		//
+		// But, if it is ALREADY a global, we don't want to mark it again.
+		if self.lox.get_var_mut(ptr).typ != VarType::Global {
+			self.lox.get_var_mut(ptr).typ = VarType::Global;
+			self.lox.get_var_mut(ptr).index = self.global_index;
+			self.global_index += 1;
+		}
 	}
 
 	fn check_closure(&mut self, ptr: VarRef) {
