@@ -1073,6 +1073,7 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 			Stmt::ExternFunction { c_name, arity, identity, .. } => {
 				// Like a function, except we don't need to compile anything -- just
 				// insert the known name into the current scope.
+				self.indent(into);
 				self.compile_var(*identity, into);
 				inf_writeln!(into, " = jay_fun_from({c_name}, {arity}, scope);");
 			},
