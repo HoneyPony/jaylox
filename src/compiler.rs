@@ -524,12 +524,10 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 							name.lexeme, arguments.len());
 					}
 					// For superclass calls, use invoke_super
-					Expr::Super { method, identity, this_identity, .. } => {
+					Expr::Super { method, identity, ..} => {
 						self.add_name(method, false);
 						self.indent(into);
-						inf_write!(into, "jay_op_invoke_super(");
-						self.compile_var(*this_identity, into);
-						inf_write!(into, ", NAME_{}, ", method.lexeme);
+						inf_write!(into, "jay_op_invoke_super(this, NAME_{}, ", method.lexeme);
 						self.compile_var(*identity, into);
 						inf_writeln!(into, ", {});", arguments.len());
 					},
