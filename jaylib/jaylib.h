@@ -1487,7 +1487,7 @@ static inline
 void
 jay_op_invoke(size_t name, size_t arity) {
 	// Leave "this" on top in case we have to do a jay_op_get() and jay_op_call()
-	jay_value target = jay_top();
+	jay_value target = jay_stack_ptr[-1];
 
 	if(!JAY_IS_INSTANCE(target)) {
 		oops("can only get properties on an instance");
@@ -1574,7 +1574,7 @@ jay_dbg_stack(const char *message) {
 	}
 
 	printf("%s\t%llu : ", message, (jay_stack_ptr - jay_stack));
-	jay_print(jay_top());
+	jay_print(jay_stack_ptr[-1]);
 }
 
 static inline
