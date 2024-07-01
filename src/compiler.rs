@@ -187,51 +187,6 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 		Val::OnStack
 	}
 
-	fn op_needs_numerical_fence(expr: &Expr) -> bool {
-		match expr {
-			Expr::Binary { operator, ..  } => {
-				// Note: We could kind of do this "recursively" but that would
-				// be inefficient. Maybe at some point we could store this information
-				// on the tree and then generate it at parse time.
-				match operator.typ {
-					Minus | Slash | Star => false,
-
-					// All other operators (including +) need checks.
-					_ => true
-				}
-			},
-			Expr::Literal(what) => {
-				// TODO: Maybe have a compiler error for this earlier..?
-				match what {
-					LoxValue::Number(_) => false,
-					_ => {
-						panic!("invalid literal operand to binary operator");
-					}
-				}
-			},
-			Expr::Unary { .. } => {
-				// TODO: Fence unary operators
-				true
-			},
-
-			Expr::Grouping(inner) => {
-				// For grouping exprs, we might as well traverse into them,
-				// as it's unlikely that they're very deep.
-				Self::op_needs_numerical_fence(inner)
-			}
-
-			// Some other checks we can do...
-			Expr::This { .. } => {
-				panic!("'this' cannot be an operand to binary operator");
-			},
-
-			// All other expression types need fences.
-			_ => {
-				true
-			}
-		}
-	}
-
 	fn compile_val(&mut self, val: &Val, stackidx: u32, into: &mut String) {
 		match val {
 			Val::OnStack => {
