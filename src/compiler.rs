@@ -37,6 +37,16 @@ enum Val {
 	Literal(LoxValue),
 	Variable(VarRef),
 }
+
+impl Val {
+	pub fn is_on_stack(&self) -> bool {
+		match self {
+			Val::OnStack => true,
+			_ => false,
+		}
+	}
+}
+
 pub struct Compiler<'a, Writer: std::io::Write> {
 	pub lox: &'a mut Lox,
 
@@ -180,9 +190,95 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 		}
 	}
 
+	// Addition is the most complicated binary operation to compile, and requires
+	// its own function.
+	fn add(&mut self, into: &mut String, left: &Expr, right: &Expr) -> Val {
+		let left = self.compile_expr(left, into);
+		let right = self.compile_expr(right, into);
+
+		match (&left, &right) {
+			// If both values are on the stack, we cannot help but use the most
+			// generic version of the operation.
+			(Val::OnStack, Val::OnStack) => {
+				self.indent(into);
+				inf_writeln!(into, "jay_stack_ptr[-2] = jay_add(jay_stack_ptr[-2], jay_stack_ptr[-1]);");
+				self.indent(into);
+				inf_writeln!(into, "jay_stack_ptr -= 1;");
+
+				return Val::OnStack
+			},
+			_ => { }
+		}
+
+		// Here we know that the values CANNOT both be on the stack, as otherwise
+		// we would have hit the match arm. So, we can always use stackidx = 1,
+		// and there will be no out-of-order stack shenanigans happening.
+		//
+		// If one of the values is numerical, we can fence the other one then
+		// generate a straight-up numerical add. Otherwise, we generate a generic
+		// jay_add as we don't specially handle strings at the moment.
+
+		let is_num = if self.is_val_numerical(&left) {
+			self.num_fence_for("jay_fence_number", &right, 1, into);
+			true
+		}
+		else if self.is_val_numerical(&right) {
+			self.num_fence_for("jay_fence_number", &left, 1, into);
+			true
+		}
+		else {
+			// Fence both inputs
+			self.num_fence_for("jay_fence_number", &left, 1, into);
+			self.num_fence_for("jay_fence_number", &right, 1, into);
+			false
+		};
+
+		let has_stack_value = left.is_on_stack() || right.is_on_stack();
+
+		// If we're not doing a numerical add, then simply generate a jay_add
+		// and push to stack.
+		if !is_num {
+			self.indent(into);
+			// If we have a stack value, overwrite it with the jay_add, otherwise
+			// jay_push the new value on to the stack
+			if has_stack_value {
+				inf_write!(into, "jay_stack_ptr[-1] = ");
+			}
+			else {
+				inf_write!(into, "jay_push(");
+			}
+			inf_write!(into, "jay_add(");
+			self.compile_val(&left, 1, into);
+			inf_write!(into, ", ");
+			self.compile_val(&right, 1, into);
+			if has_stack_value {
+				inf_writeln!(into, ");");
+			}
+			else {
+				// Close the jay_add and the jay_push
+				inf_writeln!(into, "));");
+			}
+
+			return Val::OnStack;
+		}
+
+		// Finally, we have a numerical operation. Generate a new double temporary,
+		// and return a Val::DoubleConst.
+
+		let name = self.tmp_name();
+		self.indent(into);
+		inf_write!(into, "const double {name} = ");
+		self.compile_val_as(&left, 1, Ty::Number, into);
+		inf_write!(into, " + ");
+		self.compile_val_as(&right, 1, Ty::Number, into);
+		inf_writeln!(into, ";");
+
+		Val::DoubleConst(name)
+	}
+
 	fn binary_stackop(&mut self, into: &mut String, left: &Expr, op: &Token, right: &Expr) -> Val {
 		let fun = match op.typ {
-			Plus => "jay_op_add",
+			Plus => return self.add(into, left, right),
 			BangEqual => "jay_op_neq",
 			EqualEqual => "jay_op_eq",
 			_ => unreachable!()
@@ -190,7 +286,6 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 
 		self.compile_expr_tostack(left, into);
 		self.compile_expr_tostack(right, into);
-
 
 		self.indent(into);
 		inf_write!(into, "{fun}();\n");
@@ -272,13 +367,22 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 	}
 
 	fn num_fence_for(&mut self, fn_name: &str, val: &Val, stackidx: u32, into: &mut String) {
+		// TODO: Consider getting rid of stackidx value?
+		if !self.is_val_numerical(val) {
+			self.fence(fn_name, val, stackidx, into);
+		}
+	}
+
+	fn is_val_numerical(&mut self, val: &Val) -> bool {
 		match val {
-			Val::DoubleConst(_) | Val::Literal(LoxValue::Number(_)) => {
-				// No fence needed.
-			},
-			_ => {
-				self.fence(fn_name, val, stackidx, into);
-			}
+			Val::DoubleConst(_) => true,
+			Val::Literal(LoxValue::Number(_)) => true,
+
+			// For now, we don't have any type info about variables.
+			Val::Variable(_) => false,
+
+			// Nothing else can be considered definitively numerical.
+			_ => false,
 		}
 	}
 
@@ -1190,7 +1294,7 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 	}
 
 	fn compile_to_buffers(&mut self, stmts: &Vec<Stmt>, globals_count: u32) -> Result<String, fmt::Error> {
-		inf_writeln!(self.prelude, "/* --- jaylib configuration --- */\n");
+		inf_writeln!(self.prelude, "/* --- jaylib configuration --- */\n"); 
 		if self.opt.gc_stress_test {
 			inf_writeln!(self.prelude, "#define JAY_GC_STRESS_TEST");
 		}

@@ -1578,29 +1578,30 @@ jay_dbg_stack(const char *message) {
 }
 
 static inline
-void
-jay_op_add(void) {
+jay_value
+jay_add(jay_value aval, jay_value bval) {
 	// For now, only add handles gc correctly..
 
-	if(JAY_IS_NUMBER(jay_stack_ptr[-2])) {
-		if(JAY_IS_NUMBER(jay_stack_ptr[-1])) {
-			jay_stack_ptr[-2] = jay_box_number(JAY_AS_NUMBER(jay_stack_ptr[-1]) + JAY_AS_NUMBER(jay_stack_ptr[-2]));
-			jay_stack_ptr -= 1;
-			return;
+	if(JAY_IS_NUMBER(aval)) {
+		if(JAY_IS_NUMBER(bval)) {
+			return jay_box_number(JAY_AS_NUMBER(aval) + JAY_AS_NUMBER(bval));
 		}
 	}
 
-	if(JAY_IS_STRING(jay_stack_ptr[-2])) {
-		if(JAY_IS_STRING(jay_stack_ptr[-1])) {
-			size_t length = 
-				JAY_AS_STRING(jay_stack_ptr[-2])->length + JAY_AS_STRING(jay_stack_ptr[-1])->length;
+	if(JAY_IS_STRING(aval)) {
+		if(JAY_IS_STRING(bval)) {
+			jay_string *a = JAY_AS_STRING(aval);
+			jay_string *b = JAY_AS_STRING(bval);
+			size_t length = a->length + b->length;
+
+			jay_harbor(b);
+			jay_harbor(a);
+
 			jay_string *cat = jay_new_string(length);
 
-			// Now that we're done allocating, we can unwrap the stack things
-			// for the rest of the function.
-
-			jay_string *a = JAY_AS_STRING(jay_stack_ptr[-1]);
-			jay_string *b = JAY_AS_STRING(jay_stack_ptr[-2]);
+			// Now that we're done allocating, we can get back our references.
+			a = jay_unharbor();
+			b = jay_unharbor();
 
 			memcpy(cat->contents,             a->contents, a->length);
 			memcpy(cat->contents + a->length, b->contents, b->length);
@@ -1608,9 +1609,7 @@ jay_op_add(void) {
 			// Recompute hash
 			cat->hash = jay_compute_string_hash(cat->contents, length);
 
-			jay_stack_ptr[-2] = jay_box_string(cat);
-			jay_stack_ptr -= 1;
-			return;
+			return jay_box_string(cat);
 		}
 	}
 
