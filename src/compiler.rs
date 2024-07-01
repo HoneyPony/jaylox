@@ -323,24 +323,18 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 		}
 	}
 
-	fn binary_fenceop(&mut self, into: &mut String, left: &Expr, op: &Token, right: &Expr) -> Val {
-
-		let (op, ty, input_ty) = match op.typ {
-			Minus => ("-", Ty::Number, Ty::Number),
-			Slash => ("/",  Ty::Number, Ty::Number),
-			Star => ("*",  Ty::Number, Ty::Number),
+	fn binary_fenceop_num_inputs(&mut self, into: &mut String, left: &Expr, op: &Token, right: &Expr) -> Val {
+		let (op, ty) = match op.typ {
+			Minus => ("-", Ty::Number),
+			Slash => ("/",  Ty::Number),
+			Star => ("*",  Ty::Number),
 			
-			Greater => (">", Ty::Bool, Ty::Number),
-			GreaterEqual => (">=", Ty::Bool, Ty::Number),
-			Less => ("<", Ty::Bool, Ty::Number),
-			LessEqual => ("<=", Ty::Bool, Ty::Number),
+			Greater => (">", Ty::Bool),
+			GreaterEqual => (">=", Ty::Bool),
+			Less => ("<", Ty::Bool),
+			LessEqual => ("<=", Ty::Bool),
 
 			_ => unreachable!()
-		};
-
-		let (in_ty_fence, in_ty_cap) = match input_ty {
-			Ty::Number => ("jay_fence_number", "NUMBER"),
-			Ty::Bool => ("jay_fence_bool", "BOOL"),
 		};
 
 		let out_ty_ctype = match ty {
@@ -348,39 +342,32 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 			Ty::Bool => "bool",
 		};
 
-		let left_fence = Self::op_needs_numerical_fence(left);
-		let right_fence = Self::op_needs_numerical_fence(right);
-
-		// We still use the stack machine for the exprs for now.
 		let left = self.compile_expr(left, into);
 		let right = self.compile_expr(right, into);
 
 		let right_stack_idx = Self::stack_idx(&right, 0);
 		let left_stack_idx = Self::stack_idx(&left, right_stack_idx);
 
-		if left_fence { 
-			self.fence(in_ty_fence, &left, left_stack_idx, into);
-		}
-		if right_fence { 
-			self.fence(in_ty_fence, &right, right_stack_idx, into);
-		}
+		self.num_fence_for("jay_fence_number", &left, left_stack_idx, into);
+		self.num_fence_for("jay_fence_number", &right, right_stack_idx, into);
 
 		let tmp_name = self.tmp_name();
 
 		// Now that the types are checked, we can just directly generate the
 		// operation.
 		self.indent(into);
-		inf_write!(into,
-			"const {out_ty_ctype} {tmp_name} = ");
-		self.compile_val_as(&left, left_stack_idx, input_ty, into);
+		inf_write!(into, "const {out_ty_ctype} {tmp_name} = ");
+		self.compile_val_as(&left, left_stack_idx, Ty::Number, into);
 		inf_write!(into, " {op} ");
-		self.compile_val_as(&right, right_stack_idx, input_ty, into);
+		self.compile_val_as(&right, right_stack_idx, Ty::Number, into);
 		inf_writeln!(into, ";");
 
 		// Finally, we have to explicitly pop as many of the values as were on 
 		// the stack.
-		self.indent(into);
-		inf_writeln!(into, "jay_stack_ptr -= {left_stack_idx};");
+		if left_stack_idx > 0 {
+			self.indent(into);
+			inf_writeln!(into, "jay_stack_ptr -= {left_stack_idx};");
+		}
 
 		match ty {
 			Ty::Number => Val::DoubleConst(tmp_name),
@@ -396,7 +383,7 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 
 			Minus | Slash | Star |
 			Greater | GreaterEqual | Less | LessEqual => {
-				self.binary_fenceop(into, left, op, right)
+				self.binary_fenceop_num_inputs(into, left, op, right)
 			}
 
 			_ => unreachable!()
