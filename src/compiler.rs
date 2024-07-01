@@ -880,6 +880,26 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 		}
 	}
 
+	fn compile_locals_frame(&mut self, count: u32, scope: &str, into: &mut String) {
+		inf_writeln!(into, r#"	struct {{
+		size_t count;
+		jay_closure *gc_scope;
+		jay_value at[{0}];
+	}} locals;
+	locals.count = {0};
+	locals.gc_scope = {1};"#, count, scope);
+	
+		// In order to avoid giving the GC any bogus data, initialize all the
+		// ".at" values to nil.
+
+		for i in 0..count {
+			inf_writeln!(into, "\tlocals.at[{i}] = jay_box_nil();");
+		}
+
+		// Finally, push the frame so the GC can see it.
+		inf_writeln!(into, "\tjay_push_frame(&locals);");
+	}
+
 	fn compile_function(&mut self, fun: &Function, mangled_name: &String, is_method: bool) {
 		let mut def = String::new();
 
@@ -952,23 +972,7 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 
 		// Create the 'locals' struct.
 		if self.has_locals_frame {
-			inf_writeln!(def,r#"	struct {{
-		size_t count;
-		jay_closure *gc_scope;
-		jay_value at[{0}];
-	}} locals;
-	locals.count = {0};
-	locals.gc_scope = {1};"#, fun.local_count, gc_scope);
-
-			// In order to avoid giving the GC any bogus data, initialize all the
-			// ".at" values to nil.
-
-			for i in 0..fun.local_count {
-				inf_writeln!(def, "\tlocals.at[{i}] = jay_box_nil();");
-			}
-
-			// Finally, push the frame so the GC can see it.
-			inf_writeln!(def, "\tjay_push_frame(&locals);");
+			self.compile_locals_frame(fun.local_count, gc_scope, &mut def);
 		}
 
 		if is_method {
@@ -1318,7 +1322,7 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 		}
 	}
 
-	fn compile_to_buffers(&mut self, stmts: &Vec<Stmt>, globals_count: u32) -> Result<String, fmt::Error> {
+	fn compile_to_buffers(&mut self, stmts: &Vec<Stmt>, globals_count: u32, globals_locals_count: u32) -> Result<String, fmt::Error> {
 		inf_writeln!(self.prelude, "/* --- jaylib configuration --- */\n"); 
 		if self.opt.gc_stress_test {
 			inf_writeln!(self.prelude, "#define JAY_GC_STRESS_TEST");
@@ -1384,6 +1388,9 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 		// Create the scope for the main fn
 		inf_writeln!(main_fn, "jay_closure *scope = NULL;");
 
+		// Create the locals frame for the main fn
+		self.compile_locals_frame(globals_locals_count, "NULL", &mut main_fn);
+
 		// Compile the actual top-level code (any normal statements will go
 		// into main; other things will go into their own functions)
 		self.compile_stmts(stmts, &mut main_fn);
@@ -1392,7 +1399,7 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 		Ok(main_fn)
 	}
 
-	pub fn compile(&mut self, stmts: &Vec<Stmt>, globals_count: u32) -> std::io::Result<()> {
+	pub fn compile(&mut self, stmts: &Vec<Stmt>, globals_count: u32, globals_locals_count: u32) -> std::io::Result<()> {
 		// We use inf_write! a lot and so get fmt::Result, but most of the compilation
 		// process should not fail (unless we OOM or something). By contrast, it
 		// is very possible that, while writing out to the self.writer, there is
@@ -1401,7 +1408,7 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 		// So, wrap all of the compiling-to-buffers in its own function, and assume
 		// that it almost certainly won't error. Then, the error from writing to
 		// self.writer can be returned to the caller.
-		let main_fn = match self.compile_to_buffers(stmts, globals_count) {
+		let main_fn = match self.compile_to_buffers(stmts, globals_count, globals_locals_count) {
 			Ok(main_fn) => main_fn,
 			Err(err) => {
 				panic!("Compiler error while writing to buffers: {}", err);

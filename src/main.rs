@@ -149,7 +149,7 @@ impl Lox {
 			scanner.scan_tokens()
 		};
 
-		let (program, globals_count) = {
+		let (program, globals_count, globals_locals_count) = {
 			let mut parser = Parser::new(tokens, self);
 			parser.parse()
 		};
@@ -178,7 +178,7 @@ impl Lox {
 					.expect("Could not spawn 'gcc'.");
 
 				Compiler::new(self, stdin, options.codegen.clone())
-					.compile(&program, globals_count)?;
+					.compile(&program, globals_count, globals_locals_count)?;
 
 				let ecode = child.wait()?;
 				if !ecode.success() {
@@ -190,11 +190,11 @@ impl Lox {
 			CompileOutput::CFile { path } => {
 				let out_file = File::create(path)?;
 				Compiler::new(self, out_file, options.codegen.clone())
-				.compile(&program, globals_count)
+				.compile(&program, globals_count, globals_locals_count)
 			},
 			CompileOutput::StandardOut => {
 				Compiler::new(self, std::io::stdout(), options.codegen.clone())
-					.compile(&program, globals_count)
+					.compile(&program, globals_count, globals_locals_count)
 			}
 		}
 	}

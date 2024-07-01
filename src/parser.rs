@@ -45,6 +45,8 @@ pub struct Parser<'a> {
 	// statements (make sure they're 'return;' and transform them into 'return this;')
 	in_initializer: bool,
 
+	global_index: u32,
+
 	// Stores which VarRef is currently the superclass.
 	current_superclass: Option<VarRef>,
 
@@ -62,6 +64,7 @@ impl<'a> Parser<'a> {
 			fun_scopes: vec![],
 
 			undeclared_globals: HashSet::new(),
+			global_index: 0,
 
 			in_initializer: false,
 			current_superclass: None,
@@ -84,6 +87,23 @@ impl<'a> Parser<'a> {
 		self.fun_scopes.pop().unwrap()
 	}
 
+	fn check_global(&mut self, ptr: VarRef) {
+		// If we're at the global scope, we want to consider our variables "local"
+		// if possible to give the compiler more information.
+		//
+		// So, don't mark them global in that case.
+		if self.fun_scopes.len() == 1 {
+			return;
+		}
+
+		// Otherwise, we know we got here from check_closure, so we know that
+		// the variable IS definitely a global, and so it should be marked as
+		// such.
+		self.lox.get_var_mut(ptr).typ = VarType::Global;
+		self.lox.get_var_mut(ptr).index = self.global_index;
+		self.global_index += 1;
+	}
+
 	fn check_closure(&mut self, ptr: VarRef) {
 		// If it's in the current function scope, it's definitely not a closure.
 		if self.fun_scopes.last().unwrap().variables.contains(&ptr) {
@@ -91,7 +111,10 @@ impl<'a> Parser<'a> {
 		}
 
 		// Similarly, if it's in the top-level function scope, it's not a closure.
+		// However, if it is in the top level function scope, and we're not
+		// at that top-level scope, it should be marked as a global.
 		if self.fun_scopes.first().unwrap().variables.contains(&ptr) {
+			self.check_global(ptr);
 			return;
 		}
 
@@ -425,6 +448,13 @@ impl<'a> Parser<'a> {
 			self.fun_scopes.first_mut().unwrap().variables.insert(variable);
 
 			self.undeclared_globals.insert(variable);
+
+			// Note that in this case, the variable MUST be global, because
+			// we're accessing it from a non-global level (otherwise it would
+			// error with undeclared), so immediately mark it as really global.
+			self.lox.get_var_mut(variable).typ = VarType::Global;
+			self.lox.get_var_mut(variable).index = self.global_index;
+			self.global_index += 1;
 
 			return Ok(variable);
 		};
@@ -838,7 +868,7 @@ impl<'a> Parser<'a> {
 		}
 	}
 
-	pub fn parse(&mut self) -> (Vec<Stmt>, u32) {
+	pub fn parse(&mut self) -> (Vec<Stmt>, u32, u32) {
 		let mut result = vec![];
 
 		// Create the initial scopes
@@ -852,12 +882,14 @@ impl<'a> Parser<'a> {
 			if let Some(next) = self.declaration() { result.push(next); }
 		}
 
-		// Every variable in the top-level fun-scope is marked as global.
-		let mut global_index = 0;
+		// For each variable in the global scope that is actually only used
+		// in main(), we need to assign it an index.
+		let mut global_local_index = 0;
 		for var in &self.fun_scopes[0].variables {
-			self.lox.get_var_mut(*var).typ = VarType::Global;
-			self.lox.get_var_mut(*var).index = global_index;
-			global_index += 1;
+			if self.lox.get_var_mut(*var).typ == VarType::Local {
+				self.lox.get_var_mut(*var).index = global_local_index;
+				global_local_index += 1;
+			}
 		}
 
 		// If we have any undeclared global variables, report an error.
@@ -874,8 +906,8 @@ impl<'a> Parser<'a> {
 			self.lox.error_general(&format!("Global variable '{}' has not been declared.", name));
 		}
 
-		// Return the globals count
-		(result, global_index)
+		// Return the globals counts
+		(result, self.global_index, global_local_index)
 	}
 
 	// Helper function for creating library functions
