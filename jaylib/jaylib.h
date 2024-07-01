@@ -968,12 +968,6 @@ jay_pop() {
 	return *jay_stack_ptr;
 }
 
-static inline
-jay_value
-jay_top() {
-	return jay_stack_ptr[-1];
-}
-
 static inline bool
 jay_truthy(jay_value value) {
 	if(JAY_TAG(value) == JAY_FALSE || JAY_TAG(value) == JAY_NIL) return false;
@@ -986,15 +980,6 @@ jay_pop_condition() {
 }
 
 /* --- Literals --- */
-
-#define OP_LIT(name, param) \
-static inline void \
-jay_op_ ## name (param arg) { \
-	jay_push(jay_box_ ## name (arg)); \
-}
-
-OP_LIT(number, double)
-OP_LIT(bool, bool)
 
 static inline
 jay_string*
@@ -1566,12 +1551,6 @@ jay_method_from(jay_class *class, jay_function_impl impl, size_t arity) {
 
 /* --- Operators --- */
 
-#define OP_ONE(name) \
-static inline void \
-jay_op_ ## name (void) { \
-	jay_push(jay_ ## name(jay_pop())); \
-}
-
 #define OP_TWO(name) \
 static inline void \
 jay_op_ ## name (void) { \
@@ -1639,76 +1618,6 @@ jay_op_add(void) {
 }
 
 static inline
-jay_value
-jay_sub(jay_value a, jay_value b) {
-	if(!JAY_IS_NUMBER(a) || !JAY_IS_NUMBER(b)) {
-		oops("subtraction expects two numbers");
-	}
-	return jay_box_number(JAY_AS_NUMBER(a) - JAY_AS_NUMBER(b));
-}
-OP_TWO(sub)
-
-static inline
-jay_value
-jay_mul(jay_value a, jay_value b) {
-	if(!JAY_IS_NUMBER(a) || !JAY_IS_NUMBER(b)) {
-		oops("multiplication expects two numbers");
-	}
-	return jay_box_number(JAY_AS_NUMBER(a) * JAY_AS_NUMBER(b));
-}
-OP_TWO(mul)
-
-static inline
-jay_value
-jay_div(jay_value a, jay_value b) {
-	if(!JAY_IS_NUMBER(a) || !JAY_IS_NUMBER(b)) {
-		oops("division expects two numbers");
-	}
-	return jay_box_number(JAY_AS_NUMBER(a) / JAY_AS_NUMBER(b));
-}
-OP_TWO(div)
-
-static inline
-jay_value
-jay_gt(jay_value a, jay_value b) {
-	if(!JAY_IS_NUMBER(a) || !JAY_IS_NUMBER(b)) {
-		oops("comparison (>) expects two numbers");
-	}
-	return jay_box_bool(JAY_AS_NUMBER(a) > JAY_AS_NUMBER(b));
-}
-OP_TWO(gt)
-
-static inline
-jay_value
-jay_ge(jay_value a, jay_value b) {
-	if(!JAY_IS_NUMBER(a) || !JAY_IS_NUMBER(b)) {
-		oops("comparison (>=) expects two numbers");
-	}
-	return jay_box_bool(JAY_AS_NUMBER(a) >= JAY_AS_NUMBER(b));
-}
-OP_TWO(ge)
-
-static inline
-jay_value
-jay_lt(jay_value a, jay_value b) {
-	if(!JAY_IS_NUMBER(a) || !JAY_IS_NUMBER(b)) {
-		oops("comparison (<) expects two numbers");
-	}
-	return jay_box_bool(JAY_AS_NUMBER(a) < JAY_AS_NUMBER(b));
-}
-OP_TWO(lt)
-
-static inline
-jay_value
-jay_le(jay_value a, jay_value b) {
-	if(!JAY_IS_NUMBER(a) || !JAY_IS_NUMBER(b)) {
-		oops("comparison (<=) expects two numbers");
-	}
-	return jay_box_bool(JAY_AS_NUMBER(a) <= JAY_AS_NUMBER(b));
-}
-OP_TWO(le)
-
-static inline
 bool
 jay_eq_impl(jay_value a, jay_value b) {
 #ifdef JAY_NAN_BOXING
@@ -1769,23 +1678,6 @@ jay_eq(jay_value a, jay_value b) {
 	return jay_box_bool(jay_eq_impl(a, b));
 }
 OP_TWO(eq)
-
-static inline
-jay_value
-jay_not(jay_value v) {
-	return jay_box_bool(!jay_truthy(v));
-}
-OP_ONE(not)
-
-static inline
-jay_value
-jay_negate(jay_value v) {
-	if(!JAY_IS_NUMBER(v)) {
-		oops("negation expects a number");
-	}
-	return jay_box_number(-JAY_AS_NUMBER(v));
-}
-OP_ONE(negate)
 
 #ifdef JAY_ASSUME_CORRECT
 

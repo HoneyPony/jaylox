@@ -476,7 +476,7 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 				self.compile_expr_tostack(left, into);
 				// Check if the left expression should short-circuit.
 				self.indent(into);
-				inf_write!(into, "if({}jay_truthy(jay_top())) {{\n", invert);
+				inf_write!(into, "if({}jay_truthy(jay_stack_ptr[-1])) {{\n", invert);
 
 				self.push_indent();
 
