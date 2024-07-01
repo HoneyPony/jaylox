@@ -535,18 +535,10 @@ jay_gc_copy(jay_object *previous) {
 
 	size_t size = jay_gc_find_size(previous);
 
-#ifdef JAY_TRACE_GC_DIRECT
-	printf("gc:   copy %s %zu %p -> %p\n", jay_gc_tag_name(jay_gc_tag(previous)), size, previous, result);
-#endif
-
 	// Bump-allocate
 	jay_gc.high_ptr = jay_gc_align(jay_gc.high_ptr + size);
 	assert(jay_gc.high_ptr < jay_gc.limit);
 	assert((jay_gc.high_ptr & 0x7) == 0x0);
-
-#ifdef JAY_TRACE_GC
-	printf("     v copy %s %p -> %p (%zu bytes)\n", jay_gc_tag_name((uint64_t)previous->gc >> 32), previous, result, size);
-#endif
 
 	// Copy the old object over
 	memcpy(result, previous, size);
@@ -557,10 +549,6 @@ jay_gc_copy(jay_object *previous) {
 	// our alignment of 8
 	memcpy(&previous->gc, &result, sizeof(result));
 	assert((previous->gc & 1) == 0);
-
-#ifdef JAY_TRACE_GC
-	printf("     v (...which redirects %p -> %p)\n", previous, previous->gc);
-#endif
 
 	return result;
 }
@@ -579,17 +567,10 @@ jay_gc_copy_or_forward(void *prev) {
 	if(!prev) return NULL;
 	jay_object *previous = prev;
 
-#ifdef JAY_TRACE_GC
-	printf("     v forward %p -> %p\n", previous, previous->gc);
-#endif
-
 	if((previous->gc & 1) == 0) {
 		jay_object* result;
 		// Return the existing forwarding pointer.
 		memcpy(&result, &previous->gc, sizeof(result));
-#ifdef JAY_TRACE_GC_DIRECT
-		printf("gc:   forward %s %p -> %p\n", jay_gc_tag_name(jay_gc_tag(result)), previous, result);
-#endif
 		return result;
 	}
 
@@ -598,14 +579,7 @@ jay_gc_copy_or_forward(void *prev) {
 	return jay_gc_copy(previous);
 }
 
-#ifdef JAY_TRACE_GC_DIRECT
-	#define JAY_GC_VISIT_DIRECT(ptr) do { \
-		printf("gc: visit %s : %s %p\n", #ptr, ptr ? jay_gc_tag_name(jay_gc_tag(ptr)) : "<null>", ptr); \
-		ptr = jay_gc_copy_or_forward(ptr); \
-	} while(0)
-#else
-	#define JAY_GC_VISIT_DIRECT(ptr) ptr = jay_gc_copy_or_forward(ptr)
-#endif
+#define JAY_GC_VISIT_DIRECT(ptr) ptr = jay_gc_copy_or_forward(ptr)
 
 static inline
 void
@@ -675,10 +649,6 @@ size_t
 jay_gc_trace(jay_object *object) {
 	uint32_t gc_tag = (object->gc >> 32ULL);
 
-#ifdef JAY_TRACE_GC
-	printf("gc: trace %p = %s (%zd rel to high_ptr)\n", object, jay_gc_tag_name(gc_tag), (ssize_t)object - (ssize_t)jay_gc.high_ptr);
-#endif
-
 	switch(gc_tag) {
 		case JAY_GC_STRING:
 			/* no-op */
@@ -714,11 +684,6 @@ jay_gc_trace(jay_object *object) {
 			jay_value *values = jay_table_values(table);
 			for(size_t i = 0; i < table->table_size; ++i) {
 				if(names[i] != JAY_NAME_TOMBSTONE) {
-#ifdef JAY_TRACE_GC_DIRECT
-					printf("gc: visit table entry %zu (name = %zu)", i, table->table[i].name);
-					jay_print(table->table[i].value);
-					fflush(stdout);
-#endif
 					jay_gc_visit(&values[i]);
 				}
 			}
@@ -729,10 +694,6 @@ jay_gc_trace(jay_object *object) {
 			jay_closure *closure = (jay_closure*)object;
 			JAY_GC_VISIT_DIRECT(closure->parent);
 			for(size_t i = 0; i < closure->count; ++i) {
-#ifdef JAY_TRACE_GC_DIRECT
-				printf("gc: visit closure entry %zu ", i);
-				jay_print(closure->values[i]);
-#endif
 				jay_gc_visit(&closure->values[i]);
 			}
 			break;
@@ -742,13 +703,7 @@ jay_gc_trace(jay_object *object) {
 			oops("unknown garbage collection type");
 	}
 
-#ifdef JAY_TRACE_GC
-	size_t result_size = jay_gc_find_size(object);
-	printf("^^^ return size = %zu\n", result_size);
-	return result_size;
-#else
 	return jay_gc_find_size(object);
-#endif
 }
 
 // The core garbage-collection method, which performs scanning and copying
@@ -756,45 +711,24 @@ jay_gc_trace(jay_object *object) {
 static
 void
 jay_gc_go() {
-#ifdef JAY_TRACE_GC_DIRECT
-	printf("GC: BEGIN COLLECT!\n");
-#endif
-
 	// We will scan through the new to-space to copy any more referenced objects.
 	uintptr_t scan = jay_gc.high_ptr;
 
 	// We visit all roots.
 	for(jay_value *sp = jay_stack; sp != jay_stack_ptr; ++sp) {
-#ifdef JAY_TRACE_GC_DIRECT
-		printf("gc: visit stack ptr %p (as inst %p) -> ", sp, sp->as_instance);
-		jay_print(*sp);
-#endif
 		jay_gc_visit(sp);
 	}
 
 	for(size_t sf = 0; sf < jay_frames_ptr; ++sf) {
-#ifdef JAY_TRACE_GC_DIRECT
-		printf("gc: visit frame %zu\n", sf);
-#endif
 		jay_stackframe *frame = jay_frames[sf];
 		JAY_GC_VISIT_DIRECT(frame->gc_scope);
 		for(size_t i = 0; i < frame->count; ++i) {
-#ifdef JAY_TRACE_GC_DIRECT
-			printf("gc: visit frame value %zu ", i);
-			jay_print(frame->values[i]);
-#endif
 			jay_gc_visit(&frame->values[i]);
 		}
 
 	}
 
-#ifdef JAY_TRACE_GC_DIRECT
-	printf("gc: jay_harbor_ptr = %zu\n", jay_harbor_ptr);
-#endif
 	for(size_t hptr = 0; hptr < jay_harbor_ptr; ++hptr) {
-#ifdef JAY_TRACE_GC_DIRECT
-		printf("gc: visit harbor %zu\n", hptr);
-#endif
 		JAY_GC_VISIT_DIRECT(jay_harbor_stack[hptr]);
 	}
 
@@ -804,10 +738,6 @@ jay_gc_go() {
 		jay_object *to_scan = (void*)scan;
 		scan = jay_gc_align(scan + jay_gc_trace(to_scan));
 	}
-
-#ifdef JAY_TRACE_GC_DIRECT
-	printf("GC: COLLECT DONE! copied %zu bytes (out of %zu)\n", (size_t)(jay_gc.high_ptr - jay_gc.to_space), (jay_gc.current_size / 2));
-#endif
 
 	// Based on the proportion of collected memory, enable a flag to automatically
 	// expand the memory next time. (E.g., if we think we're using 80% of the memory,
@@ -830,26 +760,11 @@ jay_gc_go() {
 	}
 }
 
-//static char
-//gc_debugger[1024 * 1024];
-
-//static bool
-//gc_debugger_flag = false;
-
 static inline
 void
 jay_gc_recollect(size_t needed_size) {
-
-#ifdef JAY_TRACE_GC_DIRECT
-	printf("GC: RECOLLECT (NEED %zu)\n", needed_size);
-	printf("GC: REMAINING = %zu\n", (jay_gc.limit - jay_gc.high_ptr));
-#endif
-
 	size_t half = jay_gc.current_size / 2;
 	size_t taken = (size_t)(jay_gc.high_ptr - jay_gc.to_space);
-#ifdef JAY_TRACE_GC_DIRECT
-	printf("GC: TAKEN = %zu\n", taken);
-#endif
 
 	// Always double at least once.
 	// This is for the following reasons:
@@ -964,15 +879,6 @@ static inline
 void*
 jay_gc_alloc(size_t size, uint32_t tag) {
 	jay_object *obj = jay_gc_alloc_impl(size);
-#ifdef JAY_TRACE_GC_DIRECT
-	printf("gc: alloc %s %zu -> %p\n", jay_gc_tag_name(tag), size, obj);
-#endif
-
-
-#ifdef JAY_TRACE_GC
-	printf("gc: alloc %zu bytes => %p (high ptr -> %p)\n", size, obj, jay_gc.high_ptr);
-	printf("gc: tag = %lu %s\n", tag, jay_gc_tag_name(tag));
-#endif
 	// The gc pointer is initialized with 1 in the LSB, as well as the tag in
 	// the high bits.
 	obj->gc = 1 | ((uint64_t)tag << 32ULL);
@@ -1006,17 +912,6 @@ jay_gc_init(size_t init_size) {
 
 	// Don't automatically expand the heap, initially.
 	jay_gc.flag_auto_recollect = false;
-
-#ifdef JAY_TRACE_GC
-	puts("--- gc init --- ");
-	printf("current_heap = %p\n", jay_gc.current_heap);
-	printf("current_size = %p\n", jay_gc.current_size);
-	printf("to_space     = %p\n", jay_gc.to_space);
-	printf("high_ptr     = %p\n", jay_gc.high_ptr);
-	printf("limit        = %p\n", jay_gc.limit);
-	printf("from_space   = %p\n", jay_gc.from_space);
-	puts("---");
-#endif
 }
 
 static inline
