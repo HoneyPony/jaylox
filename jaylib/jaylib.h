@@ -1,9 +1,6 @@
 #ifndef JAYLIB_H
 #define JAYLIB_H
 
-// TODO: Make this a compiler option or something
-#define JAY_FULL_COMPAT
-
 #include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
@@ -1316,8 +1313,6 @@ jay_bind(jay_method method, jay_instance *this) {
 	return jay_box_bound_method(result);
 }
 
-#ifdef JAY_FULL_COMPAT
-
 static inline
 jay_value
 jay_get_instance(jay_instance *instance, size_t name) {
@@ -1346,32 +1341,6 @@ jay_fence_get(jay_value v) {
 		oops("can only look up properties on an instance");
 	}
 }
-
-#else
-
-static inline
-jay_value
-jay_get(jay_value v, size_t name) {
-	if(!JAY_IS_INSTANCE(v)) {
-		oops("can only look up properties on an instance");
-	}
-	jay_instance *instance = JAY_AS_INSTANCE(v);
-
-	jay_method *method = instance->class->dispatcher(instance->class, name);
-	if(method) {
-		return jay_bind(*method, instance);
-	}
-
-	// Look up the field on the object.
-	jay_hash_entry *place = jay_find_bucket(instance, name);
-	if(!place) {
-		oops("tried to look up non-existent property");
-	}
-
-	return place->value;
-}
-
-#endif
 
 static inline
 jay_value
@@ -1606,8 +1575,6 @@ jay_op_invoke_super(jay_value object, size_t name, jay_value superclass, size_t 
 	oops("superclass has no such method");
 }
 
-#ifdef JAY_FULL_COMPAT
-
 static inline
 void
 jay_op_invoke(size_t name, size_t arity) {
@@ -1647,46 +1614,6 @@ jay_op_invoke(size_t name, size_t arity) {
 
 	jay_push(result);
 }
-
-#else
-
-static inline
-void
-jay_op_invoke(size_t name, size_t arity) {
-	// Leave "this" on top in case we have to do a jay_op_get() and jay_op_call()
-	jay_value target = jay_top();
-
-	if(!JAY_IS_INSTANCE(target)) {
-		oops("can only get properties on an instance");
-	}
-
-	jay_instance *instance = JAY_AS_INSTANCE(target);
-
-	jay_method *method = instance->class->dispatcher(instance->class, name);
-	if(!method) {
-		// If the method doesn't exist, it still might be a field, in which case
-		// we look it up that way.
-		//
-		// I believe this differs from clox... so we could try looking up the
-		// field first, but that seems a little annoying.
-		jay_op_get(name);
-		jay_op_call(arity);
-		return;
-	}
-
-	// Okay, we have a valid method, we can actually still leave "this" on top
-	// as it's the last argument for the method...
-	jay_value result = jay_call_any(
-		method->implementation,
-		instance->class->closure,
-		method->arity,
-		arity + 1
-	);
-
-	jay_push(result);
-}
-
-#endif
 
 static inline
 jay_value
