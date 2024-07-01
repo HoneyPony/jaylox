@@ -1204,19 +1204,27 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 		inf_writeln!(self.prelude, "#include \"jaylib/jaylib.h\"\n");
 
 		// Write the globals array to the prelude (and the string constants array)
-		inf_writeln!(self.prelude, "static jay_value globals[{globals_count}];");
-		inf_writeln!(self.prelude, "static jay_value global_string_constants[{}];\n", self.lox.string_constants.len());
-
+		let string_constants_count = self.lox.string_constants.len();
+		if globals_count > 0 { 
+			inf_writeln!(self.prelude, "static jay_value globals[{globals_count}];");
+		}
+		if string_constants_count > 0 {
+			inf_writeln!(self.prelude, "static jay_value global_string_constants[{}];\n", string_constants_count);
+		}
 		// Create the global-visit function
 		inf_writeln!(self.prelude, "static\nvoid\njay_gc_visit_globals(void) {{");
-		inf_writeln!(self.prelude, "\tfor(size_t i = 0; i < {globals_count}; ++i) {{");
-		inf_writeln!(self.prelude, "\t\tjay_gc_visit(&globals[i]);");
-		inf_writeln!(self.prelude, "\t}}");
+		if globals_count > 0 {
+			inf_writeln!(self.prelude, "\tfor(size_t i = 0; i < {globals_count}; ++i) {{");
+			inf_writeln!(self.prelude, "\t\tjay_gc_visit(&globals[i]);");
+			inf_writeln!(self.prelude, "\t}}");
+		}
 		// For now, we also have to copy the string constants over, although this should change
 		// later (make them immortal)
-		inf_writeln!(self.prelude, "\tfor(size_t i = 0; i < {}; ++i) {{", self.lox.string_constants.len());
-		inf_writeln!(self.prelude, "\t\tjay_gc_visit(&global_string_constants[i]);");
-		inf_writeln!(self.prelude, "\t}}");
+		if string_constants_count > 0 {
+			inf_writeln!(self.prelude, "\tfor(size_t i = 0; i < {string_constants_count}; ++i) {{", );
+			inf_writeln!(self.prelude, "\t\tjay_gc_visit(&global_string_constants[i]);");
+			inf_writeln!(self.prelude, "\t}}");
+		}
 		inf_writeln!(self.prelude, "}}\n");
 
 		let mut main_fn = String::new();
