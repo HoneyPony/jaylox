@@ -729,6 +729,30 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 		}
 	}
 
+	fn make_if(&mut self, cond: Val, invert: bool, into: &mut String) {
+		self.indent(into);
+		let invert = if invert { "!" } else { "" };
+		match &cond {
+			Val::BoolConst(name) => {
+				inf_writeln!(into, "if({invert}{name}) {{");
+			},
+			Val::Variable(_) | Val::DoubleConst(_) | Val::Literal(_) => {
+				inf_write!(into, "if({invert}jay_is_truthy(");
+				// Note: We aren't using the stack, so this is fine.
+				self.compile_val(&cond, 0, into);
+				inf_writeln!(into, ")) {{");
+			}
+			// TODO: Support Val::Literal specifically..?
+			_ => {
+				// Note: We have to use braces due to the fact that expressions can be multi-line.
+				// Anything that we can't directly stick into the if must
+				// be stackified then popped from the stack.
+				self.stackify(&cond, into);
+				inf_writeln!(into, "if({invert}jay_pop_condition()) {{");
+			}
+		}
+	}
+
 	// NOTE: Provide 'into' if the function should be stored in the scope
 	// (So set to None when generated methods)
 	fn compile_function(&mut self, fun: &Function, mangled_name: &String) {
@@ -1059,26 +1083,7 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 			},
 			Stmt::If { condition, then_branch, else_branch } => {
 				let cond = self.compile_expr(condition, into);
-				self.indent(into);
-				match &cond {
-					Val::BoolConst(name) => {
-						inf_writeln!(into, "if({name}) {{");
-					},
-					Val::Variable(_) | Val::DoubleConst(_) | Val::Literal(_) => {
-						inf_write!(into, "if(jay_is_truthy(");
-						// Note: We aren't using the stack, so this is fine.
-						self.compile_val(&cond, 0, into);
-						inf_writeln!(into, ")) {{");
-					}
-					// TODO: Support Val::Literal specifically..?
-					_ => {
-						// Note: We have to use braces due to the fact that expressions can be multi-line.
-						// Anything that we can't directly stick into the if must
-						// be stackified then popped from the stack.
-						self.stackify(&cond, into);
-						into.push_str("if(jay_pop_condition()) {\n");
-					}
-				}
+				self.make_if(cond, false, into);
 
 				self.push_indent();
 				self.compile_stmt(then_branch, into);
@@ -1156,9 +1161,14 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 				into.push_str("for(;;) {\n");
 
 				self.push_indent();
-				self.compile_expr_tostack(condition, into);
+
+				let condition = self.compile_expr(condition, into);
+
+				self.make_if(condition, true, into);
 				self.indent(into);
-				into.push_str("if(!jay_pop_condition()) { break; }\n");
+				inf_writeln!(into, "\tbreak;");
+				self.indent(into);
+				inf_writeln!(into, "}}");
 
 				self.compile_stmt(body, into);
 

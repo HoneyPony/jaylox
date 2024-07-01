@@ -1,0 +1,14 @@
+fun indirect(a) {
+	return a;
+}
+
+var a = true;
+var b = false;
+
+if(true) { print "yes"; }
+if(a) { print "yes"; }
+if(b and a) { print "no"; }
+
+while(false) { print "no"; }
+while(b) { print "no"; }
+while(b and a) { print "no"; }
