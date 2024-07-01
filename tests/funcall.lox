@@ -1,0 +1,11 @@
+fun nothing() { }
+
+var start = clock();
+for(var i = 0; i < 100000000; i = i + 1) {
+	nothing();
+}
+
+var time = clock() - start;
+print time;
+print "ns:";
+print (time * 1000000) / 100000000;

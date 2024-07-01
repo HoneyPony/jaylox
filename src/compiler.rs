@@ -1110,11 +1110,10 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 				into.push_str("jay_op_print();\n");
 			},
 			Stmt::Return { value, .. } => {
-				match value {
-					Some(value) => { self.compile_expr_tostack(value, into); },
+				let val = match value {
+					Some(value) => { self.compile_expr(value, into) },
 					None => {
-						self.indent(into); 
-						into.push_str("jay_push(jay_box_nil());\n"); 
+						Val::Literal(LoxValue::Nil)
 					}
 				};
 
@@ -1129,7 +1128,16 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 				// just return an expression, if that expression is a single-fun-call.
 				// I don't think there would be any way to lose a root reference
 				// in that process.
-				into.push_str("return jay_pop();\n");
+				match &val {
+					Val::OnStack => {
+						into.push_str("return jay_pop();\n");
+					},
+					_ => {
+						inf_write!(into, "return ");
+						self.compile_val(&val, 0, into);
+						inf_writeln!(into, ";");
+					}
+				}
 			},
 			Stmt::Var { initializer, identity, .. } => {
 				// The only real role this statement plays, given that the variables are
