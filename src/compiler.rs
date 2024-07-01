@@ -279,11 +279,41 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 		}
 	}
 
+	fn compile_val_as_truthy(&mut self, val: &Val, stackidx: u32, into: &mut String) {
+		match val {
+			Val::BoolConst(what) => {
+				inf_write!(into, "{what}");
+			},
+			Val::Literal(LoxValue::Bool(false) | LoxValue::Nil) => {
+				inf_write!(into, "false");
+			},
+			Val::Literal(_) => {
+				inf_write!(into, "true");
+			},
+			_ => {
+				inf_write!(into, "jay_is_truthy(");
+				self.compile_val(val, stackidx, into);
+				inf_write!(into, ")");
+			}
+		}
+	}
+
 	fn fence(&mut self, fn_name: &str, val: &Val, stackidx: u32, into: &mut String) {
 		self.indent(into);
 		inf_write!(into, "{fn_name}(");
 		self.compile_val(val, stackidx, into);
 		inf_writeln!(into, ");");
+	}
+
+	fn num_fence_for(&mut self, fn_name: &str, val: &Val, stackidx: u32, into: &mut String) {
+		match val {
+			Val::DoubleConst(_) | Val::Literal(LoxValue::Number(_)) => {
+				// No fence needed.
+			},
+			_ => {
+				self.fence(fn_name, val, stackidx, into);
+			}
+		}
 	}
 
 	fn stack_idx(val: &Val, prev: u32) -> u32 {
@@ -643,17 +673,52 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 				Val::OnStack
 			},
 			Expr::Unary { operator, right } => {
-				let op = match operator.typ {
-					Bang => "jay_op_not",
-					Minus => "jay_op_negate",
-					_ => unreachable!()
-				};
+				match operator.typ {
+					Bang => {
+						let val = self.compile_expr(right, into);
+						let name = self.tmp_name();
 
-				self.indent(into);
-				self.compile_expr_tostack(right, into);
-				inf_write!(into, "{op}();\n");
+						self.indent(into);
+						inf_write!(into, "const bool {name} = !");
+						// If it's a stack object, it's index 1
+						// An interesting thing about bool semantics is that
+						// any value can be compiled as a bool... so we can't
+						// necessarily optimize using fences, etc.
+						//
+						// (That said, if we somehow knew a Variable was a
+						// Bool, then we could use that info.)
+						self.compile_val_as_truthy(&val, 1, into);
+						inf_writeln!(into, ";");
+						
+						// If it's a stack object, pop the value from the stack.
+						if let Val::OnStack = val {
+							self.indent(into);
+							inf_writeln!(into, "jay_stack_ptr -= 1;");
+						}
 
-				Val::OnStack
+						Val::BoolConst(name)
+					},
+					Minus => {
+						let val = self.compile_expr(right, into);
+						let name = self.tmp_name();
+						self.num_fence_for("jay_fence_number", &val, 1, into);
+
+						self.indent(into);
+						// Note the negation sign
+						inf_write!(into, "const double {name} = -");
+
+						self.compile_val_as(&val, 1, Ty::Number, into);
+						inf_writeln!(into, ";");
+
+						if let Val::OnStack = val {
+							self.indent(into);
+							inf_writeln!(into, "jay_stack_ptr -= 1;");
+						}
+
+						Val::DoubleConst(name)
+					},
+					_ => unreachable!(),
+				}
 			},
 			// Variables and This are essentially equivalent. Actually... I guess we could
 			// scrap Expr::This, and then just generate Expr::Variable in its place...
@@ -736,13 +801,18 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 			Val::BoolConst(name) => {
 				inf_writeln!(into, "if({invert}{name}) {{");
 			},
-			Val::Variable(_) | Val::DoubleConst(_) | Val::Literal(_) => {
+			Val::Literal(LoxValue::Bool(false) | LoxValue::Nil) => {
+				inf_writeln!(into, "if(false) {{");
+			},
+			Val::Literal(_) => {
+				inf_writeln!(into, "if(true) {{");
+			}
+			Val::Variable(_) | Val::DoubleConst(_) => {
 				inf_write!(into, "if({invert}jay_is_truthy(");
 				// Note: We aren't using the stack, so this is fine.
 				self.compile_val(&cond, 0, into);
 				inf_writeln!(into, ")) {{");
 			}
-			// TODO: Support Val::Literal specifically..?
 			_ => {
 				// Note: We have to use braces due to the fact that expressions can be multi-line.
 				// Anything that we can't directly stick into the if must

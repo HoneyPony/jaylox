@@ -1,0 +1,11 @@
+print -1;
+print !false;
+print -(-1);
+print !!false;
+
+var a = 1;
+print -a;
+print !a;
+
+if(true) { print "true"; }
+if(false) { print "false"; }
