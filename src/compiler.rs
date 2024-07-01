@@ -291,7 +291,7 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 				inf_write!(into, "true");
 			},
 			_ => {
-				inf_write!(into, "jay_is_truthy(");
+				inf_write!(into, "jay_truthy(");
 				self.compile_val(val, stackidx, into);
 				inf_write!(into, ")");
 			}
@@ -808,7 +808,7 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 				inf_writeln!(into, "if(true) {{");
 			}
 			Val::Variable(_) | Val::DoubleConst(_) => {
-				inf_write!(into, "if({invert}jay_is_truthy(");
+				inf_write!(into, "if({invert}jay_truthy(");
 				// Note: We aren't using the stack, so this is fine.
 				self.compile_val(&cond, 0, into);
 				inf_writeln!(into, ")) {{");
