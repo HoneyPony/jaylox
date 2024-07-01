@@ -1480,15 +1480,21 @@ jay_op_invoke_super(jay_instance *instance, size_t name, jay_value superclass, s
 
 static inline
 void
-jay_op_invoke(size_t name, size_t arity) {
-	// Leave "this" on top in case we have to do a jay_op_get() and jay_op_call()
-	jay_value target = jay_stack_ptr[-1];
-
+jay_fence_invoke(jay_value target) {
 	if(!JAY_IS_INSTANCE(target)) {
 		oops("can only get properties on an instance");
 	}
+}
 
-	jay_instance *instance = JAY_AS_INSTANCE(target);
+static inline
+void
+jay_op_invoke(size_t name, size_t arity, jay_instance *instance) {
+	// Leave "this" on top in case we have to do a jay_op_get() and jay_op_call()
+	// 'invoke' is a little bit weird in that we kind of need the 'this' pointer
+	// on the stack at all times, but we also want to elide the JAY_AS_INSTANCE
+	// check and such for 'this' calls. So, we both put it on the stack, and
+	// pass it as a parameter.
+	jay_value target = jay_stack_ptr[-1];
 
 	// In full compat mode, we have to look up the field first.
 	if(name < JAY_MAX_FIELD) {

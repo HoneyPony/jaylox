@@ -36,6 +36,7 @@ enum Val {
 	BoolConst(String),
 	Literal(LoxValue),
 	Variable(VarRef),
+	This(VarRef),
 }
 
 impl Val {
@@ -95,7 +96,8 @@ pub struct Compiler<'a, Writer: std::io::Write> {
 #[derive(Clone, Copy)]
 enum Ty {
 	Number,
-	Bool
+	Bool,
+	Instance,
 }
 
 
@@ -309,6 +311,9 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 			},
 			Val::Variable(ptr) => {
 				self.compile_var(*ptr, into);
+			},
+			Val::This(ptr) => {
+				self.compile_var(*ptr, into);
 			}
 		}
 	}
@@ -328,10 +333,15 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 				inf_write!(into, "{n}");
 			},
 
+			(Ty::Instance, Val::This(_)) => {
+				inf_write!(into, "this");
+			}
+
 			_ => {
 				let ty = match as_ty {
 					Ty::Number => "NUMBER",
 					Ty::Bool => "BOOL",
+					Ty::Instance => "INSTANCE",
 				};
 				inf_write!(into, "JAY_AS_{ty}(");
 				self.compile_val(val, stackidx, into);
@@ -410,6 +420,7 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 		let out_ty_ctype = match ty {
 			Ty::Number => "double",
 			Ty::Bool => "bool",
+			_ => unreachable!()
 		};
 
 		let left = self.compile_expr(left, into);
@@ -442,6 +453,7 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 		match ty {
 			Ty::Number => Val::DoubleConst(tmp_name),
 			Ty::Bool => Val::BoolConst(tmp_name),
+			_ => unreachable!()
 		}
 	}
 
@@ -516,12 +528,29 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 					// If the callee is a Get, then instead of making a new bound
 					// method, do an invoke
 					Expr::Get { object, name } => {
-						self.compile_expr_tostack(object, into);
+						let val = self.compile_expr(object, into);
+						// All values must be pushed on to the stack. Some, however,
+						// may be directly used as an instance.
+						self.stackify(&val, into);
+
+						// All vals but 'this' must be fenced.
+						match val {
+							Val::This(_) => { },
+							_ => {
+								self.indent(into);
+								inf_write!(into, "jay_fence_invoke(");
+								self.compile_val(&val, 1, into);
+								inf_writeln!(into, ");");
+							}
+						}
 
 						self.add_name(name, false);
 						self.indent(into);
-						inf_write!(into, "jay_op_invoke(NAME_{}, {});\n",
+						inf_write!(into, "jay_op_invoke(NAME_{}, {}, ",
 							name.lexeme, arguments.len());
+
+						self.compile_val_as(&val, 1, Ty::Instance, into);
+						inf_writeln!(into, ");");
 					}
 					// For superclass calls, use invoke_super
 					Expr::Super { method, identity, ..} => {
@@ -749,11 +778,12 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 					_ => unreachable!(),
 				}
 			},
-			// Variables and This are essentially equivalent. Actually... I guess we could
-			// scrap Expr::This, and then just generate Expr::Variable in its place...
-			Expr::Variable { identity, .. } | Expr::This { identity, .. } => {
+			Expr::Variable { identity, .. } => {
 				Val::Variable(*identity)
 			},
+			Expr::This { identity, .. } => {
+				Val::This(*identity)
+			}
 			Expr::Assign { value, identity, .. } => {
 				self.compile_assign(into, value, identity)
 			},
