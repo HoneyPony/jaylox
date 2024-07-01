@@ -1322,9 +1322,13 @@ static inline
 jay_value
 jay_get_instance(jay_instance *instance, size_t name) {
 	// In compat mode, we have to look up the field first.
-	jay_value *ptr = jay_find_bucket(instance, name);
-	if(ptr) {
-		return *ptr;
+	// Compare to JAY_MAX_FIELD so that we can skip this step for things that
+	// are definitely not fields.
+	if(name < JAY_MAX_FIELD) {
+		jay_value *ptr = jay_find_bucket(instance, name);
+		if(ptr) {
+			return *ptr;
+		}
 	}
 
 	jay_method *method = instance->class->dispatcher(instance->class, name);
@@ -1401,6 +1405,10 @@ jay_get_super(jay_value object, size_t name, jay_value superclass) {
 static inline
 jay_value
 jay_set_instance(jay_instance *instance, size_t name, jay_value value) {
+	// Note: Do no JAY_MAX_FIELD check here for one simple reason:
+	// The compiler should be generating correct code. In that case, the
+	// jay_set command will only ever be called with a name that can legally
+	// be a field.
 	jay_value *ptr = jay_find_bucket(instance, name);
 	if(!ptr) {
 		// Slow path is creating a new value on the object. This shouldn't happen
@@ -1613,11 +1621,13 @@ jay_op_invoke(size_t name, size_t arity) {
 	jay_instance *instance = JAY_AS_INSTANCE(target);
 
 	// In full compat mode, we have to look up the field first.
-	jay_value *ptr = jay_find_bucket(instance, name);
-	if(ptr) {
-		jay_push(*ptr);
-		jay_op_call(arity);
-		return;
+	if(name < JAY_MAX_FIELD) {
+		jay_value *ptr = jay_find_bucket(instance, name);
+		if(ptr) {
+			jay_push(*ptr);
+			jay_op_call(arity);
+			return;
+		}
 	}
 
 	// Then, look up the method.

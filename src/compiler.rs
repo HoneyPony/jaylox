@@ -49,6 +49,12 @@ pub struct Compiler<'a, Writer: std::io::Write> {
 	/// Contains every string used for names. This is for the fast hashing system.
 	name_set: HashSet<String>,
 
+	/// Contains every string that was used in a Set operation. That way, any
+	/// name not used in a Set operation can be placed in an entirely different
+	/// range of names, so that a fast-fail for whether a name is a field name
+	/// is simply name < JAY_MAX_FIELD.
+	name_set_setted: HashSet<String>,
+
 	current_indent: i32,
 
 	/// Tracks whether we currently have a 'locals' frame (wrt 'return' statements.)
@@ -90,6 +96,7 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 			prelude: String::new(),
 			function_defs: Vec::new(),
 			name_set: HashSet::new(),
+			name_set_setted: HashSet::new(),
 			current_indent: 0,
 
 			// The main function has no locals frame or captures frame.
@@ -148,7 +155,12 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 		}
 	}
 
-	fn add_name(&mut self, name: &Token) {
+	fn add_name(&mut self, name: &Token, setted: bool) {
+		if setted {
+			if self.name_set_setted.contains(&name.lexeme) { return; }
+			self.name_set_setted.insert(name.lexeme.clone());
+		}
+
 		if self.name_set.contains(&name.lexeme) { return; }
 		self.name_set.insert(name.lexeme.clone());
 	}
@@ -402,14 +414,14 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 					Expr::Get { object, name } => {
 						self.compile_expr_tostack(object, into);
 
-						self.add_name(name);
+						self.add_name(name, false);
 						self.indent(into);
 						inf_write!(into, "jay_op_invoke(NAME_{}, {});\n",
 							name.lexeme, arguments.len());
 					}
 					// For superclass calls, use invoke_super
 					Expr::Super { method, identity, this_identity, .. } => {
-						self.add_name(method);
+						self.add_name(method, false);
 						self.indent(into);
 						inf_write!(into, "jay_op_invoke_super(");
 						self.compile_var(*this_identity, into);
@@ -506,7 +518,7 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 					}
 				};
 
-				self.add_name(name);
+				self.add_name(name, false);
 				self.indent(into);
 
 				inf_write!(into, "jay_stack_ptr[-1] = ");
@@ -547,7 +559,7 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 					}
 				}
 
-				self.add_name(name);
+				self.add_name(name, true);
 				self.indent(into);
 
 				// Write to -2 because the set expression takes 2 args.
@@ -586,7 +598,7 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 				// to something... will have to think about it while designing
 				// the garbage collector...
 
-				self.add_name(method);
+				self.add_name(method, false);
 				self.indent(into);
 				inf_write!(into, "jay_op_get_super(");
 				self.compile_var(*this_identity, into);
@@ -891,7 +903,7 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 		inf_writeln!(def, "\tswitch(name) {{");
 
 		for (idx, method) in class.methods.iter().enumerate() {
-			self.add_name(&method.name);
+			self.add_name(&method.name, false);
 			inf_writeln!(def, "\t\tcase NAME_{}: return &class->methods[{}];", method.name.lexeme, idx);
 		}
 
@@ -1267,18 +1279,36 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 			}
 		};
 
-		// First: prelude, containing all function declarations
-		write!(self.writer, "{}", self.prelude)?;
+		// First, NAME_ definitions
 
 		writeln!(self.writer, "\n/* --- NAME Definitions --- */\n")?;
 
-		// Second, NAME_ definitions
 		// Note that 0 is the TOMBSTONE so we cannot use it for a NAME
 		let mut name_value: usize = 1;
+		// We start by creating all names for things that might be fields (i.e.
+		// things that have been set.) Then we generate JAY_MAX_FIELD based
+		// on that set. Finally we generate the rest of the names.
+		for name in &self.name_set_setted {
+			writeln!(self.writer, "#define NAME_{name} ((jay_name){name_value})")?;
+			name_value += 1;
+
+			self.name_set.remove(name);
+		}
+
+		// Note: We will use < for the field comparison.
+		let jay_max_field = name_value;
+
 		for name in &self.name_set {
 			writeln!(self.writer, "#define NAME_{name} ((jay_name){name_value})")?;
 			name_value += 1;
 		}
+
+		writeln!(self.writer, "#define JAY_MAX_FIELD {jay_max_field}")?;
+
+		// First: prelude, containing all function declarations
+		write!(self.writer, "{}", self.prelude)?;
+
+		
 		writeln!(self.writer, "\n/* --- Function Definitions --- */\n")?;
 
 		// Third, function definitions
