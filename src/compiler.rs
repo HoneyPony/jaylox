@@ -1,6 +1,5 @@
 use core::fmt;
 use std::collections::HashMap;
-use std::rc::Rc;
 use std::{collections::HashSet, fmt::Write};
 
 use crate::stmt::{Class, Function};
