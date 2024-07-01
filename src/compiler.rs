@@ -1190,8 +1190,7 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 	}
 
 	fn compile_to_buffers(&mut self, stmts: &Vec<Stmt>, globals_count: u32) -> Result<String, fmt::Error> {
-		// Write the first part of the prelude
-		inf_writeln!(self.prelude, "/*** This C file created by jaylox https://github.com/HoneyPony/jaylox ***/");
+		inf_writeln!(self.prelude, "/* --- jaylib configuration --- */\n");
 		if self.opt.gc_stress_test {
 			inf_writeln!(self.prelude, "#define JAY_GC_STRESS_TEST");
 		}
@@ -1279,6 +1278,8 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 				panic!("Compiler error while writing to buffers: {}", err);
 			}
 		};
+
+		writeln!(self.writer, "/*** This C file created by jaylox https://github.com/HoneyPony/jaylox ***/")?;
 
 		// First, NAME_ definitions
 
