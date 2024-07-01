@@ -416,40 +416,23 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 		}
 	}
 
-	fn compile_assign(&mut self, into: &mut String, value: &Expr, identity: &VarRef, do_push: bool) {
-		match value {
-			Expr::Literal(_) | Expr::Variable { .. } => {},
-			_ => {
-				// If it's a literal or variable, we don't need the expr pushed.
-				// TODO: Build a better optimizer that doesn't need all these
-				// separate checks...
-				self.compile_expr_tostack(value, into);
-			}
-		}
+	fn compile_assign(&mut self, into: &mut String, value: &Expr, identity: &VarRef) -> Val {
+		let val = self.compile_expr(value, into);
 		self.indent(into);
-		if do_push {
-			inf_write!(into, "jay_push(");
-		}
-		self.compile_var(*identity, into);
-		match value {
-			Expr::Literal(value) => {
-				inf_write!(into, " = ");
-				self.compile_literal_inline(into, value);
-			},
-			Expr::Variable { identity, .. } => {
-				inf_write!(into, " = ");
-				self.compile_var(*identity, into);
-			},
 
-			// For non-special cased assignments, just pop.
-			_ => {
-				inf_write!(into, " = jay_pop()");
-			}
-		}
-		if do_push {
-			inf_write!(into, ")");
-		}
+		self.compile_var(*identity, into);
+		inf_write!(into, " = ");
+		self.compile_val(&val, 1, into);
 		inf_write!(into, ";\n");
+
+		if let Val::OnStack = val {
+			self.indent(into);
+			inf_writeln!(into, "jay_stack_ptr -= 1;");
+		}
+
+		// Return a value with the variable. This results in the assignment
+		// also being able to propagate, etc.
+		Val::Variable(*identity)
 	}
 
 	fn compile_expr_tostack(&mut self, expr: &Expr, into: &mut String) -> Val {
@@ -726,9 +709,7 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 				Val::Variable(*identity)
 			},
 			Expr::Assign { value, identity, .. } => {
-				// For exprs, we have to push, in case the value is needed.
-				self.compile_assign(into, value, identity, true);
-				Val::OnStack
+				self.compile_assign(into, value, identity)
 			},
 		}
 	}
@@ -1105,25 +1086,16 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 				inf_writeln!(into, ", scope);");
 			},
 			Stmt::Expression(expr) => {
-				match expr {
-					Expr::Assign { value, identity, .. } => {
-						// Elide extra stack shenanigans for assignment statements.
-						self.compile_assign(into, value, identity, false);
+				let val = self.compile_expr(expr, into);
+				match val {
+					Val::OnStack => {
+						// After the expression is done, pop the unused value.
+						// Any expression that does not needlessly push a value
+						// will not return Val::OnStack.
+						self.indent(into);
+						into.push_str("jay_stack_ptr -= 1;\n");
 					},
-
-					// For any exprs we don't special case, just compile them
-					// and pop.
-					_ => {
-						let val = self.compile_expr(expr, into);
-						match val {
-							Val::OnStack => {
-								// After the expression is done, pop the unused value.
-								self.indent(into);
-								into.push_str("jay_pop();\n");
-							},
-							_ => { }
-						}
-					}
+					_ => { }
 				}
 			},
 			Stmt::Function(fun) => {
@@ -1224,7 +1196,7 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 					Some(initializer) => {
 						// If we have an initializer, re-use the compile_assign
 						// logic to compile it "inline".
-						self.compile_assign(into, initializer, identity, false);
+						self.compile_assign(into, initializer, identity);
 					},
 					None => {
 						// Otherwise, just compile the variable = jay_box_nil().
