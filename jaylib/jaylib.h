@@ -1252,14 +1252,10 @@ jay_fence_get(jay_value v) {
 
 static inline
 jay_value
-jay_get_super(jay_value object, size_t name, jay_value superclass) {
-	if(!JAY_IS_INSTANCE(object)) {
-		oops("can only look up super properties on an instance");
-	}
+jay_get_super(jay_instance *instance, size_t name, jay_value superclass) {
 	if(!JAY_IS_CLASS(superclass)) {
 		oops("superclass must be a class");
 	}
-	jay_instance *instance = JAY_AS_INSTANCE(object);
 
 	// Superclass is "statically bound" so to speak -- see abc_super.lox. 
 	// Essentially, the superclass does not change to match the superclass
@@ -1318,7 +1314,7 @@ jay_fence_set(jay_value v) {
 // Same with 'this'. But, the super _op does push a value on to the stack.
 static inline
 void
-jay_op_get_super(jay_value this, size_t name, jay_value superclass) {
+jay_op_get_super(jay_instance *this, size_t name, jay_value superclass) {
 	jay_push(jay_get_super(this, name, superclass));
 }
 
@@ -1442,16 +1438,15 @@ jay_op_call(size_t arity) {
 	}
 }
 
+// Note: invoke_super and get_super both take a jay_value* because they MUST always
+// be provided a 'this', and the compiler will always be able to generate the correct
+// code for that.
 static inline
 void
-jay_op_invoke_super(jay_value object, size_t name, jay_value superclass, size_t arity) {
-	if(!JAY_IS_INSTANCE(object)) {
-		oops("can only look up super properties on an instance");
-	}
+jay_op_invoke_super(jay_instance *instance, size_t name, jay_value superclass, size_t arity) {
 	if(!JAY_IS_CLASS(superclass)) {
 		oops("superclass must be a class");
 	}
-	jay_instance *instance = JAY_AS_INSTANCE(object);
 
 	// Superclass is "statically bound" so to speak -- see abc_super.lox. 
 	// Essentially, the superclass does not change to match the superclass
@@ -1466,7 +1461,7 @@ jay_op_invoke_super(jay_value object, size_t name, jay_value superclass, size_t 
 	jay_method *method = superclass_real->dispatcher(superclass_real, name);
 	if(method) {
 		// Push 'this' on to the stack, then call the method.
-		jay_push(object);
+		jay_push(jay_box_instance(instance));
 
 		jay_value result = jay_call_any(
 			method->implementation,

@@ -628,13 +628,8 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 				inf_write!(into, "jay_stack_ptr[-1] = ");
 
 				match object.as_ref() {
-					Expr::This { identity, .. } => {
-						// We know that 'this' is always an instance.
-						// TODO: Maybe generate a 'const pointer' 'this' that
-						// we can just reference directly..?
-						inf_write!(into, "jay_get_instance(JAY_AS_INSTANCE(");
-						self.compile_var(*identity, into);
-						inf_write!(into, "), NAME_{});\n", name.lexeme);
+					Expr::This { .. } => {
+						inf_write!(into, "jay_get_instance(this, NAME_{});\n", name.lexeme);
 					},
 					_ => {
 						inf_write!(into, "jay_get_instance(JAY_AS_INSTANCE(jay_stack_ptr[-1]), NAME_{});\n", name.lexeme);
@@ -670,13 +665,11 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 				inf_write!(into, "jay_stack_ptr[-2] = ");
 
 				match object.as_ref() {
-					Expr::This { identity, .. } => {
+					Expr::This { .. } => {
 						// We know that 'this' is always an instance.
 						// TODO: Maybe generate a 'const pointer' 'this' that
 						// we can just reference directly..?
-						inf_write!(into, "jay_set_instance(JAY_AS_INSTANCE(");
-						self.compile_var(*identity, into);
-						inf_write!(into, "), NAME_{}, jay_stack_ptr[-2]);\n", name.lexeme);
+						inf_write!(into, "jay_set_instance(this, NAME_{}, jay_stack_ptr[-2]);\n", name.lexeme);
 					},
 					_ => {
 						inf_write!(into, "jay_set_instance(JAY_AS_INSTANCE(jay_stack_ptr[-1]), NAME_{}, jay_stack_ptr[-2]);\n", name.lexeme);
@@ -689,7 +682,7 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 
 				Val::OnStack
 			},
-			Expr::Super { method, identity, this_identity, .. } => {
+			Expr::Super { method, identity, .. } => {
 				// Super is a little unique in that it is one of the only
 				// operators that explicitly takes a non-stack argument (because
 				// the superclass is always a variable, which is necessarily
@@ -704,9 +697,7 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 
 				self.add_name(method, false);
 				self.indent(into);
-				inf_write!(into, "jay_op_get_super(");
-				self.compile_var(*this_identity, into);
-				inf_write!(into, ", NAME_{}, ", method.lexeme);
+				inf_write!(into, "jay_op_get_super(this, NAME_{}, ", method.lexeme);
 				self.compile_var(*identity, into);
 				inf_writeln!(into, ");");
 
@@ -861,9 +852,7 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 		}
 	}
 
-	// NOTE: Provide 'into' if the function should be stored in the scope
-	// (So set to None when generated methods)
-	fn compile_function(&mut self, fun: &Function, mangled_name: &String) {
+	fn compile_function(&mut self, fun: &Function, mangled_name: &String, is_method: bool) {
 		let mut def = String::new();
 
 		// Track 'has_locals_frame' down the call stack
@@ -952,6 +941,12 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 
 			// Finally, push the frame so the GC can see it.
 			inf_writeln!(def, "\tjay_push_frame(&locals);");
+		}
+
+		if is_method {
+			// Create a "this" variable for faster get/set operations
+			inf_writeln!(def, "\tjay_instance *const this = JAY_AS_INSTANCE(args[{}]);",
+				fun.param_count - 1)
 		}
 
 		
@@ -1064,7 +1059,8 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 			
 			// The C function should be the same, due to the 'this' variable being
 			// automatically added at the end.
-			self.compile_function(method, &method_mangled_name);
+			// Methods are compiled separately from functions so they get a this.
+			self.compile_function(method, &method_mangled_name, true);
 
 			// Methods do not store the closure, because the have a pointer back
 			// to the class.
@@ -1157,7 +1153,8 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 			},
 			Stmt::Function(fun) => {
 				let mangled_name = self.mangle(format!("jf_{}", fun.name.lexeme));
-				self.compile_function(fun, &mangled_name);
+				// Functions are not methods and do not have 'this'.
+				self.compile_function(fun, &mangled_name, false);
 
 				// In the outer scope, we need to have a reference to this function
 				// in our closure. And, that function's closure is our 'scope.' So,
