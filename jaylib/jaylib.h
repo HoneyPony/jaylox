@@ -20,6 +20,12 @@ struct jay_class;
 
 typedef uint32_t jay_name;
 
+#ifdef JAY_ASSERT_GC
+	#define jay_gc_assert(...) assert(__VA_ARGS__)
+#else
+	#define jay_gc_assert(...)
+#endif
+
 #ifndef JAY_NAN_BOXING
 
 typedef struct jay_value {
@@ -531,24 +537,24 @@ jay_gc_copy(jay_object *previous) {
 
 	// Allocate from high ptr
 	jay_object *result = (void*)jay_gc.high_ptr;
-	assert(jay_gc.high_ptr >= jay_gc.to_space);
+	jay_gc_assert(jay_gc.high_ptr >= jay_gc.to_space);
 
 	size_t size = jay_gc_find_size(previous);
 
 	// Bump-allocate
 	jay_gc.high_ptr = jay_gc_align(jay_gc.high_ptr + size);
-	assert(jay_gc.high_ptr < jay_gc.limit);
-	assert((jay_gc.high_ptr & 0x7) == 0x0);
+	jay_gc_assert(jay_gc.high_ptr < jay_gc.limit);
+	jay_gc_assert((jay_gc.high_ptr & 0x7) == 0x0);
 
 	// Copy the old object over
 	memcpy(result, previous, size);
 
-	assert(((uint64_t)result->gc >> 32) == ((uint64_t)previous->gc >> 32));
+	jay_gc_assert(((uint64_t)result->gc >> 32) == ((uint64_t)previous->gc >> 32));
 
 	// Update forwarding pointer. Note that the LSB will always be 0 due to
 	// our alignment of 8
 	memcpy(&previous->gc, &result, sizeof(result));
-	assert((previous->gc & 1) == 0);
+	jay_gc_assert((previous->gc & 1) == 0);
 
 	return result;
 }
