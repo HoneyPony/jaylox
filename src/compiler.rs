@@ -229,9 +229,10 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 			true
 		}
 		else {
-			// Fence both inputs
-			self.num_fence_for("jay_fence_number", &left, 1, into);
-			self.num_fence_for("jay_fence_number", &right, 1, into);
+			// If we don't know that one of the values is numerical, then we should not
+			// fence either of them (because they might be strings). Instead, disable
+			// any numerical-specific code generation ('return false' here) and use
+			// the general jay_add call.
 			false
 		};
 
