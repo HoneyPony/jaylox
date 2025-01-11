@@ -859,10 +859,10 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 				inf_writeln!(into, "if({invert}{name}) {{");
 			},
 			Val::Literal(LoxValue::Bool(false) | LoxValue::Nil) => {
-				inf_writeln!(into, "if(false) {{");
+				inf_writeln!(into, "if({invert}false) {{");
 			},
 			Val::Literal(_) => {
-				inf_writeln!(into, "if(true) {{");
+				inf_writeln!(into, "if({invert}true) {{");
 			}
 			Val::Variable(_) | Val::DoubleConst(_) => {
 				inf_write!(into, "if({invert}jay_truthy(");
