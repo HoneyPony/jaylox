@@ -19,25 +19,14 @@ pub struct Function {
 
 	pub captured: Vec<VarRef>,
 
+	/// Reference to the "this" var if the function references it. 
+	/// Used to implement the "this" optimization.
+	pub this: Option<VarRef>,
+
 	pub body: Vec<Stmt>,
 }
 
 impl Function {
-	pub fn empty_init() -> Function {
-		return Function {
-			name: Token::new(TokenType::Identifier, "init".into(), LoxValue::Nil, 0),
-
-			identity: None, // This is a method which doesn't have identity
-			vars: HashSet::new(),
-			param_count: 1, // Any method needs at least 1 param, for 'this'
-			local_count: 0,
-
-			captured: vec![],
-
-			body: vec![],
-		};
-	}
-
 	pub fn is_method(&self) -> bool {
 		// Hack: For now, whether or not we have an identity corresponds to whether
 		// we are a method. Methods don't have identity.

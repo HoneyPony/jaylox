@@ -975,12 +975,12 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 			self.compile_locals_frame(fun.local_count, gc_scope, &mut def);
 		}
 
-		if is_method {
+		if let Some(this_var) = fun.this {
 			// Create a "this" variable for faster get/set operations
-			inf_writeln!(def, "\tjay_instance *const this = JAY_AS_INSTANCE(args[{}]);",
-				fun.param_count - 1)
+			inf_write!(def, "\tjay_instance *const this = JAY_AS_INSTANCE(");
+			self.compile_var(this_var, &mut def);
+			inf_writeln!(def, ");");
 		}
-
 		
 		// Generate the code inside the function.
 		self.compile_stmts(&fun.body, &mut def);

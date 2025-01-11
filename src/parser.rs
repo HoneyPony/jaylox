@@ -743,6 +743,9 @@ impl<'a> Parser<'a> {
 		self.consume(LeftBrace, &format!("Expect '{{' before {kind} body."))?;
 		let body = self.block()?;
 
+		// Keep track of any "this" value for compiler.
+		let function_this = self.find_variable("this");
+
 		self.pop_scope();
 
 		// Get the fun scope so that variable indices can be assigned.
@@ -785,6 +788,7 @@ impl<'a> Parser<'a> {
 			param_count: param_idx,
 			local_count: locals_idx,
 			body,
+			this: function_this,
 			captured,
 		});
 	}
