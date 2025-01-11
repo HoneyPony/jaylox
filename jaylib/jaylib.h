@@ -450,7 +450,7 @@ jay_print(jay_value value) {
 			puts("<function>");
 			break;
 		default:
-			printf("%f\n", JAY_AS_NUMBER(value));
+			printf("%g\n", JAY_AS_NUMBER(value));
 			break;
 	}
 }
