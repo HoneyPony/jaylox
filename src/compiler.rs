@@ -1436,6 +1436,10 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 		// Note: We will use < for the field comparison.
 		let jay_max_field = name_value;
 
+		// We must always define NAME_init for the op_call implementation, even if
+		// that name is not actually used.
+		self.name_set.insert(String::from("init"));
+
 		for name in &self.name_set {
 			writeln!(self.writer, "#define NAME_{name} ((jay_name){name_value})")?;
 			name_value += 1;
