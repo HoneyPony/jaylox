@@ -808,19 +808,15 @@ impl<'a> Parser<'a> {
 
 		self.consume(LeftBrace, "Expect '{' before class body.")?;
 
-		// Because init is always at 0th index, place some kind of init there.
-		let mut methods = vec![Function::empty_init()];
+		// We start with 0 methods.
+		// Originally, we created an empty initializer here. But that's not valid--
+		// classes without an initializer should defer to their superclass.
+		let mut methods = vec![];
 
+		// Push every method into our methods array.
 		while !self.check(RightBrace) && !self.is_at_end() {
 			let method = self.function("method", true)?;
-			if method.name.lexeme == "init" {
-				// If we find a real init, place it into the 0th index instead
-				// of the empty one.
-				methods[0] = method;
-			}
-			else {
-				methods.push(method);
-			}
+			methods.push(method);
 		}
 
 		self.consume(RightBrace, "Expect '}' after class body.")?;

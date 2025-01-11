@@ -1424,19 +1424,30 @@ jay_op_call(size_t arity) {
 		jay_value new_this = jay_box_instance(instance);
 		
 		jay_push(new_this);
-
-		jay_value result = jay_call_any(
-			class->methods[0].implementation,
-			class->closure,
-			class->methods[0].arity,
-			arity + 1 // Same as above
-		);
 		
-		// Originally, we just pushed new_this back on to the stack. But this
-		// isn't gc-safe, because jay_call_any might allocate. Instead, the easiest
-		// thing to do is to just trust the contract that the initializer will
-		// return this, and push that value.
-		jay_push(result);
+		// Because 'init' might belong to the superclass or might not exist
+		// at all, we have to look it up through the dispatcher for consistency
+		// with normal method lookup.
+
+		jay_method *method = class->dispatcher(class, NAME_init);
+		if(method) {
+			jay_value result = jay_call_any(
+				method->implementation,
+				class->closure,
+				method->arity,
+				arity + 1 // Same as above
+			);
+			
+			// Originally, we just pushed new_this back on to the stack. But this
+			// isn't gc-safe, because jay_call_any might allocate. Instead, the easiest
+			// thing to do is to just trust the contract that the initializer will
+			// return this, and push that value.
+			jay_push(result);
+		}
+		else {
+			// If there isn't an initializer, we simply return the new_this value,
+			// which is already pushed onto the stack.
+		}
 	}
 	else {
 		oops("can only call callable objects");
@@ -1569,18 +1580,6 @@ static inline
 void
 jay_op_print(void) {
 	jay_print(jay_pop());
-}
-
-static inline
-void
-jay_dbg_stack(const char *message) {
-	if(jay_stack_ptr == jay_stack) {
-		printf("%s\t[empty]\n", message);
-		return;
-	}
-
-	printf("%s\t%llu : ", message, (jay_stack_ptr - jay_stack));
-	jay_print(jay_stack_ptr[-1]);
 }
 
 static inline
