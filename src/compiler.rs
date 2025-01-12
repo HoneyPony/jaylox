@@ -710,7 +710,7 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 
 				Val::OnStack
 			},
-			Expr::Super { method, identity, .. } => {
+			Expr::Super { method, class_identity, .. } => {
 				// Super is a little unique in that it is one of the only
 				// operators that explicitly takes a non-stack argument (because
 				// the superclass is always a variable, which is necessarily
@@ -726,7 +726,7 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 				self.add_name(method, false);
 				self.indent(into);
 				inf_write!(into, "jay_op_get_super(this, NAME_{}, ", method.lexeme);
-				self.compile_var(*identity, into);
+				self.compile_var(*class_identity, into);
 				inf_writeln!(into, ");");
 
 				Val::OnStack
