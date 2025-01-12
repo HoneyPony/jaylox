@@ -122,7 +122,7 @@ impl<'a> Scanner<'a> {
 	}
 
 	fn is_at_end(&self) -> bool {
-		return self.current >= self.source.len() as i32
+		return self.current >= self.chars.len() as i32
 	}
 
 	fn advance(&mut self) -> char {
