@@ -1524,6 +1524,18 @@ jay_op_invoke(size_t name, size_t arity, jay_instance *instance) {
 	if(name < JAY_MAX_FIELD) {
 		jay_value *ptr = jay_find_bucket(instance, name);
 		if(ptr) {
+			// In the case that we're calling a field, there are two cases
+			// to consider:
+			// 1. It's a regular function.
+			// 2. It's a bound method.
+			// In both cases, we do not want to have 'this' on the stack
+			// anymore. In the first case, it is straight up the wrong
+			// argument (see test/field_call.lox) and in the second case,
+			// jay_op_call will push this for us so we end up with too
+			// many.
+			// Therefore, we have to pop(), then we can just push()
+			// the actual function to call and jay_op_call.
+			jay_pop();
 			jay_push(*ptr);
 			jay_op_call(arity);
 			return;
