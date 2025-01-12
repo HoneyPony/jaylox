@@ -146,7 +146,7 @@ fn generate_ast_files(expr: &mut File, stmt: &mut File) -> io::Result<()> {
 		ty("Literal", vec![arg("value", "LoxValue")]),
 		ty("Logical", vec![arg("left", "Expr"), arg("operator", "Token"), arg("right", "Expr")]),
 		ty("Set", vec![arg("object", "Expr"), arg("name", "Token"), arg("value", "Expr")]),
-		ty("Super", vec![arg("keyword", "Token"), arg("method", "Token"), arg("identity", "VarRef"), arg("this_identity", "VarRef")]),
+		ty("Super", vec![arg("keyword", "Token"), arg("method", "Token"), arg("identity", "VarRef"), arg("this_identity", "VarRef"), arg("class_identity", "VarRef")]),
 		ty("This", vec![arg("keyword", "Token"), arg("identity", "VarRef")]),
 		ty("Unary", vec![arg("operator", "Token"), arg("right", "Expr")]),
 		ty("Variable", vec![arg("name", "Token"), arg("identity", "VarRef")]),

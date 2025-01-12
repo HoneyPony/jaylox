@@ -554,11 +554,11 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 						inf_writeln!(into, ");");
 					}
 					// For superclass calls, use invoke_super
-					Expr::Super { method, identity, ..} => {
+					Expr::Super { method, class_identity, ..} => {
 						self.add_name(method, false);
 						self.indent(into);
 						inf_write!(into, "jay_op_invoke_super(this, NAME_{}, ", method.lexeme);
-						self.compile_var(*identity, into);
+						self.compile_var(*class_identity, into);
 						inf_writeln!(into, ", {});", arguments.len());
 					},
 					// For regular calls, just compile the inner expression,

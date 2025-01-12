@@ -50,6 +50,9 @@ pub struct Parser<'a> {
 	// Stores which VarRef is currently the superclass.
 	current_superclass: Option<VarRef>,
 
+	// Stores which VarRef is currently the class.
+	current_class: Option<VarRef>,
+
 	lox: &'a mut Lox
 }
 
@@ -68,6 +71,7 @@ impl<'a> Parser<'a> {
 
 			in_initializer: false,
 			current_superclass: None,
+			current_class: None,
 		}
 	}
 
@@ -496,6 +500,14 @@ impl<'a> Parser<'a> {
 				"Expect superclass method name.")?;
 
 
+			// We have to track the class that is making use of the 'super' keyword. That class
+			// object lets us know what the actual correct superclass value is at runtime.
+			// See test/super/reassign_super.lox.
+			let Some(class_identity) = self.current_class else {
+				self.error_report(&keyword, "Can't use 'super' outside of a class.");
+				return Err(ExprErr);
+			};
+
 			// Like with 'this', we kind of have to check whether the superclass
 			// is valid at parse time..
 			let Some(identity) = self.current_superclass else {
@@ -503,12 +515,12 @@ impl<'a> Parser<'a> {
 				return Err(ExprErr);
 			};
 
-			// When we access the superclass through super, we have to add it
-			// to the closure so that we can find it later (that is, if the
-			// superclass it not a global variable, for example).
+			// When we access the superclass through super, we have to add the
+			// class_identity to the closure so that we can find it later (that is, if that
+			// class not a global variable, for example).
 			// Usually find_variable() would do this, but because we just look
-			// it up in self.current_superclass, we have to do it manually.
-			self.check_closure(identity /* identity == superclass */);
+			// it up in self.current_class, we have to do it manually.
+			self.check_closure(class_identity);
 
 			let this_identity = self.find_variable("this")
 				.expect("If the super lookup worked, this definitely should have.");
@@ -518,7 +530,7 @@ impl<'a> Parser<'a> {
 			// we could have simply returned either a reference to the token, or
 			// perhaps an index into the Token Vec...
 
-			return Ok(Expr::super_(keyword, method, identity, this_identity));
+			return Ok(Expr::super_(keyword, method, identity, this_identity, class_identity));
 		}
 
 		if self.match_one(Identifier) {
@@ -810,6 +822,9 @@ impl<'a> Parser<'a> {
 		let enclosing_superclass = self.current_superclass;
 		self.current_superclass = superclass;
 
+		let enclosing_class = self.current_class;
+		self.current_class = Some(identity);
+
 		self.consume(LeftBrace, "Expect '{' before class body.")?;
 
 		// We start with 0 methods.
@@ -827,6 +842,7 @@ impl<'a> Parser<'a> {
 
 		// Pop superclass info.
 		self.current_superclass = enclosing_superclass;
+		self.current_class = enclosing_class;
 
 		Ok(Stmt::class(crate::stmt::Class {
 			name,

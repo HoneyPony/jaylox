@@ -1459,20 +1459,20 @@ jay_op_call(size_t arity) {
 // code for that.
 static inline
 void
-jay_op_invoke_super(jay_instance *instance, size_t name, jay_value superclass, size_t arity) {
-	if(!JAY_IS_CLASS(superclass)) {
-		oops("superclass must be a class");
+jay_op_invoke_super(jay_instance *instance, size_t name, jay_value static_class, size_t arity) {
+	if(!JAY_IS_CLASS(static_class)) {
+		oops("'super' must be invoked from within a class");
 	}
 
 	// Superclass is "statically bound" so to speak -- see abc_super.lox. 
 	// Essentially, the superclass does not change to match the superclass
 	// of the class of the current instance (i.e. it is not instance->class->superclass),
-	// but rather, it is always the same superclass.
+	// but rather, it is always the same superclass. (More specifically, the superclass is
+	// always the superclass of the jay_class containing the reference to "super." see
+	// test/super/reassign_super.lox).
 	//
-	// As such, we have to somehow explicitly track the superclass. I guess
-	// this is why it is mandated to be a variable in lox -- so that that variable
-	// can always be directly looked up.
-	jay_class *superclass_real = JAY_AS_CLASS(superclass);
+	// As such, we have to somehow explicitly track that class.
+	jay_class *superclass_real = JAY_AS_CLASS(static_class)->superclass;
 
 	jay_method *method = superclass_real->dispatcher(superclass_real, name);
 	if(method) {
