@@ -1,0 +1,15 @@
+fun test() {
+    var value = 10;
+
+    class F {
+        print_out() {
+            print(value);
+        }
+    }
+
+    return F;
+}
+
+var FF = test();
+var instance = FF();
+instance.print_out();

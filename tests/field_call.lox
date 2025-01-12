@@ -1,0 +1,17 @@
+class Thing {
+    myfun(arg) {
+        print(arg);
+        print("hello");
+    }
+}
+
+fun cool(arg) {
+    print(arg);
+    print("goodbye");
+}
+
+var x = Thing();
+x.myfun(20); // hello
+
+x.myfun = cool;
+x.myfun(40); // goodbye
