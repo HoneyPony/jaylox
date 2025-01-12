@@ -470,7 +470,9 @@ oops(const char *fmt, ...) {
 	vfprintf(stderr, fmt, args);
 	va_end(args);
 
-	printf("\n");
+	fprintf(stderr, "\n");
+	// TODO: Add the stack trace below.
+	fprintf(stderr, "\n");
 
 	// To match the lox reference implementation, use an exit code of 70.
 	exit(70);
