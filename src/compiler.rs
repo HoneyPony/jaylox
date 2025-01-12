@@ -1125,7 +1125,7 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 		inf_writeln!(def, "\t}}\n\telse if(JAY_IS_CLASS(superclass)) {{");
 		inf_writeln!(def, "\t\tclass->superclass = JAY_AS_CLASS(superclass);");
 		inf_writeln!(def, "\t}}\n\telse {{");
-		inf_writeln!(def, "\t\toops(\"superclass must be class\");");
+		inf_writeln!(def, "\t\toops(\"Superclass must be a class.\");");
 		inf_writeln!(def, "\t}}");
 
 		inf_writeln!(def, "\treturn jay_box_class(class);\n");

@@ -26,6 +26,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -457,15 +458,22 @@ jay_print(jay_value value) {
 
 #ifdef JAY_ASSUME_CORRECT
 
-#define oops(message) __builtin_unreachable()
+#define oops(fmt, ...) __builtin_unreachable()
 
 #else
 
 static inline
 _Noreturn void 
-oops(const char *message) {
-	printf("runtime error: %s\n", message);
-	exit(1);
+oops(const char *fmt, ...) {
+	va_list args;
+	va_start(args, fmt);
+	vfprintf(stderr, fmt, args);
+	va_end(args);
+
+	printf("\n");
+
+	// To match the lox reference implementation, use an exit code of 70.
+	exit(70);
 }
 
 #endif
