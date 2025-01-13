@@ -91,6 +91,11 @@ pub struct Compiler<'a, Writer: std::io::Write> {
 	opt: CodegenOptions,
 
 	tmp_idx: u32,
+
+	/// Tracks the current line number in the source code. We can call lineno() to compile
+	/// current line number information into the executable, but it only needs to be updated
+	/// if the line number is actually different from this value.
+	current_lineno: i32,
 }
 
 #[derive(Clone, Copy)]
@@ -124,6 +129,8 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 			opt,
 
 			tmp_idx: 0,
+
+			current_lineno: 1, // Start at line 1.
 		}
 	}
 
@@ -194,7 +201,7 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 
 	// Addition is the most complicated binary operation to compile, and requires
 	// its own function.
-	fn add(&mut self, into: &mut String, left: &Expr, right: &Expr) -> Val {
+	fn add(&mut self, into: &mut String, left: &Expr, right: &Expr, op: &Token) -> Val {
 		let left = self.compile_expr(left, into);
 		let right = self.compile_expr(right, into);
 
@@ -219,6 +226,10 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 		// If one of the values is numerical, we can fence the other one then
 		// generate a straight-up numerical add. Otherwise, we generate a generic
 		// jay_add as we don't specially handle strings at the moment.
+
+		// Update the line number before we perform the fences. That way, the fences
+		// will show the correct line when they fail.
+		self.lineno(op.line, into);
 
 		let is_num = if self.is_val_numerical(&left) {
 			self.num_fence_for("jay_fence_number", &right, 1, into);
@@ -281,7 +292,7 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 
 	fn binary_stackop(&mut self, into: &mut String, left: &Expr, op: &Token, right: &Expr) -> Val {
 		let fun = match op.typ {
-			Plus => return self.add(into, left, right),
+			Plus => return self.add(into, left, right, op),
 			BangEqual => "jay_op_neq",
 			EqualEqual => "jay_op_eq",
 			_ => unreachable!()
@@ -290,6 +301,7 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 		self.compile_expr_tostack(left, into);
 		self.compile_expr_tostack(right, into);
 
+		self.lineno(op.line, into);
 		self.indent(into);
 		inf_write!(into, "{fun}();\n");
 
@@ -370,6 +382,14 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 		}
 	}
 
+	fn lineno(&mut self, number: i32, into: &mut String) {
+		if number != self.current_lineno {
+			self.indent(into);
+			inf_writeln!(into, "JAY_FRAME_BT_UPDATE(locals, {number});");
+			self.current_lineno = number;
+		}
+	}
+
 	fn fence(&mut self, fn_name: &str, val: &Val, stackidx: u32, into: &mut String) {
 		self.indent(into);
 		inf_write!(into, "{fn_name}(");
@@ -405,6 +425,7 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 	}
 
 	fn binary_fenceop_num_inputs(&mut self, into: &mut String, left: &Expr, op: &Token, right: &Expr) -> Val {
+		let opline = op.line;
 		let (op, ty) = match op.typ {
 			Minus => ("-", Ty::Number),
 			Slash => ("/",  Ty::Number),
@@ -430,6 +451,7 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 		let right_stack_idx = Self::stack_idx(&right, 0);
 		let left_stack_idx = Self::stack_idx(&left, right_stack_idx);
 
+		self.lineno(opline, into);
 		self.num_fence_for("jay_fence_number", &left, left_stack_idx, into);
 		self.num_fence_for("jay_fence_number", &right, right_stack_idx, into);
 
@@ -516,7 +538,7 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 			Expr::Binary { left, operator, right } => {
 				self.binary_op(into, left, operator, right)
 			},
-			Expr::Call { callee, arguments, .. } => {
+			Expr::Call { callee, arguments, paren } => {
 				// Push all args, push the callee, then do jay_op_call.
 				// Note: It is very significant that we always push all the
 				// arguments, no matter what kind of call/invoke we do. They
@@ -533,6 +555,9 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 						// All values must be pushed on to the stack. Some, however,
 						// may be directly used as an instance.
 						self.stackify(&val, into);
+
+						// Lineno before fence
+						self.lineno(paren.line, into);
 
 						// All vals but 'this' must be fenced.
 						match val {
@@ -556,6 +581,8 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 					// For superclass calls, use invoke_super
 					Expr::Super { method, class_identity, ..} => {
 						self.add_name(method, false);
+
+						self.lineno(paren.line, into);
 						self.indent(into);
 						inf_write!(into, "jay_op_invoke_super(this, NAME_{}, ", method.lexeme);
 						self.compile_var(*class_identity, into);
@@ -566,6 +593,7 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 					_ => {
 						self.compile_expr_tostack(callee, into);
 
+						self.lineno(paren.line, into);
 						self.indent(into);
 						inf_write!(into, "jay_op_call({});\n", arguments.len());
 					}
@@ -627,6 +655,8 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 				Val::OnStack
 			},
 			Expr::Get { object, name } => {
+				// Update lineno before the fences
+				self.lineno(name.line, into);
 
 				match object.as_ref() {
 					Expr::This { .. } => {
@@ -668,6 +698,9 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 			},
 			Expr::Set { object, name, value } => {
 				self.compile_expr_tostack(value, into);
+
+				// Update lineno before the fences
+				self.lineno(name.line, into);
 
 				match object.as_ref() {
 					Expr::This { .. } => {
@@ -724,6 +757,7 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 				// the garbage collector...
 
 				self.add_name(method, false);
+				self.lineno(method.line, into);
 				self.indent(into);
 				inf_write!(into, "jay_op_get_super(this, NAME_{}, ", method.lexeme);
 				self.compile_var(*class_identity, into);
@@ -760,6 +794,8 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 					Minus => {
 						let val = self.compile_expr(right, into);
 						let name = self.tmp_name();
+
+						self.lineno(operator.line, into); // lineno before the fence
 						self.num_fence_for("jay_fence_number", &val, 1, into);
 
 						self.indent(into);
@@ -780,12 +816,15 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 				}
 			},
 			Expr::Variable { identity, .. } => {
+				// Cannot fail. (no lineno)
 				Val::Variable(*identity)
 			},
 			Expr::This { identity, .. } => {
+				// Cannot fail. (no lineno)
 				Val::This(*identity)
 			}
 			Expr::Assign { value, identity, .. } => {
+				// Cannot fail. (no lineno)
 				self.compile_assign(into, value, identity)
 			},
 		}
@@ -881,14 +920,21 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 		}
 	}
 
-	fn compile_locals_frame(&mut self, count: u32, scope: &str, into: &mut String) {
+	fn compile_locals_frame(&mut self, count: u32, scope: &str, fn_name: &str, fn_name_parens: bool, line_num: i32, into: &mut String) {
 		inf_writeln!(into, r#"	struct {{
 		size_t count;
 		jay_closure *gc_scope;
+
+		JAY_FRAME_BT_INFO
+
 		jay_value at[{0}];
 	}} locals;
 	locals.count = {0};
 	locals.gc_scope = {1};"#, count, scope);
+
+		// Write the backtrace info at the beginning of the function.
+		// Functions have parens after the name; 'script' does not.
+		inf_writeln!(into, "\tJAY_FRAME_BT_INIT(locals, {line_num}, \"{fn_name}{}\");", if fn_name_parens { "()" } else { "" });
 	
 		// In order to avoid giving the GC any bogus data, initialize all the
 		// ".at" values to nil.
@@ -906,10 +952,13 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 
 		// Track 'has_locals_frame' down the call stack
 		let enclosing_locals = self.has_locals_frame;
-		self.has_locals_frame = fun.local_count > 0;
+		self.has_locals_frame = true; // TODO: We need the locals frame for the backtrace info. //fun.local_count > 0;
 
 		let enclosing_captures = self.has_captures_frame;
 		self.has_captures_frame = fun.captured.len() > 0;
+
+		// Track the lineno that we came from so we can restore it.
+		let enclosing_lineno = self.current_lineno;
 
 		// Reset indent for top-level functions
 		let enclosing_indent = self.current_indent;
@@ -973,8 +1022,9 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 
 		// Create the 'locals' struct.
 		if self.has_locals_frame {
-			self.compile_locals_frame(fun.local_count, gc_scope, &mut def);
+			self.compile_locals_frame(fun.local_count, gc_scope, &fun.name.lexeme, true, fun.name.line, &mut def);
 		}
+		self.current_lineno = fun.name.line;
 
 		if let Some(this_var) = fun.this {
 			// Create a "this" variable for faster get/set operations
@@ -1014,6 +1064,7 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 		// Restore locals and captures and initializer
 		self.has_locals_frame = enclosing_locals;
 		self.has_captures_frame = enclosing_captures;
+		self.current_lineno = enclosing_lineno;
 	}
 
 	fn compile_class_dispatcher(&mut self, class: &Class, mangled_name: &String) {
@@ -1390,7 +1441,9 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 		inf_writeln!(main_fn, "jay_closure *scope = NULL;");
 
 		// Create the locals frame for the main fn
-		self.compile_locals_frame(globals_locals_count, "NULL", &mut main_fn);
+		// Note: Lox uses the name "script" for the top-level backtrace, and e.g. funname() for other functions.
+		// We start at line 1 because that's where the main script starts.
+		self.compile_locals_frame(globals_locals_count, "NULL", "script", false, 1, &mut main_fn);
 
 		// Compile the actual top-level code (any normal statements will go
 		// into main; other things will go into their own functions)

@@ -1,0 +1,14 @@
+fun fun_three() {
+    var a = 5;
+    var b = a + "hello";
+}
+
+fun fun_one() {
+    fun_two();
+}
+
+fun fun_two() {
+    fun_three();
+}
+
+fun_one();
