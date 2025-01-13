@@ -27,9 +27,6 @@
 // - Enables backtraces when we call oops(). This requires some additional runtime
 //   overhead as we have to set the line number every time that it changes.
 
-// For now: Always define JAY_BACKTRACE.
-#define JAY_BACKTRACE
-
 #include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
@@ -507,6 +504,8 @@ oops(const char *fmt, ...) {
 	for(size_t frame = jay_frames_ptr; frame --> 0;) {
 		fprintf(stderr, "[line %zu] in %s\n", jay_frames[frame]->line_number, jay_frames[frame]->fn_name);
 	}
+	#else
+	fprintf(stderr, "(note: backtraces disabled)\n");
 	#endif
 
 	// To match the lox reference implementation, use an exit code of 70.

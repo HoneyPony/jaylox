@@ -1385,6 +1385,9 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 		if self.opt.assume_correct {
 			inf_writeln!(self.prelude, "#define JAY_ASSUME_CORRECT");
 		}
+		if self.opt.backtrace {
+			inf_writeln!(self.prelude, "#define JAY_BACKTRACE");
+		}
 		inf_writeln!(self.prelude, "#include \"jaylib/jaylib.h\"\n");
 
 		// Write the globals array to the prelude (and the string constants array)

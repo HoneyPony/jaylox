@@ -63,6 +63,7 @@ pub struct CodegenOptions {
 	gc_stress_test: bool,
 	nan_boxing: bool,
 	assume_correct: bool,
+	backtrace: bool,
 }
 
 struct CompileOptions {
@@ -242,6 +243,7 @@ fn main() -> io::Result<()> {
 			gc_stress_test: false,
 			nan_boxing: false,
 			assume_correct: false,
+			backtrace: false,
 		},
 	};
 
@@ -270,6 +272,9 @@ fn main() -> io::Result<()> {
 				},
 				"-assumecorrect" => {
 					options.codegen.assume_correct = true;
+				}
+				"-backtrace" => {
+					options.codegen.backtrace = true;
 				}
 				"-O1" | "-O2" | "-O3" => {
 					options.optimization = arg.clone();
