@@ -22,6 +22,13 @@
 //   E.g. if field names are x = 1, y = 2, z = 3, then JAY_MAX_FIELD should be 4,
 //   so that (name < JAY_MAX_FIELD) will always return true for any name used
 //   as a field name.
+//
+// #define JAY_BACKTRACE
+// - Enables backtraces when we call oops(). This requires some additional runtime
+//   overhead as we have to set the line number every time that it changes.
+
+// For now: Always define JAY_BACKTRACE.
+#define JAY_BACKTRACE
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -97,8 +104,31 @@ typedef struct jay_closure {
 typedef struct jay_stackframe {
 	size_t count;
 	jay_closure *gc_scope;
+
+#ifdef JAY_BACKTRACE
+	size_t line_number;
+	const char *fn_name;
+#endif
+
 	jay_value values[];
 } jay_stackframe;
+
+#ifdef JAY_BACKTRACE
+// Macros used to define line number information and stack frame information
+// when we enable backtraces. These macros turn into NOPs when we don't want
+// backtraces.
+	#define JAY_FRAME_BT_INFO size_t line_number; const char *fn_name;
+	#define JAY_FRAME_BT_INIT(frame_name, line_number_val, fn_name_val) \
+	do { \
+		frame_name.line_number = line_number_val; \
+		frame_name.fn_name = fn_name_val; \
+	} while(0)
+	#define JAY_FRAME_BT_UPDATE(frame_name, line_number_val) frame_name.line_number = line_number_val
+#else
+	#define JAY_FRAME_BT_INFO
+	#define JAY_FRAME_BT_INIT(frame_name, line_number_val, fn_name_val)
+	#define JAY_FRAME_BT_UPDATE(frame_name, line_number_val)
+#endif
 
 typedef struct jay_function {
 	jay_object object;
@@ -471,8 +501,13 @@ oops(const char *fmt, ...) {
 	va_end(args);
 
 	fprintf(stderr, "\n");
-	// TODO: Add the stack trace below.
-	fprintf(stderr, "\n");
+	#ifdef JAY_BACKTRACE
+	// To perform a backtrace, walk backwards through the stack of jay_stackframes,
+	// and print the relevant information from each one.
+	for(size_t frame = jay_frames_ptr; frame --> 0;) {
+		fprintf(stderr, "[line %zu] in %s\n", jay_frames[frame]->line_number, jay_frames[frame]->fn_name);
+	}
+	#endif
 
 	// To match the lox reference implementation, use an exit code of 70.
 	exit(70);
@@ -1261,7 +1296,7 @@ static inline
 void
 jay_fence_get(jay_value v) {
 	if(!JAY_IS_INSTANCE(v)) {
-		oops("can only look up properties on an instance");
+		oops("Only instances have properties.");
 	}
 }
 
@@ -1320,7 +1355,7 @@ static inline
 void
 jay_fence_set(jay_value v) {
 	if(!JAY_IS_INSTANCE(v)) {
-		oops("can only set fields on an instance");
+		oops("Only instances have fields.");
 	}
 }
 
@@ -1339,7 +1374,7 @@ static inline
 jay_value
 jay_call_any(jay_function_impl fun, jay_closure *closure, size_t actual_arity, size_t tried_arity) {
 	if(actual_arity != tried_arity) {
-		oops("wrong arity");
+		oops("Expected %zu arguments but got %zu.", actual_arity, tried_arity);
 	}
 
 	jay_value result = fun(jay_stack_ptr - actual_arity, closure);
@@ -1353,7 +1388,7 @@ static inline
 jay_value
 jay_call(struct jay_function *fun, size_t arity) {
 	if(arity != fun->arity) {
-		oops("wrong arity");
+		oops("Expected %zu arguments but got %zu.", fun->arity, arity);
 	}
 
 	// The arguments remain on the stack until the function returns.
@@ -1460,7 +1495,7 @@ jay_op_call(size_t arity) {
 		}
 	}
 	else {
-		oops("can only call callable objects");
+		oops("Can only call functions and classes.");
 	}
 }
 
