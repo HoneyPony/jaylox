@@ -1291,6 +1291,12 @@ jay_get_instance(jay_instance *instance, size_t name) {
 	oops("tried to get non-exist property");
 }
 
+#ifdef JAY_ASSUME_CORRECT
+
+#define jay_fence_get(v)
+
+#else
+
 static inline
 void
 jay_fence_get(jay_value v) {
@@ -1298,6 +1304,8 @@ jay_fence_get(jay_value v) {
 		oops("Only instances have properties.");
 	}
 }
+
+#endif
 
 static inline
 jay_value
@@ -1350,6 +1358,12 @@ jay_set_instance(jay_instance *instance, size_t name, jay_value value) {
 	return value;
 }
 
+#ifdef JAY_ASSUME_CORRECT
+
+#define jay_fence_set(v)
+
+#else
+
 static inline
 void
 jay_fence_set(jay_value v) {
@@ -1357,6 +1371,8 @@ jay_fence_set(jay_value v) {
 		oops("Only instances have fields.");
 	}
 }
+
+#endif
 
 // Because the superclass must be (retrievable from) a variable, we have no need to do any stack
 // machine shenanigans (even for GC purposes) -- so always pass it here.
@@ -1549,6 +1565,12 @@ jay_op_invoke_super(jay_instance *instance, size_t name, jay_value static_class,
 	oops("superclass has no such method");
 }
 
+#ifdef JAY_ASSUME_CORRECT
+
+#define jay_fence_invoke(target)
+
+#else
+
 static inline
 void
 jay_fence_invoke(jay_value target) {
@@ -1556,6 +1578,8 @@ jay_fence_invoke(jay_value target) {
 		oops("can only get properties on an instance");
 	}
 }
+
+#endif
 
 static inline
 void
