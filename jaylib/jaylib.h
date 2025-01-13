@@ -1372,8 +1372,16 @@ jay_op_get_super(jay_instance *this, size_t name, jay_value static_class) {
 
 static inline
 jay_value
-jay_call_any(jay_function_impl fun, jay_closure *closure, size_t actual_arity, size_t tried_arity) {
+jay_call_any(jay_function_impl fun, jay_closure *closure, size_t actual_arity, size_t tried_arity, bool is_method) {
 	if(actual_arity != tried_arity) {
+		if(is_method) {
+			// If it's a method, the error message should subtract from the arities, as
+			// we will have implicitly added the "this" parameter.
+			//
+			// TODO: It looks like we only ever use jay_call_any to call methods anyway...
+			actual_arity -= 1;
+			if(tried_arity > 0) tried_arity -= 1;
+		}
 		oops("Expected %zu arguments but got %zu.", actual_arity, tried_arity);
 	}
 
@@ -1443,7 +1451,8 @@ jay_op_call(size_t arity) {
 			method->implementation,
 			method->closure,
 			method->arity,
-			arity + 1
+			arity + 1,
+			true
 		);
 		jay_push(result);
 	}
@@ -1480,7 +1489,8 @@ jay_op_call(size_t arity) {
 				method->implementation,
 				class->closure,
 				method->arity,
-				arity + 1 // Same as above
+				arity + 1, // Same as above
+				true
 			);
 			
 			// Originally, we just pushed new_this back on to the stack. But this
@@ -1528,7 +1538,8 @@ jay_op_invoke_super(jay_instance *instance, size_t name, jay_value static_class,
 			method->implementation,
 			superclass_real->closure,
 			method->arity,
-			arity + 1
+			arity + 1,
+			true
 		);
 
 		jay_push(result);
@@ -1591,7 +1602,8 @@ jay_op_invoke(size_t name, size_t arity, jay_instance *instance) {
 		method->implementation,
 		instance->class->closure,
 		method->arity,
-		arity + 1
+		arity + 1,
+		true
 	);
 
 	jay_push(result);
