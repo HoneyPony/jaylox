@@ -1773,8 +1773,8 @@ static
 jay_value
 jay_std_clock(jay_value *args, jay_closure *closure) {
 	clock_t time = clock();
-	double ms = (time * 1000.0 / CLOCKS_PER_SEC);
-	return jay_box_number(ms);
+	double seconds = (time / CLOCKS_PER_SEC);
+	return jay_box_number(seconds);
 }
 
 #endif
