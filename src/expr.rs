@@ -89,6 +89,12 @@ impl Expr {
 	// TODO: Consider NOT propogating an error up the call stack when constant folding fails,
 	// as it isn't actually a parse error but rather a semantic error.
 	pub fn binary_folded(left: Expr, operator: Token, right: Expr, lox: &mut Lox) -> Result<Expr, ExprErr> {
+		if lox.full_conformance {
+			// In full conformance mode, disable constant folding so that numerical errors
+			// will show up as runtime errors.
+			return Ok(Self::binary(left, operator, right));
+		}
+
 		match (left, right) {
 			(Expr::Literal(a), Expr::Literal(b)) => {
 				Ok(Expr::Literal(Self::bi_fold(a, operator,b, lox)?))

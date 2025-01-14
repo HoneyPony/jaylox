@@ -46,6 +46,8 @@ impl StrConstRef {
 pub struct Lox {
 	had_error: bool,
 
+	full_conformance: bool,
+
 	variables: Vec<Variable>,
 
 	pub string_constants: Vec<String>,
@@ -64,6 +66,11 @@ pub struct CodegenOptions {
 	nan_boxing: bool,
 	assume_correct: bool,
 	backtrace: bool,
+
+	/// Option that prevents optimizations which would turn runtime errors into compile errors, namely
+	/// constant folding.
+	/// This option is not actually very useful outside of running the tester, but that's OK.
+	full_conformance: bool,
 }
 
 struct CompileOptions {
@@ -79,6 +86,8 @@ impl Lox {
 	fn new() -> Self {
 		Lox {
 			had_error: false,
+
+			full_conformance: false,
 
 			variables: vec![],
 
@@ -143,6 +152,7 @@ impl Lox {
 	}
 
 	fn compile(&mut self, options: CompileOptions) -> std::io::Result<()> {
+		self.full_conformance = options.codegen.full_conformance;
 		let code = std::fs::read_to_string(options.input_path)?;
 
 		let tokens = {
@@ -244,6 +254,7 @@ fn main() -> io::Result<()> {
 			nan_boxing: false,
 			assume_correct: false,
 			backtrace: false,
+			full_conformance: false,
 		},
 	};
 
@@ -275,6 +286,9 @@ fn main() -> io::Result<()> {
 				}
 				"-backtrace" => {
 					options.codegen.backtrace = true;
+				}
+				"-conformance" => {
+					options.codegen.full_conformance = true;
 				}
 				"-O1" | "-O2" | "-O3" => {
 					options.optimization = arg.clone();

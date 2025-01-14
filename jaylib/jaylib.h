@@ -1841,7 +1841,7 @@ jay_add(jay_value aval, jay_value bval) {
 		}
 	}
 
-	oops("addition expects two numbers or two strings");
+	oops("Operands must be two numbers or two strings.");
 }
 
 static inline
@@ -1908,15 +1908,24 @@ OP_TWO(eq)
 
 #ifdef JAY_ASSUME_CORRECT
 
-#define jay_fence_number(v)
+#define jay_fence_number_binop(v)
+#define jay_fence_number_unop(v)
 
 #else
 
 static inline
 void 
-jay_fence_number(jay_value v) {
+jay_fence_number_binop(jay_value v) {
 	if(!JAY_IS_NUMBER(v)) {
-		oops("operation expects numerical arguments");
+		oops("Operands must be numbers.");
+	}
+}
+
+static inline
+void 
+jay_fence_number_unop(jay_value v) {
+	if(!JAY_IS_NUMBER(v)) {
+		oops("Operand must be number.");
 	}
 }
 

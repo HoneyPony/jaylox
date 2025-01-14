@@ -232,11 +232,11 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 		self.lineno(op.line, into);
 
 		let is_num = if self.is_val_numerical(&left) {
-			self.num_fence_for("jay_fence_number", &right, 1, into);
+			self.num_fence_for("jay_fence_number_binop", &right, 1, into);
 			true
 		}
 		else if self.is_val_numerical(&right) {
-			self.num_fence_for("jay_fence_number", &left, 1, into);
+			self.num_fence_for("jay_fence_number_binop", &left, 1, into);
 			true
 		}
 		else {
@@ -452,8 +452,8 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 		let left_stack_idx = Self::stack_idx(&left, right_stack_idx);
 
 		self.lineno(opline, into);
-		self.num_fence_for("jay_fence_number", &left, left_stack_idx, into);
-		self.num_fence_for("jay_fence_number", &right, right_stack_idx, into);
+		self.num_fence_for("jay_fence_number_binop", &left, left_stack_idx, into);
+		self.num_fence_for("jay_fence_number_binop", &right, right_stack_idx, into);
 
 		let tmp_name = self.tmp_name();
 
@@ -808,7 +808,7 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 						let name = self.tmp_name();
 
 						self.lineno(operator.line, into); // lineno before the fence
-						self.num_fence_for("jay_fence_number", &val, 1, into);
+						self.num_fence_for("jay_fence_number_unop", &val, 1, into);
 
 						self.indent(into);
 						// Note the negation sign
