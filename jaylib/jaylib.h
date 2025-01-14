@@ -1135,6 +1135,15 @@ jay_truthy(jay_value value) {
 	return true;
 }
 
+static inline int
+jay_exitcode(jay_value value) {
+	if(JAY_IS_NUMBER(value)) {
+		return (int)JAY_AS_NUMBER(value);
+	}
+	// If it's not a number, then just use truthiness as the exit code.
+	return !jay_truthy(value);
+}
+
 static inline bool
 jay_pop_condition() {
 	return jay_truthy(jay_pop());

@@ -715,6 +715,12 @@ impl<'a> Parser<'a> {
 			value = Some(Expr::this(this_token, identity));
 		}
 
+		// If we're in the top level code, in full conformance mode, we can't return.
+		// (In non-full conformance mode, we'll turn the value into an exit code).
+		if self.lox.full_conformance && self.fun_scopes.len() == 1 {
+			self.error_report(&keyword, "Can't return from top-level code.");
+		}
+
 		return Ok(Stmt::return_(keyword, value));
 	}
 

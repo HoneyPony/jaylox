@@ -74,6 +74,9 @@ pub struct Compiler<'a, Writer: std::io::Write> {
 	/// Tracks whether we currently have a 'captures' frame.
 	has_captures_frame: bool,
 
+	/// Tracks whether we're currently in the main method.
+	in_main: bool,
+
 	/// Keeps track of how many hops each captured variable is from the current function.
 	/// Each function that creates a dynamic scope / closure will increase the hops
 	/// of all captured variables by 1 (and add its own); otherwise, the hops stay the same,
@@ -119,6 +122,8 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 			// The main function has no locals frame or captures frame.
 			has_locals_frame: false,
 			has_captures_frame: false,
+			// We start out in the main method.
+			in_main: true,
 
 			captured_depths: HashMap::new(),
 
@@ -1004,6 +1009,9 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 		// Track the lineno that we came from so we can restore it.
 		let enclosing_lineno = self.current_lineno;
 
+		let enclosing_main = self.in_main;
+		self.in_main = false;
+
 		// Reset indent for top-level functions
 		let enclosing_indent = self.current_indent;
 		self.current_indent = 0;
@@ -1109,6 +1117,7 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 		self.has_locals_frame = enclosing_locals;
 		self.has_captures_frame = enclosing_captures;
 		self.current_lineno = enclosing_lineno;
+		self.in_main = enclosing_main;
 	}
 
 	fn compile_class_dispatcher(&mut self, class: &Class, mangled_name: &String) {
@@ -1377,14 +1386,24 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 				// just return an expression, if that expression is a single-fun-call.
 				// I don't think there would be any way to lose a root reference
 				// in that process.
+
+				let mut root_fun_beg = "";
+				let mut root_fun_end = "";
+				// If we're in main, we want to return an exit code based on any
+				// 'return' statements. We use a special jay_exitcode function for this.
+				if self.in_main {
+					root_fun_beg = "jay_exitcode(";
+					root_fun_end = ")";
+				}
+
 				match &val {
 					Val::OnStack => {
-						into.push_str("return jay_pop();\n");
+						inf_writeln!(into, "return {root_fun_beg}jay_pop();{root_fun_end}\n");
 					},
 					_ => {
-						inf_write!(into, "return ");
+						inf_write!(into, "return {root_fun_beg}");
 						self.compile_val(&val, 0, into);
-						inf_writeln!(into, ";");
+						inf_writeln!(into, "{root_fun_end};");
 					}
 				}
 			},
