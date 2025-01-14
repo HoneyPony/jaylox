@@ -1148,8 +1148,8 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 
 			// Methods do not store the closure, because the have a pointer back
 			// to the class.
-			inf_writeln!(def, "\tclass->methods[{idx}] = jay_method_from(class, {method_mangled_name}, {});",
-				method.param_count);
+			inf_writeln!(def, "\tclass->methods[{idx}] = jay_method_from(class, {method_mangled_name}, {} JAY_NAME_ARGUMENT(\"{}\"));",
+				method.param_count, method.name.lexeme);
 		}
 
 		// The dispatcher is simply initialized to be the dispatcher function we
@@ -1166,6 +1166,11 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 		inf_writeln!(def, "\tclass->closure = jay_unharbor();");
 
 		inf_writeln!(def, "\tclass->methods_count = {};\n", class.methods.len());
+
+		// We manually write every class name if enabled.
+		inf_writeln!(def, "#ifdef JAY_ENABLE_NAMES");
+		inf_writeln!(def, "\tclass->name = \"{}\";", class.name.lexeme);
+		inf_writeln!(def, "#endif");
 
 		// Fill in the superclass
 		// If it is nil, then the superclass is NULL, otherwise, it must be
@@ -1256,8 +1261,8 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 				self.indent(into);
 				// Essentially, generate an assignment with the var.
 				self.compile_var(fun.identity.expect("non-methods must have an identity"), into);
-				inf_writeln!(into, " = jay_fun_from({}, {}, scope);",
-					mangled_name, fun.param_count);
+				inf_writeln!(into, " = jay_fun_from({}, {}, scope JAY_NAME_ARGUMENT(\"{}\"));",
+					mangled_name, fun.param_count, fun.name.lexeme);
 			},
 			// TODO: Do we even need to have a var_name field on ExternFunction..?
 			Stmt::ExternFunction { c_name, arity, identity, .. } => {
@@ -1265,7 +1270,7 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 				// insert the known name into the current scope.
 				self.indent(into);
 				self.compile_var(*identity, into);
-				inf_writeln!(into, " = jay_fun_from({c_name}, {arity}, scope);");
+				inf_writeln!(into, " = jay_fun_from({c_name}, {arity}, scope JAY_NAME_NULL);");
 			},
 			Stmt::If { condition, then_branch, else_branch } => {
 				let cond = self.compile_expr(condition, into);
