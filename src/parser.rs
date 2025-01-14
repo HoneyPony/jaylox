@@ -776,6 +776,10 @@ impl<'a> Parser<'a> {
 			parameters_toks.push(
 				self.consume(Identifier, "Expect parameter name.")?);
 			while self.match_one(Comma) {
+				// If we already have 255 parameters, we can't push another one.
+				if parameters_toks.len() == 255 {
+					self.error_report(&self.peek().clone(), "Can't have more than 255 parameters.");
+				}
 				parameters_toks.push(
 					self.consume(Identifier, "Expect parameter name.")?);
 			}
