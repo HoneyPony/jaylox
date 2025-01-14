@@ -1,8 +1,10 @@
+#[cfg(feature = "run")]
 use libtcc::{Guard, Context, OutputType};
 use std::ffi::CString;
 use std::ffi::CStr;
 use std::mem::transmute;
 
+#[cfg(feature = "run")]
 fn run_libtcc_or_err(compiled_c_code: &CString) -> Result<(), &str> {
     let mut g = Guard::new()?;
 
@@ -37,9 +39,16 @@ fn run_libtcc_or_err(compiled_c_code: &CString) -> Result<(), &str> {
     std::process::exit(exit_code);
 }
 
+#[cfg(feature = "run")]
 pub fn run_libtcc(compiled_c_code: &CString) {
     if let Err(msg) = run_libtcc_or_err(compiled_c_code) {
         eprintln!("failed to run Lox script: {}\n", msg);
         std::process::exit(70);
     }
+}
+
+#[cfg(not(feature = "run"))]
+pub fn run_libtcc(compiled_c_code: &CString) {
+    eprintln!("libtcc support is not enabled. cannot run.");
+    std::process::exit(70);
 }
