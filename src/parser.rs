@@ -648,6 +648,15 @@ impl<'a> Parser<'a> {
 	fn for_statement(&mut self) -> StmtRes {
 		self.consume(LeftParen, "Expect '(' after 'for'.")?;
 
+		// The for loop gets essentially two levels of scopes: it gets its own scope
+		// for e.g. the loop variable, and then another new scope for the loop body.
+		//
+		// See test/for/scope.lox.
+		//
+		// TODO: If the loop body is not a block, does it still get a new scope?
+		// For now we're saying No.
+		self.push_scope();
+
 		let mut initializer = None;
 		if self.match_one(Semicolon) {
 
@@ -688,6 +697,9 @@ impl<'a> Parser<'a> {
 		if let Some(initializer) = initializer {
 			body = Stmt::Block(vec![initializer, body]);
 		}
+
+		// Pop the scope for the for loop.
+		self.pop_scope();
 
 		return Ok(body);
 	}
