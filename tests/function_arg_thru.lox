@@ -8,9 +8,16 @@ class Test1 {
         thing("hello");
     }
 
-    get_a() {
-        var t = Test1();
-        return t;
+    get_a(a, b) {
+        var result = Test1();
+        var chain = result;
+        while (b > a) {
+            chain.next = Test1();
+            chain = chain.next;
+            b = b - 1;
+        }
+
+        return result;
     }
 
     get_b() {
@@ -20,9 +27,14 @@ class Test1 {
 }
 
 class Test2 {
+    init() {
+        this.own_t = Test1();
+        this.a = 30;
+        this.b = 40;
+    }
+
     go() {
-        var t = Test1();
-        t.get_a().get_b().call(the_thing);
+        this.own_t.get_a(this.a, this.b).call(the_thing);
     }    
 }
 
