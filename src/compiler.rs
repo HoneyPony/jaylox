@@ -1500,7 +1500,13 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 		if self.opt.enable_names {
 			inf_writeln!(self.prelude, "#define JAY_ENABLE_NAMES");
 		}
-		inf_writeln!(self.prelude, "#include \"jaylib/jaylib.h\"\n");
+		if self.opt.extern_jaylib {
+			inf_writeln!(self.prelude, "#include \"jaylib/jaylib.h\"\n");
+		}
+		else {
+			let jaylib_h = include_str!("../jaylib/jaylib.h");
+			inf_writeln!(self.prelude, "{}", jaylib_h);
+		}
 
 		// Write the globals array to the prelude (and the string constants array)
 		let string_constants_count = self.lox.string_constants.len();

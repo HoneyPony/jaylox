@@ -84,6 +84,10 @@ pub struct CodegenOptions {
 	/// Determines whether classes, functions, etc store their names. Will also provide names for fields
 	/// in the case of a field access error.
 	enable_names: bool,
+
+	/// If true, the compiler will generate '#include "jaylib/jaylib.h"' instead of just dumping the
+	/// built-in jaylib (compiled into the Rust executable) into the file.
+	extern_jaylib: bool,
 }
 
 struct CompileOptions {
@@ -269,6 +273,7 @@ fn main() -> io::Result<()> {
 			backtrace: false,
 			full_conformance: false,
 			enable_names: false,
+			extern_jaylib: false,
 		},
 	};
 
@@ -306,6 +311,9 @@ fn main() -> io::Result<()> {
 				}
 				"-enablenames" => {
 					options.codegen.enable_names = true;
+				}
+				"-externjaylib" => {
+					options.codegen.extern_jaylib = true;
 				}
 				"-O1" | "-O2" | "-O3" => {
 					options.optimization = arg.clone();
