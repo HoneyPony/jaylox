@@ -2,8 +2,22 @@ opts="-nanbox -backtrace -enablenames"
 cc="tcc"
 c_name="./run-jaylox-out.c"
 exe_name="./run-jaylox-out"
+
+# For a lot of tests we need "full conformance."
+# Basically, the tester is expecting things like runtime errors for numerical
+# operations that, when constant folded, simply have an error at compile time;
+# or for undeclared global variables that we produce compile time errors for.
+#
+# Enabling the full conformance mode allows these tests to pass, but we want
+# to keep it off when possible to find other errors (e.g. several errors in our
+# code were caused by optimizations).
+#
+# Ideally we also run as many tests possible in both conformance and non-conformance
+# mode, but we haven't set that up quite yet. (We could also test both with
+# and without nanbox).
 list_needing_conform=$(cat <<EOF
 
+# A lot of operator tests require full conformance due to constant folding.
 test/operator/divide_num_nonnum.lox
 test/operator/add_num_nil.lox
 test/operator/less_nonnum_num.lox
@@ -25,6 +39,8 @@ test/operator/divide_nonnum_num.lox
 test/operator/add_bool_num.lox
 test/operator/greater_nonnum_num.lox
 
+# These other tests require full conformance for other reasons, normally due to the
+# requirement for runtime-error global variable failures.
 test/function/local_mutual_recursion.lox
 test/string/error_after_multiline.lox
 test/variable/unreached_undefined.lox
@@ -48,8 +64,20 @@ fi
 test_realpath=$(realpath "$1")
 cd $(dirname "$0")
 rm -f "$c_name" "$exe_name"
-./target/debug/jlox -oc "$c_name" $opts $conform "$test_realpath"
+
+jaylox=""
+# TODO: This might be bad for iteration..?
+if [ -f ./target/release/jlox ]; then
+	jaylox="./target/release/jlox"
+elif [ -f ./target/debug/jlox ]; then
+	jaylox="./target/debug/jlox"
+else
+	exit 10
+fi
+
+"$jaylox" -oc "$c_name" $opts $conform "$test_realpath"
 err="$?"
+
 if [ $err -ne 0 ]; then exit $err; fi
 "$cc" "$c_name" -o "$exe_name" -w
 if [ -f "$exe_name" ]; then
@@ -57,3 +85,5 @@ if [ -f "$exe_name" ]; then
 	err="$?"
 	exit $err
 fi
+
+exit 20
