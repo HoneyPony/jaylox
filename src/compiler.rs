@@ -1570,6 +1570,10 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 		// We start at line 1 because that's where the main script starts.
 		self.compile_locals_frame(globals_locals_count, "NULL", "script", false, 1, &mut main_fn);
 
+		// If we are going to use a SIGSEGV handler, install it as soon as the basic program state is set up,
+		// in case a miscompile or similar causes a segfault.
+		inf_writeln!(main_fn, "\tjay_sigsegv_install();");
+
 		// Compile the actual top-level code (any normal statements will go
 		// into main; other things will go into their own functions)
 		self.compile_stmts(stmts, &mut main_fn);
