@@ -1617,6 +1617,11 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 		// TODO: Maybe we just build this thing in a separate string? That
 		// way we don't have to worry about any weirdness, shouldn't really
 		// be a problem either.
+		for name in &self.name_set_setted {
+			// Note: We have to do both name sets, just like above. (originally we forgot
+			// name_set_setted)
+			writeln!(self.writer, "\t\t\"{}\",", name)?;
+		}
 		for name in &self.name_set {
 			// The comma is very important! Otherwise all the strings are concatenated together
 			writeln!(self.writer, "\t\t\"{}\",", name)?;
