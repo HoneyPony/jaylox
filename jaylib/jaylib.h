@@ -1925,7 +1925,7 @@ static inline
 void 
 jay_fence_number_unop(jay_value v) {
 	if(!JAY_IS_NUMBER(v)) {
-		oops("Operand must be number.");
+		oops("Operand must be a number.");
 	}
 }
 
