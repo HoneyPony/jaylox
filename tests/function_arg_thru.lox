@@ -1,0 +1,30 @@
+fun the_thing(arg) {
+    print("the_thing:");
+    print(arg);
+}
+
+class Test1 {
+    call(thing) {
+        thing("hello");
+    }
+
+    get_a() {
+        var t = Test1();
+        return t;
+    }
+
+    get_b() {
+        var t = Test1();
+        return t;
+    }
+}
+
+class Test2 {
+    go() {
+        var t = Test1();
+        t.get_a().get_b().call(the_thing);
+    }    
+}
+
+var t = Test2();
+t.go();
