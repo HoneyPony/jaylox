@@ -224,7 +224,8 @@ impl<'a> Parser<'a> {
 			.is_some();
 
 		if had {
-			self.error(name.clone(), "Already a variable with this name in this scope.")?;
+			// Report an error but do not unwind. This is a semantic error not a syntactic error.
+			self.error_report(&name, "Already a variable with this name in this scope.");
 		}
 
 		Ok(variable)
