@@ -602,17 +602,19 @@ impl<'a> Parser<'a> {
 		return Ok(Stmt::expression(value));
 	}
 
-	fn block(&mut self) -> Result<Vec<Stmt>, ExprErr> {
+	fn block(&mut self, own_scope: bool) -> Result<Vec<Stmt>, ExprErr> {
 		let mut statements = vec![];
 
-		// Blocks introduce a new scope.
-		self.push_scope();
+		// Blocks introduce a new scope unless they are associated with a function
+		// -- in that case, for full conformance, the function parameters MUST be
+		// part of the same scope as the rest of the function.
+		if own_scope { self.push_scope(); }
 
 		while !self.check(RightBrace) && !self.is_at_end() {
 			statements.push(self.declaration().ok_or(ExprErr)?);
 		}
 
-		self.pop_scope();
+		if own_scope { self.pop_scope(); }
 
 		self.consume(RightBrace, "Expect '}' after block.")?;
 		return Ok(statements);
@@ -732,7 +734,8 @@ impl<'a> Parser<'a> {
 		if self.match_one(Print) { return self.print_statement(); }
 		if self.match_one(Return) { return self.return_statement(); }
 		if self.match_one(LeftBrace) {
-			return Ok(Stmt::Block(self.block()?))
+			// Block statements always introduce a new scope.
+			return Ok(Stmt::Block(self.block(true)?))
 		}
 
 		return self.expression_statement();
@@ -817,7 +820,10 @@ impl<'a> Parser<'a> {
 		self.consume(RightParen, "Expect ')' after parameters.")?;
 
 		self.consume(LeftBrace, &format!("Expect '{{' before {kind} body."))?;
-		let body = self.block()?;
+		// The block in the function does NOT introduce a new scope--it is part of the
+		// function scope. This means parameter names will conflict with variables in
+		// the block.
+		let body = self.block(false)?;
 
 		// Keep track of any "this" value for compiler.
 		let function_this = self.find_variable("this");
