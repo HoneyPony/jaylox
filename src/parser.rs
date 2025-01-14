@@ -907,6 +907,17 @@ impl<'a> Parser<'a> {
 		self.current_superclass = enclosing_superclass;
 		self.current_class = enclosing_class;
 
+		if Some(identity) == superclass {
+			// Note: It's actually not a problem for us to have a class inherit from itself,
+			// because its variable value will be initialized to jay_box_nil() before it is passed
+			// as its own superclass, which is supported (at least sort of... we need to get rid
+			// of that support in conformance mode I guess).
+			//
+			// But in any case, that behavior will be unintuitive and useless anyway, so we might
+			// as well correctly report the error (as expected by the tester).
+			self.error_report(&name, "A class can't inherit from itself.")
+		}
+
 		Ok(Stmt::class(crate::stmt::Class {
 			name,
 			methods,
