@@ -1204,6 +1204,11 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 
 				self.compile_class(class, &mangled_name);
 
+				// TODO: Technically maybe the lineno should be at the superclass token?
+				// I think in general this is the correct location for the token. This should
+				// be the only point in the code where we actually call jclass_<name>, and
+				// so updating the lineno in our locals frame seems correct.
+				self.lineno(class.name.line, into);
 				self.indent(into);
 				self.compile_var(class.identity, into);
 				// The class is a function that takes a superclass and a scope,
