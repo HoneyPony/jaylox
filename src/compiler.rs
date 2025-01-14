@@ -838,8 +838,12 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 					_ => unreachable!(),
 				}
 			},
-			Expr::Variable { identity, .. } => {
-				// Cannot fail. (no lineno)
+			Expr::Variable { identity, name } => {
+				// Cannot fail UNLESS we're in conformance mode. In that case,
+				// update lineno here..?
+				if self.lox.full_conformance {
+					self.lineno(name.line, into);
+				}
 				Val::Variable(*identity)
 			},
 			Expr::This { identity, .. } => {
