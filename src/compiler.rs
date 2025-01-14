@@ -1497,6 +1497,9 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 		if self.opt.full_conformance {
 			inf_writeln!(self.prelude, "#define JAY_FULL_CONFORMANCE");
 		}
+		if self.opt.enable_names {
+			inf_writeln!(self.prelude, "#define JAY_ENABLE_NAMES");
+		}
 		inf_writeln!(self.prelude, "#include \"jaylib/jaylib.h\"\n");
 
 		// Write the globals array to the prelude (and the string constants array)

@@ -36,8 +36,6 @@
 //   to the standard Lox semantics. Right now, this only controls whether a class 
 //   inheriting from nil is an error or not.
 
-#define JAY_ENABLE_NAMES // Turn on by default for now
-
 #include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>

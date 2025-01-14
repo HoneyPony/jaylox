@@ -80,6 +80,10 @@ pub struct CodegenOptions {
 	/// constant folding.
 	/// This option is not actually very useful outside of running the tester, but that's OK.
 	full_conformance: bool,
+
+	/// Determines whether classes, functions, etc store their names. Will also provide names for fields
+	/// in the case of a field access error.
+	enable_names: bool,
 }
 
 struct CompileOptions {
@@ -264,6 +268,7 @@ fn main() -> io::Result<()> {
 			assume_correct: false,
 			backtrace: false,
 			full_conformance: false,
+			enable_names: false,
 		},
 	};
 
@@ -298,6 +303,9 @@ fn main() -> io::Result<()> {
 				}
 				"-conformance" => {
 					options.codegen.full_conformance = true;
+				}
+				"-enablenames" => {
+					options.codegen.enable_names = true;
 				}
 				"-O1" | "-O2" | "-O3" => {
 					options.optimization = arg.clone();
