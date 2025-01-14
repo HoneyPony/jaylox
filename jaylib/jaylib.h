@@ -1516,7 +1516,13 @@ jay_op_call(size_t arity) {
 		}
 		else {
 			// If there isn't an initializer, we simply return the new_this value,
-			// which is already pushed onto the stack.
+			// which is already pushed onto the stack. However, we still have to
+			// verify that the arity is correct. In this case we don't have to
+			// add/subtract 1 -- the caller provides us the arity without the
+			// this, so it's the "real" arity.
+			if(arity != 0) {
+				oops("Expected 0 arguments but got %zu.", arity);
+			}
 		}
 	}
 	else {
