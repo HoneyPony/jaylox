@@ -168,7 +168,7 @@ impl<'a> Parser<'a> {
 		return None;
 	}
 
-	fn declare_variable(&mut self, name: String) -> Result<VarRef, ExprErr> {
+	fn declare_variable(&mut self, name: &Token) -> Result<VarRef, ExprErr> {
 		// Special case: If we're at the top-level scope (and implicitly, fun_scope),
 		// then we want to check the undeclared variable set. It's possible that
 		// we've simply reached the declaration for an undeclared variable, in which
@@ -176,7 +176,7 @@ impl<'a> Parser<'a> {
 		// identity.
 		if self.scopes.len() == 1 {
 			let scope = self.scopes.first_mut().unwrap();
-			if let Some(existing) = scope.variables.get(&name) {
+			if let Some(existing) = scope.variables.get(&name.lexeme) {
 				// At the global level, unlike the local level, we're allowed to redefine
 				// variables (see e.g. test/variable/use_global_in_initializer.lox).
 				//
@@ -197,7 +197,7 @@ impl<'a> Parser<'a> {
 					// TODO: Maybe deduplicate this logic with the logic below?
 					let variable = self.lox.new_var();
 
-					self.scopes.first_mut().unwrap().variables.insert(name, variable);
+					self.scopes.first_mut().unwrap().variables.insert(name.lexeme.clone(), variable);
 					self.fun_scopes.first_mut().unwrap().variables.insert(variable);
 
 					// Note that in this case, the variable MUST be global, because
@@ -220,11 +220,11 @@ impl<'a> Parser<'a> {
 
 		let had = 
 			scope.variables
-			.insert(name, variable)
+			.insert(name.lexeme.clone(), variable)
 			.is_some();
 
 		if had {
-			self.error(self.previous().clone(), "Cannot redeclare variable in same scope.")?;
+			self.error(name.clone(), "Already a variable with this name in this scope.")?;
 		}
 
 		Ok(variable)
@@ -704,7 +704,7 @@ impl<'a> Parser<'a> {
 		if self.in_initializer {
 			if value.is_some() {
 				// Note: not a parse error.
-				self.error_report(&keyword, "'return' in initializer can't return a value");
+				self.error_report(&keyword, "Can't return a value from an initializer.");
 			}
 
 			let identity = self.find_variable("this")
@@ -741,7 +741,13 @@ impl<'a> Parser<'a> {
 
 		self.consume(Semicolon, "Expect ';' after variable declaration.")?;
 
-		let identity = self.declare_variable(name.lexeme.clone())?;
+		// Perform the declaration after parsing, because the variable might be
+		// referencing a variable with the same name and we can't overwrite the
+		// identity yet.
+		// 
+		// Pass the name token in to the function so that it can accurately report
+		// where the error occurred.
+		let identity = self.declare_variable(&name)?;
 
 		return Ok(Stmt::var(name, initializer, identity));
 	}
@@ -754,17 +760,17 @@ impl<'a> Parser<'a> {
 		let identity = if is_method { None }
 		else {
 			// The function itself must exist as a variable inside the enclosing scope.
-			Some(self.declare_variable(name.lexeme.clone())?)
+			Some(self.declare_variable(&name)?)
 		};
 
-		let mut parameters_names = vec![];
+		let mut parameters_toks = vec![];
 		
 		if !self.check(RightParen) {
-			parameters_names.push(
-				self.consume(Identifier, "Expect parameter name.")?.lexeme);
+			parameters_toks.push(
+				self.consume(Identifier, "Expect parameter name.")?);
 			while self.match_one(Comma) {
-				parameters_names.push(
-					self.consume(Identifier, "Expect parameter name.")?.lexeme);
+				parameters_toks.push(
+					self.consume(Identifier, "Expect parameter name.")?);
 			}
 		}
 
@@ -772,7 +778,12 @@ impl<'a> Parser<'a> {
 			// If we're a method, than we need to have a 'this' parameter as our
 			// last parameter. Note that, because "this" is lexed into a keyword,
 			// we cannot have accidentally already declared it.
-			parameters_names.push("this".into());
+			//
+			// TODO: We're using a synthesized token here due to error reporting
+			// requirements of other users of declare_variable (meaning parameter_toks
+			// has to be an array of tokens). Is there a cleaner way to do this?
+			let synth = Token::new(TokenType::Identifier, "this".into(), LoxValue::Nil, 0);
+			parameters_toks.push(synth);
 		}
 
 		// Keep track of when we're in an initializer
@@ -784,8 +795,8 @@ impl<'a> Parser<'a> {
 
 		let mut param_idx = 0;
 		// Create parameter variables.
-		for param in parameters_names {
-			let var = self.declare_variable(param)?;
+		for param in parameters_toks {
+			let var = self.declare_variable(&param)?;
 			self.lox.get_var_mut(var).typ = VarType::Parameter;
 			// Assign parameter indices here.
 			self.lox.get_var_mut(var).index = param_idx;
@@ -856,7 +867,7 @@ impl<'a> Parser<'a> {
 		// The class exists as a variable in the surrounding scope.
 		// TODO: Possible optimization: hoist classes that are not "dynamic"
 		// (e.g. no closure, no dynamic superclass) to global scope
-		let identity = self.declare_variable(name.lexeme.clone())?;
+		let identity = self.declare_variable(&name)?;
 
 		let superclass = if self.match_one(Less) {
 		 	self.consume(Identifier, "Expect superclass name.")?;
@@ -986,7 +997,11 @@ impl<'a> Parser<'a> {
 	// Helper function for creating library functions
 	fn std_extern_fun(&mut self, var_name: &str, c_name: &str, arity: u32) -> Stmt {
 		// You should not call std_extern_fun in a way where it would fail.
-		let identity = match self.declare_variable(var_name.to_string()) {
+		// TODO: We're using a synthesized token because declare_variable wants
+		// to have accurate error reporting. Is this the cleanest way to use
+		// it from here?
+		let synth_token = Token::new(TokenType::Identifier, var_name.to_string(), LoxValue::Nil, 1);
+		let identity = match self.declare_variable(&synth_token) {
 			Ok(identity) => identity,
 			Err(_) => panic!("std_extern_fun failed to declare variable")
 		};
