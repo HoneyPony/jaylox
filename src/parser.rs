@@ -177,10 +177,37 @@ impl<'a> Parser<'a> {
 		if self.scopes.len() == 1 {
 			let scope = self.scopes.first_mut().unwrap();
 			if let Some(existing) = scope.variables.get(&name) {
-				// It should be the case that this value was in the undeclared set,
-				// otherwise we would have already declared it.
-				assert!(self.undeclared_globals.remove(existing));
-				return Ok(*existing);
+				// At the global level, unlike the local level, we're allowed to redefine
+				// variables (see e.g. test/variable/use_global_in_initializer.lox).
+				//
+				// So, there are two possibilities:
+				// 1. We reached the declaration for an undeclared variable.
+				// 2. We are redeclaring some global variable.
+				// If we're in case (1), then undeclare_globals.remove(existing) will return
+				// true. In that case, we are done--the variable was previously undeclared,
+				// now it's declared, so the existing value is the right value.
+				//
+				// But, if it wasn't undeclared, that means it's a redefinition. So in that
+				// case, get a new variable identity, and overwrite the old one.
+				if self.undeclared_globals.remove(existing) {
+					return Ok(*existing);
+				}
+				else {
+					// Create a new variable.
+					// TODO: Maybe deduplicate this logic with the logic below?
+					let variable = self.lox.new_var();
+
+					self.scopes.first_mut().unwrap().variables.insert(name, variable);
+					self.fun_scopes.first_mut().unwrap().variables.insert(variable);
+
+					// Note that in this case, the variable MUST be global, because
+					// we're accessing it from a non-global level (otherwise it would
+					// error with undeclared), so immediately mark it as really global.
+					self.lox.get_var_mut(variable).typ = VarType::Global;
+					self.lox.get_var_mut(variable).index = self.global_index;
+					self.global_index += 1;
+					return Ok(variable);
+				}
 			}
 		}
 
