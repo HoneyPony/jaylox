@@ -232,11 +232,12 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 		self.lineno(op.line, into);
 
 		let is_num = if self.is_val_numerical(&left) {
-			self.num_fence_for("jay_fence_number_binop", &right, 1, into);
+			// Note: Use the fence that will show the correct error message.
+			self.num_fence_for("jay_fence_number_add", &right, 1, into);
 			true
 		}
 		else if self.is_val_numerical(&right) {
-			self.num_fence_for("jay_fence_number_binop", &left, 1, into);
+			self.num_fence_for("jay_fence_number_add", &left, 1, into);
 			true
 		}
 		else {

@@ -1916,8 +1916,20 @@ jay_invalid_variable(const char *name) {
 
 #define jay_fence_number_binop(v)
 #define jay_fence_number_unop(v)
+#define jay_fence_number_add(v)
 
 #else
+
+static inline
+void
+jay_fence_number_add(jay_value v) {
+	if(!JAY_IS_NUMBER(v)) {
+		// Addition needs its own special add fence because the error message
+		// for a failed add should always be the same thing, even if we know
+		// its a numerical add and we're only fencing part of it.
+		oops("Operands must be two numbers or two strings.");
+	}
+}
 
 static inline
 void 
