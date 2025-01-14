@@ -694,8 +694,10 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 						// the inner 'this' object, we can just increment
 						// the stack pointer directly.
 						//
-						// TODO: If we ever add bounds checking, we will need
-						// to do it here.
+						// We must also do bounds checking on the stack here,
+						// as we're essentially pushing to it.
+						self.indent(into);
+						inf_writeln!(into, "JAY_STACK_CHECK();");
 						self.indent(into);
 						inf_writeln!(into, "jay_stack_ptr += 1;");
 					},
@@ -739,6 +741,8 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 					Expr::This { .. } => {
 						// Make one extra spot on the stack ptr for the following
 						// arithmetic.
+						self.indent(into);
+						inf_writeln!(into, "JAY_STACK_CHECK();");
 						self.indent(into);
 						inf_writeln!(into, "jay_stack_ptr += 1;");
 					},

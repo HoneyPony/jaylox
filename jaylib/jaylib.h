@@ -275,19 +275,24 @@ static struct {
 #define JAY_NAME_TOMBSTONE 0
 
 #define JAY_STACK_SIZE 1048576
+#define JAY_FRAMES_SIZE 4096
+#define JAY_HARBOR_SIZE 4096
 
 static jay_value jay_stack[JAY_STACK_SIZE];
 static jay_value *jay_stack_ptr;
 
-static jay_stackframe *jay_frames[4096];
+static jay_stackframe *jay_frames[JAY_FRAMES_SIZE];
 static size_t jay_frames_ptr;
 
-static void *jay_harbor_stack[4096];
+static void *jay_harbor_stack[JAY_HARBOR_SIZE];
 static size_t jay_harbor_ptr;
 
 static inline
 void
 jay_harbor(void *ptr) {
+	if(jay_harbor_ptr >= JAY_HARBOR_SIZE) {
+		oops("Stack overflow.");
+	}
 	jay_harbor_stack[jay_harbor_ptr++] = ptr;
 }
 
@@ -1109,6 +1114,9 @@ jay_gc_init(size_t init_size) {
 static inline
 void
 jay_push_frame(void *ptr) {
+	if(jay_frames_ptr >= JAY_FRAMES_SIZE) {
+		oops("Stack overflow.");
+	}
 	jay_frames[jay_frames_ptr++] = ptr;
 }
 
@@ -1118,9 +1126,16 @@ jay_pop_frame() {
 	jay_frames_ptr -= 1;
 }
 
+#define JAY_STACK_CHECK() do {\
+	if((jay_stack_ptr - jay_stack) >= JAY_STACK_SIZE) {	\
+		oops("Stack overflow."); \
+	} \
+} while(0)
+
 static inline
 void
 jay_push(jay_value v) {
+	JAY_STACK_CHECK();
 	*jay_stack_ptr = v;
 	jay_stack_ptr++;
 }
