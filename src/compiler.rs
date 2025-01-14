@@ -720,7 +720,11 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 				Val::OnStack
 			},
 			Expr::Set { object, name, value } => {
-				self.compile_expr_tostack(value, into);
+				// IMPORTANT: 
+				// To match Lox semantic, we must evaluate the object being setted
+				// BEFORE we evaluate the RHS. So, first evaluate that object, then
+				// evaluate the RHS (i.e. 'value'). We used to evaluate 'value' here.
+				//self.compile_expr_tostack(value, into);
 
 				// Update lineno before the fences
 				self.lineno(name.line, into);
@@ -742,6 +746,9 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 					}
 				}
 
+				// Evalute the RHS second. Now the stack has two things on it.
+				self.compile_expr_tostack(value, into);
+
 				self.add_name(name, true);
 				self.indent(into);
 
@@ -753,10 +760,10 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 						// We know that 'this' is always an instance.
 						// TODO: Maybe generate a 'const pointer' 'this' that
 						// we can just reference directly..?
-						inf_write!(into, "jay_set_instance(this, NAME_{}, jay_stack_ptr[-2]);\n", name.lexeme);
+						inf_write!(into, "jay_set_instance(this, NAME_{}, jay_stack_ptr[-1]);\n", name.lexeme);
 					},
 					_ => {
-						inf_write!(into, "jay_set_instance(JAY_AS_INSTANCE(jay_stack_ptr[-1]), NAME_{}, jay_stack_ptr[-2]);\n", name.lexeme);
+						inf_write!(into, "jay_set_instance(JAY_AS_INSTANCE(jay_stack_ptr[-2]), NAME_{}, jay_stack_ptr[-1]);\n", name.lexeme);
 					}
 				}
 
