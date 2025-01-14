@@ -1,0 +1,10 @@
+class Thing {
+
+}
+
+var t = Thing();
+t.blah = "hello";
+
+var t2 = Thing();
+print(t.blah);
+print(t2.blah);
