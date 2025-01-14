@@ -287,7 +287,7 @@ impl<'a> Scanner<'a> {
 					self.identifier(tokens);
 				}
 				else {
-					self.lox.error(self.line, &format!("Unexpected character '{}'", c));
+					self.lox.error(self.line, &format!("Unexpected character."));
 				}
 			}
 		}
