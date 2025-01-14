@@ -1286,7 +1286,21 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 						self.indent(into);
 						into.push_str("jay_stack_ptr -= 1;\n");
 					},
-					_ => { }
+					_ => {
+						// If the expression is not on the stack, we usually don't
+						// have to evaluate it. There is one exception, though:
+						// if we're in conformance mode, we might have to evaluate
+						// a variable, if that variable is an error variable.
+						if self.lox.full_conformance {
+							if let Val::Variable(var) = val {
+								if let crate::VarType::Undefined(_) = self.lox.get_var_type(var) {
+									self.indent(into);
+									self.compile_var(var, into);
+									inf_writeln!(into, ";");
+								}
+							}
+						}
+					}
 				}
 			},
 			Stmt::Function(fun) => {
