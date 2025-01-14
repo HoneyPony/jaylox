@@ -340,7 +340,12 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 				inf_write!(into, "{n}");
 			},
 			(Ty::Number, Val::Literal(LoxValue::Number(n))) => {
-				inf_write!(into, "{n}");
+				if *n == 0.0 {
+					inf_write!(into, "{n}.0");
+				}
+				else {
+					inf_write!(into, "{:.}", n);
+				}
 			},
 			(Ty::Bool, Val::Literal(LoxValue::Bool(n))) => {
 				inf_write!(into, "{n}");
@@ -513,7 +518,13 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 					inf_write!(into, "jay_box_inf({})", value.is_sign_negative())
 				}
 				else {
-					inf_write!(into, "jay_box_number({value})")
+					if *value == 0.0 || *value == -0.0 {
+						// Ensure that negative zeroes are treated correctly.
+						inf_write!(into, "jay_box_number({}.0)", value);
+					}
+					else {
+						inf_write!(into, "jay_box_number({:.})", value)
+					}
 				}
 			}
 			LoxValue::Bool(value) => inf_write!(into, "jay_box_bool({value})"),
