@@ -487,7 +487,7 @@ impl<'a> Parser<'a> {
 			// simply check, otherwise throw an error.
 			let Some(identity) = identity else {
 				return self.error_expr(self.previous().clone(), 
-					"Invalid use of 'this'.");
+					"Can't use 'this' outside of a class.");
 			};
 
 			return Ok(Expr::this(self.previous().clone(), identity));
