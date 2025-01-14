@@ -4,6 +4,7 @@ mod stmt;
 mod parser;
 //mod resolver;
 mod compiler;
+mod run_libtcc;
 
 use std::collections::HashMap;
 use std::{env, fs::File};
@@ -66,7 +67,8 @@ pub struct Lox {
 enum CompileOutput {
 	Executable { path: String },
 	CFile { path: String },
-	StandardOut
+	StandardOut,
+	LibTcc,
 }
 
 #[derive(Clone)]
@@ -223,7 +225,23 @@ impl Lox {
 			CompileOutput::StandardOut => {
 				Compiler::new(self, std::io::stdout(), options.codegen.clone())
 					.compile(&program, globals_count, globals_locals_count)
-			}
+			},
+			CompileOutput::LibTcc => {
+				let mut out_string = Vec::<u8>::new();
+				Compiler::new(self, &mut out_string, options.codegen.clone())
+					.compile(&program, globals_count, globals_locals_count)?;
+
+				// Add NUL terminator so we can use the safer method.
+				out_string.push(0);
+
+				// Convert to C string.
+				let out_string = std::ffi::CString::from_vec_with_nul(out_string)
+					.expect("should have generated valid C string");
+
+				run_libtcc::run_libtcc(&out_string);
+
+				Ok(())
+			},
 		}
 	}
 }
@@ -294,6 +312,7 @@ fn main() -> io::Result<()> {
 				"-o" => { eat_exefile = true; },
 				"-oc" => { eat_cfile = true; },
 				"-os" => { options.output = CompileOutput::StandardOut; },
+				"-run" => { options.output = CompileOutput::LibTcc; }
 				"-gcstress" => {
 					options.codegen.gc_stress_test = true;
 				}
