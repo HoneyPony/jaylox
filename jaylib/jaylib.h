@@ -1744,6 +1744,7 @@ jay_fun_from(jay_function_impl impl, size_t arity, jay_closure *closure
 	f->closure = jay_unharbor();
 	f->implementation = impl;
 
+	JAY_ASSIGN_NAME(f);
 
 	return jay_box_function(f);
 }
