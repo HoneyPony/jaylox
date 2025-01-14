@@ -139,6 +139,7 @@ impl<'a> Parser<'a> {
 			// For parameters, store the original parameter index for later.
 			VarType::Parameter => VarType::CapturedParameter(self.lox.get_var_mut(ptr).index),
 			VarType::CapturedParameter(idx) => VarType::CapturedParameter(idx),
+			VarType::Undefined(name) => VarType::Undefined(name),
 			_ => VarType::Captured,
 		};
 		self.lox.get_var_mut(ptr).typ = new_type;
@@ -441,6 +442,20 @@ impl<'a> Parser<'a> {
 			// some point. If we never see a declaration, than something is wrong.
 
 			if self.fun_scopes.len() <= 1 {
+				if self.lox.full_conformance {
+					// In full conformance mode, we just create a global variable
+					// with type Undefined.
+					let variable = self.lox.new_var();
+					// We don't need to bother inserting this variable in any scopes,
+					// as it can't meaningfully be referenced again.
+					//
+					// This does mean that we are quite inefficient if the same undefined
+					// variable is referenced a bunch of times. But, for now, that's
+					// OK. (TODO: Make that fast..?)
+					self.lox.get_var_mut(variable).typ = VarType::Undefined(self.previous().lexeme.clone().leak());
+					return Ok(variable);
+				}
+
 				// TODO: Get rid of 'clone()' somehow..
 				self.error_report(&self.previous().clone(), "At top level: Unknown identifier.\nExtra info: Outside a function, you cannot use a global variable before it's declared.");
 
@@ -789,6 +804,9 @@ impl<'a> Parser<'a> {
 				VarType::Global => {
 					/* Either this won't be possible here, or we won't do anything
 					 * anyways. */
+				},
+				VarType::Undefined(_) => {
+					/* Nothing to do. */
 				}
 			}
 		}
@@ -923,7 +941,15 @@ impl<'a> Parser<'a> {
 					break;
 				}
 			}
-			self.lox.error_general(&format!("Global variable '{}' has not been declared.", name));
+			if self.lox.full_conformance {
+				// In full conformance mode, we simply define the variable with 'Undefined'.
+				self.lox.get_var_mut(*var).typ = VarType::Undefined(String::from(name).leak());
+			}
+			else {
+				// Usually though, we want to give a compiler error, as using a variable that
+				// hasn't been declared is bad.
+				self.lox.error_general(&format!("Global variable '{}' has not been declared.", name));
+			}
 		}
 
 		// Return the globals counts

@@ -24,6 +24,15 @@ pub enum VarType {
 	// special treatment. Tracks its original idx in u32.
 	CapturedParameter(u32),
 	Global,
+	/// A special kind of variable that is only used for full conformance mode. The
+	/// idea is that, when Lox would expect a runtime error due to an undefined variable,
+	/// we usually catch that at compile time--but instead we can simply generate a
+	/// C code to directly generate a runtime error if that code path is ever executed.
+	/// 
+	/// This means that in conformance mode, something like test/variable/unreached_undefined.lox
+	/// will actually pass instead of giving a compile error, as the generated code will
+	/// simply have an unreached "oops" call.
+	Undefined(&'static str),
 }
 
 pub struct Variable {

@@ -855,6 +855,15 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 
 	fn compile_var(&mut self, var: VarRef, into: &mut String) {
 		match self.lox.get_var_type(var) {
+			crate::VarType::Undefined(name) => {
+				// Undefined variables are not real variables, but we do need their
+				// C value to work in a C expression context (just like these other
+				// things).
+				//
+				// So, provide a special jay_invalid_variable function that lets us
+				// create an lvalue, but internally just panics.
+				inf_write!(into, "*jay_invalid_variable(\"{name}\")");
+			}
 			crate::VarType::Local => {
 				inf_write!(into, "locals.at[{}]", self.lox.get_var_mut(var).index)
 			},

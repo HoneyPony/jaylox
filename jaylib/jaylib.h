@@ -1906,6 +1906,12 @@ jay_eq(jay_value a, jay_value b) {
 }
 OP_TWO(eq)
 
+static inline _Noreturn
+jay_value*
+jay_invalid_variable(const char *name) {
+	oops("Undefined variable '%s'.", name);
+}
+
 #ifdef JAY_ASSUME_CORRECT
 
 #define jay_fence_number_binop(v)
