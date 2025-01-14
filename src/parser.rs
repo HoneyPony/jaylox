@@ -1059,6 +1059,10 @@ impl<'a> Parser<'a> {
 	// mean that there is extra overhead for adding globals that are completely
 	// unused, which we could try to fix, but for now it's fine...
 	fn add_default_globals(&mut self, stmts: &mut Vec<Stmt>) {
-		stmts.push(self.std_extern_fun("clock", "jay_std_clock", 0));
+		stmts.push(self.std_extern_fun("clock",    "jay_std_clock",    0));
+		stmts.push(self.std_extern_fun("read",     "jay_std_read",     0));
+		stmts.push(self.std_extern_fun("utf",      "jay_std_utf",      4));
+		stmts.push(self.std_extern_fun("exit",     "jay_std_exit",     1));
+		stmts.push(self.std_extern_fun("printerr", "jay_std_printerr", 1));
 	}
 }

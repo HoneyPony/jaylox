@@ -1984,4 +1984,57 @@ jay_std_clock(jay_value *args, jay_closure *closure) {
 	return jay_box_number(seconds);
 }
 
+static
+jay_value
+jay_std_read(jay_value *args, jay_closure *closure) {
+	int c = getchar();
+	if(c == -1) {
+		return jay_box_nil();
+	}
+	return jay_box_number(c);
+}
+
+static
+jay_value
+jay_std_utf(jay_value *args, jay_closure *closure) {
+	size_t len = 0;
+	for(size_t i = 0; i < 4; ++i) {
+		if(JAY_IS_NUMBER(args[0])) len += 1;
+	}
+
+	// No need to push anything to stack, as there's nothing we
+	// need to hang on to except for the arguments, which should
+	// be numbers anyway.
+	jay_string *result = jay_new_string(len);
+
+	size_t write = 0;
+	for(size_t i = 0; i < 4; ++i) {
+		if(JAY_IS_NUMBER(args[i])) result->contents[write++] = (char)(unsigned char)JAY_AS_NUMBER(args[i]);
+	}
+
+	result->hash = jay_compute_string_hash(result->contents, len);
+
+	return jay_box_string(result);
+}
+
+static
+jay_value
+jay_std_exit(jay_value *args, jay_closure *closure) {
+	if(JAY_IS_NUMBER(args[0])) {
+		exit((int)JAY_AS_NUMBER(args[0]));
+	}
+	exit(!jay_truthy(args[0]));
+}
+
+static
+jay_value
+jay_std_printerr(jay_value *args, jay_closure *closure) {
+	if(!JAY_IS_STRING(args[0])) {
+		oops("Argument to printerr must be string.");
+	}
+
+	fprintf(stderr, "%s\n", JAY_AS_STRING(args[0])->contents);
+	return args[0];
+}
+
 #endif
