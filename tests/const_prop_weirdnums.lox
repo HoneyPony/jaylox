@@ -1,0 +1,6 @@
+var a = 0 / 0; // Should generate NaN
+var b = 1 / 0; // Should generate +Inf
+var c = -1 / 0; // Should generate -Inf
+print(a);
+print(b);
+print(c);
