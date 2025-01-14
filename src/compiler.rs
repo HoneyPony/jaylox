@@ -1574,6 +1574,26 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 		// Last, main function definition (could go earlier too)
 		write!(self.writer, "int\nmain(void) {{\n{}}}\n", main_fn)?;
 
+		// Generate jay_name_to_string for error message reporting.
+		// This just has to go sometime after we include jaylib.h.
+		writeln!(self.writer, "#ifdef JAY_ENABLE_NAMES")?;
+		writeln!(self.writer, "static const char*\njay_name_to_string(jay_name name) {{")?;
+		writeln!(self.writer, "\tstatic const char *table[] = {{")?;
+		// NOTE: THIS RELIES ON THE ITERATION ORDER BEING THE SAME AS WHEN
+		// WE DID THE #define LOOP ABOVE.
+		// TODO: Maybe we just build this thing in a separate string? That
+		// way we don't have to worry about any weirdness, shouldn't really
+		// be a problem either.
+		for name in &self.name_set {
+			// The comma is very important! Otherwise all the strings are concatenated together
+			writeln!(self.writer, "\t\t\"{}\",", name)?;
+		}
+		writeln!(self.writer, "\t}};")?;
+		// Name 0 is used for the tombstone, so we subtract 1.
+		writeln!(self.writer, "\treturn table[name - 1];")?;
+		writeln!(self.writer, "}}")?;
+		writeln!(self.writer, "#endif")?;
+
 		Ok(())
 	}
 }
