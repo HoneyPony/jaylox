@@ -3,3 +3,7 @@
 /research/fib_man
 /research/*.exe
 /*.txt
+
+/jaylox-debug
+/jaylox-release
+/.config
