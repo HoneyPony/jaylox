@@ -503,7 +503,19 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 				// that we only have to initialize them once.
 				inf_write!(into, "global_string_constants[{}]", ptr.to_number());
 			},
-			LoxValue::Number(value) => inf_write!(into, "jay_box_number({value})"),
+			LoxValue::Number(value) => {
+				// In case we generate a NaN or infinite value due to constant propogation,
+				// generate special boxers for those.
+				if value.is_nan() {
+					inf_write!(into, "jay_box_nan()");
+				}
+				else if value.is_infinite() {
+					inf_write!(into, "jay_box_inf({})", value.is_sign_negative())
+				}
+				else {
+					inf_write!(into, "jay_box_number({value})")
+				}
+			}
 			LoxValue::Bool(value) => inf_write!(into, "jay_box_bool({value})"),
 		}
 	}

@@ -488,6 +488,25 @@ JAY_MK_BOXER(jay_string*, JAY_STRING, string)
 
 #endif
 
+static inline
+jay_value
+jay_box_nan() {
+	double v = 0;
+	uint64_t bits = 0x7ff0000000000001;
+	memcpy(&v, &bits, sizeof(double));
+	return jay_box_number(v);
+}
+
+static inline
+jay_value
+jay_box_inf(bool negative) {
+	double v = 0;
+	uint64_t bits      = 0x7ff0000000000000;
+	if(negative) bits |= 0x8000000000000000;
+	memcpy(&v, &bits, sizeof(double));
+	return jay_box_number(v);
+}
+
 #ifdef JAY_ENABLE_NAMES
 
 static inline
