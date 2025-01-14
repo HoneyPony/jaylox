@@ -653,8 +653,10 @@ impl<'a> Parser<'a> {
 		//
 		// See test/for/scope.lox.
 		//
-		// TODO: If the loop body is not a block, does it still get a new scope?
-		// For now we're saying No.
+		// Note that if the loop body is not a block, it's not allowed to be a declaration.
+		// So the second scope it just handled automatically by parsing the self.statement()
+		// into body -- if that statement is a block(), it will create that second scope
+		// for us.
 		self.push_scope();
 
 		let mut initializer = None;
