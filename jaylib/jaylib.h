@@ -687,9 +687,10 @@ jay_gc_find_size(jay_object *object) {
 		case JAY_GC_FUNCTION:
 			return sizeof(jay_function);
 
-		case JAY_GC_TABLE:
+		case JAY_GC_TABLE: {
 			jay_table *table = (jay_table*)object;
 			return sizeof(jay_table) + table->table_size * (sizeof(jay_value) + sizeof(jay_name));
+		}
 
 		case JAY_GC_CLOSURE:
 			return JAY_GC_FLEX(jay_closure, count, values);
@@ -808,7 +809,7 @@ jay_gc_visit(jay_value *field) {
 			field->as_string = jay_gc_copy_or_forward(field->as_string);
 			break;
 #endif
-		default:
+		default: { }
 			// No action.
 	}
 }
@@ -840,29 +841,33 @@ jay_gc_trace(jay_object *object) {
 			/* no-op */
 			break;
 
-		case JAY_GC_BOUND_METHOD:
+		case JAY_GC_BOUND_METHOD: {
 			jay_bound_method *bound_method = (jay_bound_method*)object;
 			JAY_GC_VISIT_DIRECT(bound_method->closure);
 			JAY_GC_VISIT_DIRECT(bound_method->this);
 			break;
+		}
 
-		case JAY_GC_CLASS:
+		case JAY_GC_CLASS: {
 			// TODO: Initialize methods_count
 			jay_class *class = (jay_class*)object;
 			JAY_GC_VISIT_DIRECT(class->closure);
 			JAY_GC_VISIT_DIRECT(class->superclass);
 			break;
+		}
 
-		case JAY_GC_INSTANCE:
+		case JAY_GC_INSTANCE: {
 			jay_instance *instance = (jay_instance*)object;
 			JAY_GC_VISIT_DIRECT(instance->class);
 			JAY_GC_VISIT_DIRECT(instance->table);
 			break;
+		}
 
-		case JAY_GC_FUNCTION:
+		case JAY_GC_FUNCTION: {
 			jay_function *function = (jay_function*)object;
 			JAY_GC_VISIT_DIRECT(function->closure);
 			break;
+		}
 
 		case JAY_GC_TABLE: {
 			jay_table *table = (jay_table*)object;
