@@ -30,6 +30,11 @@
 // #define JAY_ENABLE_NAMES
 // - Enables names for all objects (classes, functions, methods, and fields). Requires
 //   a little bit of additional overhead to keep track of names information.
+//
+// #define JAY_FULL_CONFORMANCE
+// - Ensures that any semantics that are compile-time switchable are fully conforming
+//   to the standard Lox semantics. Right now, this only controls whether a class 
+//   inheriting from nil is an error or not.
 
 #define JAY_ENABLE_NAMES // Turn on by default for now
 

@@ -1229,13 +1229,32 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 		// If it is nil, then the superclass is NULL, otherwise, it must be
 		// a jay_class
 		inf_writeln!(def, "\tsuperclass = jay_pop();");
-		inf_writeln!(def, "\tif(JAY_IS_NIL(superclass)) {{");
-		inf_writeln!(def, "\t\tclass->superclass = NULL;");
-		inf_writeln!(def, "\t}}\n\telse if(JAY_IS_CLASS(superclass)) {{");
-		inf_writeln!(def, "\t\tclass->superclass = JAY_AS_CLASS(superclass);");
-		inf_writeln!(def, "\t}}\n\telse {{");
-		inf_writeln!(def, "\t\toops(\"Superclass must be a class.\");");
-		inf_writeln!(def, "\t}}");
+
+		// For full conformance reasons, we have to distinguish between "nil superclass"
+		// (because we don't have a superclass) and "nil superclass" (an error).
+		//
+		// However, this is pretty easy -- if we syntactically don't have a superclass,
+		// we can simply skip generating the code that would compute it at all, which
+		// lets us safely pass jay_box_nil() as the argument.
+		//
+		// (We could even make this class completely skip the other superclass related
+		// code too... maybe an OPT for the future.)
+		if let Some(_) = class.superclass {
+			inf_writeln!(def, "\tif(JAY_IS_NIL(superclass)) {{");
+			inf_writeln!(def, "#ifdef JAY_FULL_CONFORMANCE"); // In full conformance mode, oops on nil class.
+			inf_writeln!(def, "\t\toops(\"Superclass must be a class.\");");
+			inf_writeln!(def, "#endif");
+			inf_writeln!(def, "\t\tclass->superclass = NULL;");
+			inf_writeln!(def, "\t}}\n\telse if(JAY_IS_CLASS(superclass)) {{");
+			inf_writeln!(def, "\t\tclass->superclass = JAY_AS_CLASS(superclass);");
+			inf_writeln!(def, "\t}}\n\telse {{");
+			inf_writeln!(def, "\t\toops(\"Superclass must be a class.\");");
+			inf_writeln!(def, "\t}}");
+		}
+		else {
+			// Still need to initialize the class->superclass value.
+			inf_writeln!(def, "\tclass->superclass = NULL;");
+		}
 
 		inf_writeln!(def, "\treturn jay_box_class(class);\n");
 
@@ -1474,6 +1493,9 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 		}
 		if self.opt.backtrace {
 			inf_writeln!(self.prelude, "#define JAY_BACKTRACE");
+		}
+		if self.opt.full_conformance {
+			inf_writeln!(self.prelude, "#define JAY_FULL_CONFORMANCE");
 		}
 		inf_writeln!(self.prelude, "#include \"jaylib/jaylib.h\"\n");
 
