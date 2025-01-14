@@ -1,3 +1,7 @@
+opts="-nanbox -backtrace -enablenames"
+cc="tcc"
+c_name="./run-jaylox-out.c"
+exe_name="./run-jaylox-out"
 list_needing_conform=$(cat <<EOF
 
 test/operator/divide_num_nonnum.lox
@@ -37,32 +41,19 @@ test/inheritance/inherit_from_nil.lox
 EOF
 )
 
-#conform=""
-#if echo "$1" | grep "operator/" >/dev/null; then
-	# If the test contains "operator" in the path and "nonnum", it's
-	# testing a runtime error for some operator.
-	# (regex: "operator/.*nonnum")
-	#
-	# TODO: This also applies to the operator/add_num_nil and add_bool_num,
-	# etc... for now just -conformance in all tests in operator/.
-	#
-	# But we usually have a compile-time error for those operators,
-	# as they get constant folded. So we have to explicitly turn off
-	# that folding and get a runtime error.
-#	conform="-conformance"
-#fi
+conform=""
 if echo "$list_needing_conform" | grep -w -q "$1"; then
 	conform="-conformance"
 fi
 test_realpath=$(realpath "$1")
 cd $(dirname "$0")
-rm -f ./out ./out.c
-./target/debug/jlox -oc out.c -nanbox -backtrace -enablenames $conform $test_realpath
+rm -f "$c_name" "$exe_name"
+./target/debug/jlox -oc "$c_name" $opts $conform "$test_realpath"
 err="$?"
 if [ $err -ne 0 ]; then exit $err; fi
-tcc out.c -o out -w
-if [ -f ./out ]; then
-	./out
+"$cc" "$c_name" -o "$exe_name" -w
+if [ -f "$exe_name" ]; then
+	"$exe_name"
 	err="$?"
 	exit $err
 fi
