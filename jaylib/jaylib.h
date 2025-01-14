@@ -1980,7 +1980,7 @@ static
 jay_value
 jay_std_clock(jay_value *args, jay_closure *closure) {
 	clock_t time = clock();
-	double seconds = (time / CLOCKS_PER_SEC);
+	double seconds = (time / (double)CLOCKS_PER_SEC);
 	return jay_box_number(seconds);
 }
 
