@@ -53,6 +53,10 @@ pub struct Parser<'a> {
 	// Stores which VarRef is currently the class.
 	current_class: Option<VarRef>,
 
+	/// Stores temporarily banned variables. This is relevant to implementing the
+	/// "Can't read local variable in it's own initializer" error.
+	banned: HashSet<VarRef>,
+
 	lox: &'a mut Lox
 }
 
@@ -72,6 +76,8 @@ impl<'a> Parser<'a> {
 			in_initializer: false,
 			current_superclass: None,
 			current_class: None,
+
+			banned: HashSet::new(),
 		}
 	}
 
@@ -166,6 +172,18 @@ impl<'a> Parser<'a> {
 		}
 
 		return None;
+	}
+
+	/// Temporarily bans a variable from being used. This is needed to prevent
+	/// variable initializers from referring to themselves.
+	fn ban_var(&mut self, var: VarRef) {
+		// TODO: Does this need to be a HashSet? It might be possible to make it
+		// a single Option<VarRef>.
+		self.banned.insert(var);
+	}
+
+	fn unban_var(&mut self, var: VarRef) {
+		self.banned.remove(&var);
 	}
 
 	fn declare_variable(&mut self, name: &Token) -> Result<VarRef, ExprErr> {
@@ -578,6 +596,9 @@ impl<'a> Parser<'a> {
 
 		if self.match_one(Identifier) {
 			let identity = self.get_previous_variable_identity()?;
+			if self.banned.contains(&identity) {
+				self.error_report(&self.previous().clone(), "Can't read local variable in its own initializer.");
+			}
 			return Ok(Expr::variable(self.previous().clone(), identity));
 		}
 
@@ -758,6 +779,18 @@ impl<'a> Parser<'a> {
 	fn var_declaration(&mut self) -> StmtRes {
 		let name = self.consume(Identifier, "Expect variable name.")?;
 
+		// We ban a variable with the same name, if we're defining a local
+		// variable. This is because this is essentially what Lox does--
+		// a local variable is not allowed to refer to a global with the same
+		// name in its initializer. (See test/variable/use_local_in_initializer.lox).
+		let mut old_id = None;
+		if self.scopes.len() > 1 {
+			old_id = self.find_variable(&name.lexeme);
+			if let Some(old) = old_id {
+				self.ban_var(old);
+			}
+		}
+
 		let mut initializer = None;
 		if self.match_one(Equal) {
 			initializer = Some(self.expression()?);
@@ -772,6 +805,10 @@ impl<'a> Parser<'a> {
 		// Pass the name token in to the function so that it can accurately report
 		// where the error occurred.
 		let identity = self.declare_variable(&name)?;
+
+		if let Some(old) = old_id {
+			self.unban_var(old);
+		}
 
 		return Ok(Stmt::var(name, initializer, identity));
 	}
