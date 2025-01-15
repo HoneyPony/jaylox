@@ -172,7 +172,7 @@ fn generate_ast_files(expr: &mut File, stmt: &mut File) -> io::Result<()> {
 		ty("Print", vec![arg_stmt("expression", "Expr")]),
 		ty("Return", vec![arg_stmt("_keyword", "Token"), arg_stmt("value", "Option<Expr>")]),
 		ty("Var", vec![arg_stmt("_name", "Token"), arg_stmt("initializer", "Option<Expr>"), arg_stmt("identity", "VarRef")]),
-		ty("While", vec![arg_stmt("condition", "Expr"), arg_stmt("body", "Stmt")]),
+		ty("While", vec![arg_stmt("condition", "Expr"), arg_stmt("body", "Stmt"), arg_stmt("local_count", "u32"), arg_stmt("captured", "Vec<VarRef>")]),
 	];
 
 	generate_ast_file(expr, "Expr", &tys_expr)?;

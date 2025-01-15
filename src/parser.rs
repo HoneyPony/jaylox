@@ -739,7 +739,11 @@ impl<'a> Parser<'a> {
 
 		self.consume(RightParen, "Expect ')' after for clauses.")?;
 
+		// To match the Lox semantic, the captures frame should surround the inner
+		// loop body, but should not surround the loop expression itself.
+		self.push_fun_scope();
 		let mut body = self.statement()?;
+		let (local_count, captured) = self.pop_fun_scope_to_info();
 
 		// Desugar: add increment to end of loop body.
 		if let Some(increment) = increment {
@@ -748,7 +752,7 @@ impl<'a> Parser<'a> {
 
 		// Desugar: add condition to loop.
 		let condition = condition.unwrap_or(Expr::literal(LoxValue::Bool(true)));
-		body = Stmt::while_(condition, body, todo!(), todo!());
+		body = Stmt::while_(condition, body, local_count, captured);
 
 		// Desugar: add initializer.
 		if let Some(initializer) = initializer {
