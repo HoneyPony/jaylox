@@ -60,7 +60,6 @@ impl Token {
 }
 
 pub struct Scanner<'a> {
-	source: String,
 	chars: Vec<char>,
 	start: i32,
 	current: i32,
@@ -109,7 +108,6 @@ impl<'a> Scanner<'a> {
 		]);
 
 		Scanner {
-			source,
 			chars,
 			start: 0,
 			current: 0,
