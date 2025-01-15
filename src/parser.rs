@@ -920,7 +920,6 @@ impl<'a> Parser<'a> {
 		return Ok(Function {
 			name,
 			identity,
-			vars: funscope.variables,
 			param_count: param_idx,
 			local_count: locals_idx,
 			body,
