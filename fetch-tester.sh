@@ -5,6 +5,7 @@ if [ -d extern/craftinginterpreters ]; then
     cp -r -T tests extern/craftinginterpreters/test/jaylox
 else
     git clone https://github.com/munificent/craftinginterpreters extern/craftinginterpreters --depth 1
+    cp -r -T tests extern/craftinginterpreters/test/jaylox
 fi
 
 # Prepare the tester in case it wasn't prepared yet.
