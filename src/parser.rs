@@ -560,7 +560,6 @@ impl<'a> Parser<'a> {
 			let method = self.consume(Identifier,
 				"Expect superclass method name.")?;
 
-
 			// We have to track the class that is making use of the 'super' keyword. That class
 			// object lets us know what the actual correct superclass value is at runtime.
 			// See test/super/reassign_super.lox.
@@ -1081,8 +1080,9 @@ impl<'a> Parser<'a> {
 			Err(_) => panic!("std_extern_fun failed to declare variable")
 		};
 
+		// Note: We don't need to store the var_name, because it's already
+		// encapulated in the way we declared the variable.
 		return Stmt::externfunction(
-			var_name.to_string(), 
 			c_name.to_string(), 
 			arity, 
 			identity);
