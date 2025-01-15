@@ -1000,7 +1000,7 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 		inf_writeln!(into, "\tjay_push_frame(&locals);");
 	}
 
-	fn compile_function(&mut self, fun: &Function, mangled_name: &String, is_method: bool) {
+	fn compile_function(&mut self, fun: &Function, mangled_name: &String) {
 		let mut def = String::new();
 
 		// Track 'has_locals_frame' down the call stack
@@ -1200,8 +1200,7 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 			
 			// The C function should be the same, due to the 'this' variable being
 			// automatically added at the end.
-			// Methods are compiled separately from functions so they get a this.
-			self.compile_function(method, &method_mangled_name, true);
+			self.compile_function(method, &method_mangled_name);
 
 			// Methods do not store the closure, because the have a pointer back
 			// to the class.
@@ -1337,8 +1336,7 @@ impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
 			},
 			Stmt::Function(fun) => {
 				let mangled_name = self.mangle(format!("jf_{}", fun.name.lexeme));
-				// Functions are not methods and do not have 'this'.
-				self.compile_function(fun, &mangled_name, false);
+				self.compile_function(fun, &mangled_name);
 
 				// In the outer scope, we need to have a reference to this function
 				// in our closure. And, that function's closure is our 'scope.' So,
