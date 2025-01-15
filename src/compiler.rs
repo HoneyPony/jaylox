@@ -1458,7 +1458,8 @@ impl<'a> Compiler<'a> {
 					}
 				}
 			},
-			Stmt::While { condition, body } => {
+			Stmt::While { condition, body, local_count, captured } => {
+				// FIRST: Compile the while looping logic.
 				self.indent(into);
 				into.push_str("for(;;) {\n");
 
@@ -1471,12 +1472,70 @@ impl<'a> Compiler<'a> {
 				inf_writeln!(into, "\tbreak;");
 				self.indent(into);
 				inf_writeln!(into, "}}");
+				// End loop/conditional evaluation logic.
+
+				// SECOND: Compile the captures frame logic. This is because we make a new captures frame for
+				// EVERY iteration through the loop.
+
+				self.indent(into);
+				into.push_str("{\n");
+
+				self.push_indent();
+
+				let enclosing_captures: bool = self.has_captures_frame;
+				self.has_captures_frame = captured.len() > 0;
+
+				let mut gc_scope = "NULL";
+
+				self.indent(into);
+				inf_writeln!(into, "jay_closure *closure = scope;");
+
+				// For now, this is copied from the compile_function logic (mostly).
+				if captured.len() > 0 {
+					for (_, v) in &mut self.captured_depths {
+						*v += 1;
+					}
+		
+					// The "scope" value for this function will be a new scope,
+					// instead of being the same as the parent scope.
+					// We allocate as many variables as are captured from this function.
+					self.indent(into);
+					inf_writeln!(into, "jay_closure *scope = jay_new_scope(scope, {});\n", captured.len());
+		
+					// Add the new variables. Note that "captured" here means a function
+					// LOWER DOWN the chain captured them. Our own function sort of
+					// treats them as normal variables.
+					for v in captured {
+						let None = self.captured_depths.insert(*v, 0) else {
+							// Safety check that everything is working as expected
+							panic!("Captured variables should only come from one function");
+						};
+					}
+					
+		
+					// Captured funs need to store a reference to their scope in case
+					// it's the only one.
+					gc_scope = "scope";
+				}
+				else {
+					self.indent(into);
+					inf_writeln!(into, "jay_closure *scope = scope;\n");
+				}
+
+				// TODO: Get real line num / get rid of this stuff...
+				self.compile_locals_frame(*local_count, gc_scope, "while loop", false, 0, into);
 
 				self.compile_stmt(body, into);
 
 				self.pop_indent();
 				self.indent(into);
 				into.push_str("}\n");
+
+				self.pop_indent();
+				self.indent(into);
+				into.push_str("}\n");
+
+				self.has_captures_frame = enclosing_captures;
 			},
 		}
 	}

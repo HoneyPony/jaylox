@@ -652,14 +652,52 @@ impl<'a> Parser<'a> {
 		return Ok(Stmt::if_(condition, then_branch, else_branch));
 	}
 
+	fn pop_fun_scope_to_info(&mut self) -> (u32, Vec<VarRef>) {
+		let funscope = self.pop_fun_scope();
+
+		// Compute var indices
+		let mut locals_idx = 0;
+		let mut captures_idx = 0;
+		let mut captured = vec![];
+		for var in &funscope.variables {
+			match self.lox.get_var_mut(*var).typ {
+				VarType::Local => {
+					self.lox.get_var_mut(*var).index = locals_idx;
+					locals_idx += 1;
+				},
+				VarType::Parameter => { /* already assigned */ },
+
+				// Both these are treated the same most places, but require
+				// a little bit of extra finagling in the compiler
+				VarType::Captured | VarType::CapturedParameter(_)=> {
+					self.lox.get_var_mut(*var).index = captures_idx;
+					captures_idx += 1;
+
+					captured.push(*var);
+				},
+				VarType::Global => {
+					/* Either this won't be possible here, or we won't do anything
+					 * anyways. */
+				},
+				VarType::Undefined(_) => {
+					/* Nothing to do. */
+				}
+			}
+		}
+
+		return (locals_idx, captured)
+	}
+
 	fn while_statement(&mut self) -> StmtRes {
 		self.consume(LeftParen, "Expect '(' after 'while'.")?;
 		let condition = self.expression()?;
 		self.consume(RightParen, "Expect ')' after while condition.")?;
 
+		self.push_fun_scope();
 		let body = self.statement()?;
+		let (locals_count, captured) = self.pop_fun_scope_to_info();
 
-		return Ok(Stmt::while_(condition, body));
+		return Ok(Stmt::while_(condition, body, locals_count, captured));
 	}
 
 	fn for_statement(&mut self) -> StmtRes {
@@ -710,7 +748,7 @@ impl<'a> Parser<'a> {
 
 		// Desugar: add condition to loop.
 		let condition = condition.unwrap_or(Expr::literal(LoxValue::Bool(true)));
-		body = Stmt::while_(condition, body);
+		body = Stmt::while_(condition, body, todo!(), todo!());
 
 		// Desugar: add initializer.
 		if let Some(initializer) = initializer {
