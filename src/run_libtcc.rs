@@ -1,8 +1,12 @@
+// Imports that are only used when we support libtcc run.
 #[cfg(feature = "run")]
-use libtcc::{Guard, Context, OutputType};
+use {
+    libtcc::{Guard, Context, OutputType},
+    std::ffi::CStr,
+    std::mem::transmute
+};
+
 use std::ffi::CString;
-use std::ffi::CStr;
-use std::mem::transmute;
 
 #[cfg(feature = "run")]
 fn run_libtcc_or_err(compiled_c_code: &CString) -> Result<(), &str> {
@@ -48,7 +52,7 @@ pub fn run_libtcc(compiled_c_code: &CString) {
 }
 
 #[cfg(not(feature = "run"))]
-pub fn run_libtcc(compiled_c_code: &CString) {
+pub fn run_libtcc(_compiled_c_code: &CString) {
     eprintln!("libtcc support is not enabled. cannot run.");
     std::process::exit(70);
 }
