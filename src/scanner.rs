@@ -85,7 +85,7 @@ fn is_alnum(c: char) -> bool {
 }
 
 impl<'a> Scanner<'a> {
-	pub fn new(source: String, lox: &'a mut Lox) -> Scanner {
+	pub fn new(source: String, lox: &'a mut Lox) -> Self {
 		let chars = source.chars().collect();
 
 		let keyword_hash: HashMap<&'static str, TokenType> = HashMap::from([
