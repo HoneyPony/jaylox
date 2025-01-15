@@ -1,4 +1,12 @@
-opts="-nanbox -backtrace -enablenames"
+extra_opts=""
+test_given_path=""
+if [ "$#" -gt 1 ]; then
+	extra_opts="$1"
+	test_given_path="$2"
+else
+	test_given_path="$1"
+fi
+opts="-backtrace -enablenames $extra_opts"
 cc="tcc"
 c_name="./run-jaylox-out.c"
 exe_name="./run-jaylox-out"
@@ -58,19 +66,18 @@ EOF
 )
 
 conform=""
-if echo "$list_needing_conform" | grep -w -q "$1"; then
+if echo "$list_needing_conform" | grep -w -q "$test_given_path"; then
 	conform="-conformance"
 fi
-test_realpath=$(realpath "$1")
+test_realpath=$(realpath "$test_given_path")
 cd $(dirname "$0")
 rm -f "$c_name" "$exe_name"
 
 jaylox=""
-# TODO: This might be bad for iteration..?
-if [ -f ./target/release/jlox ]; then
-	jaylox="./target/release/jlox"
-elif [ -f ./target/debug/jlox ]; then
-	jaylox="./target/debug/jlox"
+# Note: This file will be created by running either 'make jaylox-debug'
+# or 'make jaylox-release'
+if [ -f ./jaylox ]; then
+	jaylox="./jaylox"
 else
 	exit 10
 fi

@@ -4,6 +4,5 @@
 /research/*.exe
 /*.txt
 
-/jaylox-debug
-/jaylox-release
+/jaylox
 /.config
