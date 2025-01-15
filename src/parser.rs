@@ -571,7 +571,7 @@ impl<'a> Parser<'a> {
 
 			// Like with 'this', we kind of have to check whether the superclass
 			// is valid at parse time..
-			let Some(identity) = self.current_superclass else {
+			let Some(_) = self.current_superclass else {
 				self.error_report(&keyword, "Can't use 'super' in a class with no superclass.");
 				return Err(ExprErr);
 			};
@@ -583,15 +583,12 @@ impl<'a> Parser<'a> {
 			// it up in self.current_class, we have to do it manually.
 			self.check_closure(class_identity);
 
-			let this_identity = self.find_variable("this")
-				.expect("If the super lookup worked, this definitely should have.");
-
 			// Note to self while writing this:
 			// It seems quite possible that, instead of cloning Token's willy-nilly,
 			// we could have simply returned either a reference to the token, or
 			// perhaps an index into the Token Vec...
 
-			return Ok(Expr::super_(keyword, method, identity, this_identity, class_identity));
+			return Ok(Expr::super_(keyword, method, class_identity));
 		}
 
 		if self.match_one(Identifier) {
