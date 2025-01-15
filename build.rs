@@ -138,6 +138,15 @@ fn generate_ast_file(file: &mut File, tyname: &str, tys: &Vec<ExprTy>) -> io::Re
 }
 
 fn generate_ast_files(expr: &mut File, stmt: &mut File) -> io::Result<()> {
+	// Note: Some of the Token values that we store get prefixed with an underscore
+	// due to being unused.
+	//
+	// The main place we use the Tokens would be either error reporting or runtime
+	// error reporting (i.e. calls to lineno in the compiler), and so if we aren't
+	// using a particular token then the idea is that the associated operation is
+	// infallible at runtime. So, if we ever want to double-check our assumptions
+	// about infallibility, those are the expressions/statements to start with.
+
 	let tys_expr: Vec<ExprTy> = vec![
 		ty("Binary", vec![arg("left", "Expr"), arg("operator", "Token"), arg("right", "Expr")]),
 		ty("Call", vec![arg("callee", "Expr"), arg("paren", "Token"), arg("arguments", "Vec<Expr>")]),
@@ -146,11 +155,11 @@ fn generate_ast_files(expr: &mut File, stmt: &mut File) -> io::Result<()> {
 		ty("Literal", vec![arg("value", "LoxValue")]),
 		ty("Logical", vec![arg("left", "Expr"), arg("operator", "Token"), arg("right", "Expr")]),
 		ty("Set", vec![arg("object", "Expr"), arg("name", "Token"), arg("value", "Expr")]),
-		ty("Super", vec![arg("keyword", "Token"), arg("method", "Token"), arg("class_identity", "VarRef")]),
-		ty("This", vec![arg("keyword", "Token"), arg("identity", "VarRef")]),
+		ty("Super", vec![arg("_keyword", "Token"), arg("method", "Token"), arg("class_identity", "VarRef")]),
+		ty("This", vec![arg("_keyword", "Token"), arg("identity", "VarRef")]),
 		ty("Unary", vec![arg("operator", "Token"), arg("right", "Expr")]),
 		ty("Variable", vec![arg("name", "Token"), arg("identity", "VarRef")]),
-		ty("Assign", vec![arg("name", "Token"), arg("value", "Expr"), arg("identity", "VarRef")]),
+		ty("Assign", vec![arg("_name", "Token"), arg("value", "Expr"), arg("identity", "VarRef")]),
 	];
 
 	let tys_stmt: Vec<ExprTy> = vec![
@@ -161,8 +170,8 @@ fn generate_ast_files(expr: &mut File, stmt: &mut File) -> io::Result<()> {
 		ty("Function", vec![arg_stmt("function", "Function")]),
 		ty("If", vec![arg_stmt("condition", "Expr"), arg_stmt("then_branch", "Stmt"), arg_stmt("else_branch", "Option<Stmt>")]),
 		ty("Print", vec![arg_stmt("expression", "Expr")]),
-		ty("Return", vec![arg_stmt("keyword", "Token"), arg_stmt("value", "Option<Expr>")]),
-		ty("Var", vec![arg_stmt("name", "Token"), arg_stmt("initializer", "Option<Expr>"), arg_stmt("identity", "VarRef")]),
+		ty("Return", vec![arg_stmt("_keyword", "Token"), arg_stmt("value", "Option<Expr>")]),
+		ty("Var", vec![arg_stmt("_name", "Token"), arg_stmt("initializer", "Option<Expr>"), arg_stmt("identity", "VarRef")]),
 		ty("While", vec![arg_stmt("condition", "Expr"), arg_stmt("body", "Stmt")]),
 	];
 
