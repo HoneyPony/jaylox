@@ -12,4 +12,4 @@ fun test() {
 
 var FF = test();
 var instance = FF();
-instance.print_out();
+instance.print_out(); // expect: 10

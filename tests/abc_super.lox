@@ -16,5 +16,4 @@ class B < A {
 
 class C < B {}
 
-// Should print "A method"
-C().test();
+C().test(); // expect: A method

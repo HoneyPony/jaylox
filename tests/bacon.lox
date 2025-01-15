@@ -4,4 +4,4 @@ class Bacon {
   }
 }
 
-Bacon().eat(); // Prints "Crunch crunch crunch!".
+Bacon().eat(); // expect: Crunch crunch crunch!

@@ -9,12 +9,12 @@ fun outer() {
 }
 
 var ouch = Ouch();
-ouch.debug();
+ouch.debug(); // expect: Ouch::debug
 var ouch_method = ouch.debug;
-ouch_method();
+ouch_method(); // expect: Ouch::debug
 
 ouch.debug = outer;
-ouch.debug();
+ouch.debug(); // expect: outer
 ouch_method = ouch.debug;
-ouch_method();
+ouch_method(); // expect: outer
 

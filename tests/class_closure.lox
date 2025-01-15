@@ -15,5 +15,5 @@ fun example(param) {
 
 var a = example(3);
 var b = a(5);
-print b;
-print b.value;
+print b;       // expect: Inner instance
+print b.value; // expect: 8

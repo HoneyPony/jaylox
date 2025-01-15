@@ -17,14 +17,14 @@ var maker_three_20 = maker_three(20);
 var maker_four_10 = maker_four(10);
 var maker_four_20 = maker_four(20);
 
-print maker_three_10(0);
-print maker_three_10(1);
+print maker_three_10(0); // expect: 13
+print maker_three_10(1); // expect: 14
 
-print maker_four_10(0);
-print maker_four_10(1);
+print maker_four_10(0); // expect: 14
+print maker_four_10(1); // expect: 15
 
-print maker_three_20(0);
-print maker_three_20(1);
+print maker_three_20(0); // expect: 23
+print maker_three_20(1); // expect: 24
 
-print maker_four_20(0);
-print maker_four_20(1);
+print maker_four_20(0); // expect: 24
+print maker_four_20(1); // expect: 25
