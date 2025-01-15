@@ -207,7 +207,7 @@ impl Lox {
 				let stdin = child.stdin.take()
 					.expect("Could not spawn 'gcc'.");
 
-				Compiler::new(self, stdin, options.codegen.clone())
+				Compiler::new(self, Box::new(stdin), options.codegen.clone())
 					.compile(&program, globals_count, globals_locals_count)?;
 
 				let ecode = child.wait()?;
@@ -219,16 +219,16 @@ impl Lox {
 			},
 			CompileOutput::CFile { path } => {
 				let out_file = File::create(path)?;
-				Compiler::new(self, out_file, options.codegen.clone())
+				Compiler::new(self, Box::new(out_file), options.codegen.clone())
 				.compile(&program, globals_count, globals_locals_count)
 			},
 			CompileOutput::StandardOut => {
-				Compiler::new(self, std::io::stdout(), options.codegen.clone())
+				Compiler::new(self, Box::new(std::io::stdout()), options.codegen.clone())
 					.compile(&program, globals_count, globals_locals_count)
 			},
 			CompileOutput::LibTcc => {
 				let mut out_string = Vec::<u8>::new();
-				Compiler::new(self, &mut out_string, options.codegen.clone())
+				Compiler::new(self, Box::new(&mut out_string), options.codegen.clone())
 					.compile(&program, globals_count, globals_locals_count)?;
 
 				// Add NUL terminator so we can use the safer method.

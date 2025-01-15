@@ -48,7 +48,7 @@ impl Val {
 	}
 }
 
-pub struct Compiler<'a, Writer: std::io::Write> {
+pub struct Compiler<'a> {
 	pub lox: &'a mut Lox,
 
 	/// Contains the #include and all function forward-declarations.
@@ -89,7 +89,12 @@ pub struct Compiler<'a, Writer: std::io::Write> {
 	/// The set of strings that we've already used as function names.
 	mangled_set: HashSet<String>,
 
-	writer: Writer,
+	/// The writer that the compiler is outputting to. We don't actually perform that many
+	/// individual write calls to the output writer--we mostly just write to strings and
+	/// then dump each string to the writer at the end--so the compilation time save and
+	/// code architecture improvement are worth it (rather than monomorphizing over 
+	/// a W: std::io::Write).
+	writer: Box<dyn std::io::Write + 'a>,
 
 	opt: CodegenOptions,
 
@@ -109,8 +114,8 @@ enum Ty {
 }
 
 
-impl<'a, Writer: std::io::Write> Compiler<'a, Writer> {
-	pub fn new(lox: &'a mut Lox, writer: Writer, opt: CodegenOptions) -> Self {
+impl<'a> Compiler<'a> {
+	pub fn new(lox: &'a mut Lox, writer: Box<dyn std::io::Write + 'a>, opt: CodegenOptions) -> Self {
 		return Compiler {
 			lox,
 			prelude: String::new(),
