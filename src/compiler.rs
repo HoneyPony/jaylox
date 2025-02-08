@@ -355,7 +355,7 @@ impl<'a> Compiler<'a> {
 					inf_write!(into, "{n}.0");
 				}
 				else {
-					inf_write!(into, "{:.}", n);
+					inf_write!(into, "{}", n);
 				}
 			},
 			(Ty::Bool, Val::Literal(LoxValue::Bool(n))) => {
@@ -534,7 +534,7 @@ impl<'a> Compiler<'a> {
 						inf_write!(into, "jay_box_number({}.0)", value);
 					}
 					else {
-						inf_write!(into, "jay_box_number({:.})", value)
+						inf_write!(into, "jay_box_number({})", value)
 					}
 				}
 			}
